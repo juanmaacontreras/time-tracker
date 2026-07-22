@@ -14,20 +14,57 @@ class TimerWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         for (id in ids) renderOne(context, mgr, id)
+        val pending = goAsync()
+        Thread {
+            try {
+                Sync.pullMerge(context)
+                refresh(context)
+                Notifs.update(context)
+            } finally {
+                pending.finish()
+            }
+        }.start()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TOGGLE) {
-            val actId = intent.getStringExtra("actId") ?: return
-            Store.toggle(context, actId)
-            refresh(context)
-            Thread { Sync.syncNow(context) }.start()
+        when (intent.action) {
+            ACTION_TOGGLE -> {
+                val actId = intent.getStringExtra("actId") ?: return
+                val pending = goAsync()
+                Thread {
+                    try {
+                        Sync.pullMerge(context)
+                        Store.toggle(context, actId)
+                        refresh(context)
+                        Notifs.update(context)
+                        Sync.pushOnly(context)
+                        refresh(context)
+                    } finally {
+                        pending.finish()
+                    }
+                }.start()
+            }
+            ACTION_STOP -> {
+                val pending = goAsync()
+                Thread {
+                    try {
+                        Sync.pullMerge(context)
+                        Store.stop(context)
+                        refresh(context)
+                        Notifs.update(context)
+                        Sync.pushOnly(context)
+                    } finally {
+                        pending.finish()
+                    }
+                }.start()
+            }
         }
     }
 
     companion object {
         const val ACTION_TOGGLE = "com.bitacora.timer.TOGGLE"
+        const val ACTION_STOP = "com.bitacora.timer.STOP"
 
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget)

@@ -1,9 +1,12 @@
 package com.bitacora.timer
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,8 +23,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -60,8 +67,24 @@ class MainActivity : AppCompatActivity() {
         bannerChrono = findViewById(R.id.bannerChrono)
         syncStatus = findViewById(R.id.syncStatus)
         findViewById<Button>(R.id.btnNew).setOnClickListener { newActivityDialog() }
-        findViewById<Button>(R.id.btnSync).setOnClickListener { doSync(true) }
         findViewById<Button>(R.id.btnExport).setOnClickListener { exportCsv() }
+
+        requestNotifPermission()
+        scheduleBackgroundSync()
+    }
+
+    private fun requestNotifPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7)
+            }
+        }
+    }
+
+    private fun scheduleBackgroundSync() {
+        val req = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).build()
+        WorkManager.getInstance(this)
+            .enqueueUniquePeriodicWork("bitacora-sync", ExistingPeriodicWorkPolicy.KEEP, req)
     }
 
     override fun onResume() {
@@ -88,6 +111,7 @@ class MainActivity : AppCompatActivity() {
         renderBanner(runId)
         renderStats()
         TimerWidget.refresh(this)
+        Notifs.update(this)
     }
 
     private fun renderBanner(runId: String) {

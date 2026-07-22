@@ -26,6 +26,7 @@ object Store {
         if (!obj.has("sessions")) obj.put("sessions", JSONArray())
         if (!obj.has("runActId")) obj.put("runActId", "")
         if (!obj.has("runStart")) obj.put("runStart", 0L)
+        if (!obj.has("runChangedAt")) obj.put("runChangedAt", 0L)
         if (obj.getJSONArray("activities").length() == 0) {
             val arr = obj.getJSONArray("activities")
             arr.put(newActivity("Electrónica", "Materia", COLORS[0]))
@@ -76,7 +77,9 @@ object Store {
             val s = ss.getJSONObject(i)
             if (s.getString("actId") == id) s.put("deleted", true).put("updatedAt", now())
         }
-        if (obj.optString("runActId", "") == id) obj.put("runActId", "").put("runStart", 0L)
+        if (obj.optString("runActId", "") == id) {
+            obj.put("runActId", "").put("runStart", 0L).put("runChangedAt", now())
+        }
         write(ctx, obj)
     }
 
@@ -102,12 +105,14 @@ object Store {
             if (cur.isNotEmpty()) stopInternal(obj)
             obj.put("runActId", actId).put("runStart", now())
         }
+        obj.put("runChangedAt", now())
         write(ctx, obj)
     }
 
     fun stop(ctx: Context) {
         val obj = root(ctx)
         stopInternal(obj)
+        obj.put("runChangedAt", now())
         write(ctx, obj)
     }
 
@@ -221,15 +226,30 @@ object Store {
     // ---------- sync payload + merge ----------
     fun payload(ctx: Context): JSONObject {
         val r = root(ctx)
+        val run = JSONObject()
+            .put("actId", r.optString("runActId", ""))
+            .put("start", r.optLong("runStart", 0L))
+            .put("changedAt", r.optLong("runChangedAt", 0L))
         return JSONObject()
             .put("activities", r.getJSONArray("activities"))
             .put("sessions", r.getJSONArray("sessions"))
+            .put("run", run)
     }
 
     fun merge(ctx: Context, remote: JSONObject) {
         val obj = root(ctx)
         mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))
         mergeList(obj.getJSONArray("sessions"), remote.optJSONArray("sessions"))
+        // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.
+        val rr = remote.optJSONObject("run")
+        if (rr != null) {
+            val remoteChanged = rr.optLong("changedAt", 0L)
+            if (remoteChanged > obj.optLong("runChangedAt", 0L)) {
+                obj.put("runActId", rr.optString("actId", ""))
+                obj.put("runStart", rr.optLong("start", 0L))
+                obj.put("runChangedAt", remoteChanged)
+            }
+        }
         write(ctx, obj)
     }
 

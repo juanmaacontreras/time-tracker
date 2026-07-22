@@ -34,10 +34,19 @@ class MainActivity : AppCompatActivity() {
 
     private val todayViews = HashMap<String, TextView>()
     private val handler = Handler(Looper.getMainLooper())
+
     private val ticker = object : Runnable {
         override fun run() {
             updateRunningRow()
             handler.postDelayed(this, 1000)
+        }
+    }
+
+    // Sincroniza sola cada 10s mientras la app esta abierta (sin tocar boton).
+    private val syncLoop = object : Runnable {
+        override fun run() {
+            doSync(false)
+            handler.postDelayed(this, 10000)
         }
     }
 
@@ -60,11 +69,13 @@ class MainActivity : AppCompatActivity() {
         render()
         handler.post(ticker)
         doSync(false)
+        handler.postDelayed(syncLoop, 10000)
     }
 
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(syncLoop)
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -247,7 +258,7 @@ class MainActivity : AppCompatActivity() {
             syncStatus.text = "Sync desactivada · completá Config.kt para sincronizar entre dispositivos."
             return
         }
-        syncStatus.text = "Sincronizando…"
+        if (!showToast) syncStatus.text = "Sincronizando…"
         Thread {
             val ok = Sync.syncNow(this)
             runOnUiThread {

@@ -27,7 +27,11 @@ object Sync {
 
     private fun auth(conn: HttpURLConnection) {
         conn.setRequestProperty("apikey", Config.SUPABASE_KEY)
-        conn.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_KEY}")
+        // Las llaves nuevas (sb_publishable_...) van solo en "apikey".
+        // Las viejas (JWT, empiezan con eyJ) necesitan tambien Authorization.
+        if (Config.SUPABASE_KEY.startsWith("eyJ")) {
+            conn.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_KEY}")
+        }
         conn.connectTimeout = 12000
         conn.readTimeout = 12000
     }

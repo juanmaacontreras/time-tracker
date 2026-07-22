@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#FFF4F6FA</color>
+    <color name="card">#FFFDFEFF</color>
+    <color name="ink">#FF182742</color>
+    <color name="inkSoft">#FF4A5A78</color>
+    <color name="muted">#FF8592AB</color>
+    <color name="line">#FFD3DBE8</color>
+    <color name="indigo">#FF2F4B8F</color>
+    <color name="live">#FFE1591F</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

@@ -65,6 +65,18 @@ object Store {
         write(ctx, obj)
     }
 
+    fun updateActivity(ctx: Context, id: String, name: String, type: String, color: String) {
+        val obj = root(ctx)
+        val arr = obj.getJSONArray("activities")
+        for (i in 0 until arr.length()) {
+            val a = arr.getJSONObject(i)
+            if (a.getString("id") == id) {
+                a.put("name", name).put("type", type).put("color", color).put("updatedAt", now())
+            }
+        }
+        write(ctx, obj)
+    }
+
     fun deleteActivity(ctx: Context, id: String) {
         val obj = root(ctx)
         val arr = obj.getJSONArray("activities")

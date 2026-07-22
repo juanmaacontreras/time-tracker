@@ -31,40 +31,45 @@ class TimerWidget : AppWidgetProvider() {
         when (intent.action) {
             ACTION_TOGGLE -> {
                 val actId = intent.getStringExtra("actId") ?: return
-                val pending = goAsync()
-                Thread {
-                    try {
-                        Sync.pullMerge(context)
-                        Store.toggle(context, actId)
-                        refresh(context)
-                        Notifs.update(context)
-                        Sync.pushOnly(context)
-                        refresh(context)
-                    } finally {
-                        pending.finish()
-                    }
-                }.start()
+                runInBackground(context) {
+                    Sync.pullMerge(context)
+                    Store.toggle(context, actId)
+                    refresh(context)
+                    Notifs.update(context)
+                    Sync.pushOnly(context)
+                    refresh(context)
+                }
             }
             ACTION_STOP -> {
-                val pending = goAsync()
-                Thread {
-                    try {
-                        Sync.pullMerge(context)
-                        Store.stop(context)
-                        refresh(context)
-                        Notifs.update(context)
-                        Sync.pushOnly(context)
-                    } finally {
-                        pending.finish()
-                    }
-                }.start()
+                runInBackground(context) {
+                    Sync.pullMerge(context)
+                    Store.stop(context)
+                    refresh(context)
+                    Notifs.update(context)
+                    Sync.pushOnly(context)
+                }
+            }
+            ACTION_REFRESH -> {
+                runInBackground(context) {
+                    Sync.pullMerge(context)
+                    refresh(context)
+                    Notifs.update(context)
+                }
             }
         }
+    }
+
+    private fun runInBackground(context: Context, block: () -> Unit) {
+        val pending = goAsync()
+        Thread {
+            try { block() } finally { pending.finish() }
+        }.start()
     }
 
     companion object {
         const val ACTION_TOGGLE = "com.bitacora.timer.TOGGLE"
         const val ACTION_STOP = "com.bitacora.timer.STOP"
+        const val ACTION_REFRESH = "com.bitacora.timer.REFRESH"
 
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget)
@@ -77,9 +82,17 @@ class TimerWidget : AppWidgetProvider() {
                 val elapsed = Store.now() - Store.runningStart(context)
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, true)
             } else {
-                views.setTextViewText(R.id.w_status, "EN REPOSO")
+                views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
             }
+
+            // Tocar el cuerpo del widget (fuera de los botones) lo actualiza.
+            val refreshIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_REFRESH }
+            val refreshPi = PendingIntent.getBroadcast(
+                context, 200, refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.w_root, refreshPi)
 
             val btnIds = intArrayOf(R.id.w_b0, R.id.w_b1, R.id.w_b2)
             for (i in btnIds.indices) {

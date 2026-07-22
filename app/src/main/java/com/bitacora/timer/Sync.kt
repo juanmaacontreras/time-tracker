@@ -23,6 +23,29 @@ object Sync {
         }
     }
 
+    /** Solo baja el estado compartido y lo fusiona (sin subir). Fuera del hilo principal. */
+    fun pullMerge(ctx: Context): Boolean {
+        if (!Config.syncEnabled()) return false
+        return try {
+            val remote = pull()
+            if (remote != null) Store.merge(ctx, remote)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Solo sube el estado local. Fuera del hilo principal. */
+    fun pushOnly(ctx: Context): Boolean {
+        if (!Config.syncEnabled()) return false
+        return try {
+            push(Store.payload(ctx))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun base() = Config.SUPABASE_URL.trimEnd('/')
 
     private fun auth(conn: HttpURLConnection) {

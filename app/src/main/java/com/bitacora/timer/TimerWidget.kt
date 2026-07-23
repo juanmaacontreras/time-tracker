@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
-import androidx.core.content.ContextCompat
 
 class TimerWidget : AppWidgetProvider() {
 
@@ -183,15 +182,15 @@ class TimerWidget : AppWidgetProvider() {
                     val act = acts[i]
                     val aid = act.getString("id")
                     val running = aid == runId
-                    // Forma = si tocar para o arranca; color = el propio de la actividad,
-                    // salvo si est\u00E1 pausada (\u00E1mbar) para distinguir el estado de un vistazo.
-                    views.setImageViewResource(allIconIds[i], if (running) R.drawable.ic_stop else R.drawable.ic_play)
-                    val tint = if (running && paused) {
-                        ContextCompat.getColor(context, R.color.pausedColor)
-                    } else {
-                        Color.parseColor(act.optString("color", "#2F4B8F"))
+                    // El punto siempre muestra el color propio de la actividad (identidad).
+                    // El estado (corriendo/pausado) lo dice el borde del chip, no un \u00EDcono.
+                    views.setInt(allIconIds[i], "setColorFilter", Color.parseColor(act.optString("color", "#2F4B8F")))
+                    val chipRes = when {
+                        running && paused -> R.drawable.chip_paused
+                        running -> R.drawable.chip_running
+                        else -> R.drawable.chip
                     }
-                    views.setInt(allIconIds[i], "setColorFilter", tint)
+                    views.setInt(allSlotIds[i], "setBackgroundResource", chipRes)
                     views.setTextViewText(allNameIds[i], act.getString("name"))
                     views.setViewVisibility(allSlotIds[i], View.VISIBLE)
                     val intent = Intent(context, TimerWidget::class.java).apply {

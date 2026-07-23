@@ -88,8 +88,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon0" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon0" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name0" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -105,8 +105,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon1" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon1" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name1" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -121,8 +121,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon2" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon2" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name2" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -147,8 +147,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon3" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon3" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name3" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -164,8 +164,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon4" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon4" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name4" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -180,8 +180,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon5" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon5" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name5" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -207,8 +207,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon6" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon6" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name6" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -224,8 +224,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon7" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon7" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name7" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />
@@ -240,8 +240,8 @@
             android:gravity="center_vertical"
             android:background="@drawable/chip"
             android:padding="6dp">
-            <ImageView android:id="@+id/w_icon8" android:layout_width="12dp" android:layout_height="12dp"
-                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <ImageView android:id="@+id/w_icon8" android:layout_width="10dp" android:layout_height="10dp"
+                android:layout_marginEnd="6dp" android:src="@drawable/dot" />
             <TextView android:id="@+id/w_name8" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
                 android:maxLines="2" android:ellipsize="end" android:text="—" />

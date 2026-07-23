@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private var statsCategory = "all"
 
     private val todayViews = HashMap<String, TextView>()
+    private val expandedIds = HashSet<String>()
     private val handler = Handler(Looper.getMainLooper())
 
     private val ticker = object : Runnable {
@@ -202,6 +203,15 @@ class MainActivity : AppCompatActivity() {
     private fun buildRow(act: JSONObject, runId: String): View {
         val id = act.getString("id")
         val running = id == runId
+        val expanded = id in expandedIds
+
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        val clp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        clp.bottomMargin = dp(8)
+        container.layoutParams = clp
 
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
@@ -211,11 +221,6 @@ class MainActivity : AppCompatActivity() {
         if (running && !editMode) bg.setStroke(dp(2), Color.parseColor("#E1591F"))
         if (editMode) bg.setStroke(dp(1), Color.parseColor("#2F4B8F"))
         row.background = bg
-        val lp = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.bottomMargin = dp(8)
-        row.layoutParams = lp
 
         val dot = View(this)
         val dotBg = GradientDrawable()
@@ -254,6 +259,19 @@ class MainActivity : AppCompatActivity() {
             todayViews[id] = today
         }
 
+        if (!editMode) {
+            val arrow = TextView(this)
+            arrow.text = if (expanded) "▾" else "▸"
+            arrow.setTextColor(Color.parseColor("#8592AB"))
+            arrow.textSize = 16f
+            arrow.setPadding(dp(10), 0, dp(6), 0)
+            arrow.setOnClickListener {
+                if (expanded) expandedIds.remove(id) else expandedIds.add(id)
+                renderTimer()
+            }
+            row.addView(arrow)
+        }
+
         val glyph = TextView(this)
         glyph.text = if (editMode) "✎" else if (running) "\u25A0" else "\u25B6"
         glyph.setTextColor(if (running && !editMode) Color.parseColor("#E1591F") else Color.parseColor("#2F4B8F"))
@@ -269,7 +287,81 @@ class MainActivity : AppCompatActivity() {
                 doSync()
             }
         }
-        return row
+        container.addView(row)
+        if (expanded && !editMode) container.addView(buildSessionsPanel(act))
+        return container
+    }
+
+    private fun buildSessionsPanel(act: JSONObject): View {
+        val id = act.getString("id")
+        val panel = LinearLayout(this)
+        panel.orientation = LinearLayout.VERTICAL
+        panel.setPadding(dp(14), dp(10), dp(14), dp(10))
+        val bg = GradientDrawable()
+        bg.setColor(Color.parseColor("#F3F6FB"))
+        bg.cornerRadius = dp(10).toFloat()
+        panel.background = bg
+        val plp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        plp.topMargin = dp(4)
+        panel.layoutParams = plp
+
+        val sessions = Store.sessionsForActivityToday(this, id)
+        val title = TextView(this)
+        title.text = "ENTRADAS DE HOY"
+        title.setTextColor(Color.parseColor("#8592AB"))
+        title.textSize = 10f
+        title.letterSpacing = 0.1f
+        panel.addView(title)
+
+        if (sessions.isEmpty()) {
+            val e = TextView(this)
+            e.text = "Sin entradas cerradas todavia."
+            e.setTextColor(Color.parseColor("#8592AB"))
+            e.textSize = 12f
+            e.setPadding(0, dp(8), 0, 0)
+            panel.addView(e)
+            return panel
+        }
+
+        val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        for (s in sessions) {
+            val srow = LinearLayout(this)
+            srow.orientation = LinearLayout.HORIZONTAL
+            srow.gravity = Gravity.CENTER_VERTICAL
+            srow.setPadding(0, dp(8), 0, dp(8))
+
+            val label = TextView(this)
+            val secs = (s.getLong("end") - s.getLong("start")) / 1000
+            label.text = fmt.format(s.getLong("start")) + " - " + fmt.format(s.getLong("end")) + "   " + Store.exact(secs)
+            label.textSize = 13f
+            label.setTextColor(Color.parseColor("#182742"))
+            label.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            srow.addView(label)
+
+            val del = TextView(this)
+            del.text = "Borrar"
+            del.setTextColor(Color.parseColor("#B5432E"))
+            del.textSize = 12f
+            del.setTypeface(del.typeface, Typeface.BOLD)
+            del.setPadding(dp(10), 0, dp(4), 0)
+            del.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Borrar entrada")
+                    .setMessage("Se borra el registro de " + fmt.format(s.getLong("start")) + " a " + fmt.format(s.getLong("end")) + ". Seguro?")
+                    .setPositiveButton("Borrar") { _, _ ->
+                        Store.deleteSession(this, s.getString("id"))
+                        renderTimer()
+                        doSync()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+            srow.addView(del)
+            panel.addView(srow)
+        }
+        return panel
     }
 
     private fun buildAddCard(): View {

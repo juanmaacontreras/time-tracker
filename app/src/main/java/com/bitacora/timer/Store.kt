@@ -164,6 +164,22 @@ object Store {
         write(ctx, obj)
     }
 
+    // Sesiones de una actividad que terminaron hoy (incluye las que empezaron ayer
+    // y quedaron corriendo hasta que se pararon hoy).
+    fun sessionsForActivityToday(ctx: Context, actId: String): List<JSONObject> {
+        val from = startOfToday()
+        val ss = root(ctx).getJSONArray("sessions")
+        val list = ArrayList<JSONObject>()
+        for (i in 0 until ss.length()) {
+            val s = ss.getJSONObject(i)
+            if (s.optBoolean("deleted", false)) continue
+            if (s.getString("actId") != actId) continue
+            if (s.getLong("end") >= from) list.add(s)
+        }
+        list.sortByDescending { it.getLong("start") }
+        return list
+    }
+
     fun recentSessions(ctx: Context, limit: Int): List<JSONObject> {
         val ss = root(ctx).getJSONArray("sessions")
         val list = ArrayList<JSONObject>()

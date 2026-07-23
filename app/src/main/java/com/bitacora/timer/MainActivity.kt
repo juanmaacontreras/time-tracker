@@ -17,6 +17,7 @@ import android.os.SystemClock
 import android.text.InputType
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Chronometer
 import android.widget.EditText
@@ -292,8 +293,7 @@ class MainActivity : AppCompatActivity() {
         val bg = card()
         // Borde consistente para los tres estados: solo cambia el color.
         if (running) bg.setStroke(dp(2), if (paused) col(R.color.pausedColor) else col(R.color.live))
-        // Ripple al tocar/mantener presionado: feedback inmediato de que el toque se registró.
-        row.background = withRipple(bg, dp(12).toFloat())
+        row.background = bg
 
         val arrow = TextView(this)
         arrow.text = if (expanded) "▾" else "▸"
@@ -381,6 +381,28 @@ class MainActivity : AppCompatActivity() {
         row.setOnLongClickListener {
             openActivitySheet(act)
             true
+        }
+        // El ripple solo aparece si el toque se sostiene un instante — así un tap corto
+        // (arrancar/parar) queda limpio, y mantener presionado (editar) sí se ve reaccionar.
+        val rippleBg = withRipple(bg, dp(12).toFloat())
+        var downX = 0f
+        var downY = 0f
+        val holdRunnable = Runnable {
+            row.background = rippleBg
+            rippleBg.setHotspot(downX, downY)
+            rippleBg.state = intArrayOf(android.R.attr.state_pressed, android.R.attr.state_enabled)
+        }
+        row.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.x; downY = event.y
+                    handler.postDelayed(holdRunnable, 150)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    handler.removeCallbacks(holdRunnable)
+                }
+            }
+            false
         }
         container.addView(row)
         if (expanded) container.addView(buildSessionsPanel(act))

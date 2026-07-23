@@ -50,7 +50,7 @@ object Notifs {
         val chronoBase = Store.now() - Store.runningElapsedMs(ctx)
         val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(name)
             .setContentText(if (paused) "Pausado" else "Cronometrando…")
             .setOngoing(true)

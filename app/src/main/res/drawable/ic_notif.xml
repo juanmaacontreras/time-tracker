@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Silueta blanca sobre transparente: Android solo mira el canal alfa para
+         pintar el ícono de notificación (barra de estado + vista expandida). -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,3a9,9 0,1 0,0.1 0zM12,7a5,5 0,1 1,-0.1 0z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M12,12L12,8 M12,12L15,13.5" />
+</vector>

@@ -3,9 +3,12 @@ package com.bitacora.timer
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -256,6 +259,16 @@ class MainActivity : AppCompatActivity() {
         return d
     }
 
+    // Envuelve un fondo con un ripple recortado a la misma forma, para dar feedback
+    // táctil inmediato (tap corto o mantener presionado) sin animaciones vistosas.
+    private fun withRipple(content: Drawable, cornerRadius: Float): Drawable {
+        val mask = GradientDrawable()
+        mask.cornerRadius = cornerRadius
+        mask.setColor(Color.WHITE)
+        val rippleColor = ColorStateList.valueOf(col(R.color.indigo))
+        return RippleDrawable(rippleColor, content, mask)
+    }
+
     private fun buildRow(act: JSONObject, runId: String): View {
         val id = act.getString("id")
         val running = id == runId
@@ -278,7 +291,8 @@ class MainActivity : AppCompatActivity() {
         val bg = card()
         // Borde consistente para los tres estados: solo cambia el color.
         if (running) bg.setStroke(dp(2), if (paused) col(R.color.pausedColor) else col(R.color.live))
-        row.background = bg
+        // Ripple al tocar/mantener presionado: feedback inmediato de que el toque se registró.
+        row.background = withRipple(bg, dp(12).toFloat())
 
         val arrow = TextView(this)
         arrow.text = if (expanded) "▾" else "▸"
@@ -421,7 +435,7 @@ class MainActivity : AppCompatActivity() {
             srow.addView(label)
 
             val confirmDelete = {
-                AlertDialog.Builder(this)
+                val d = AlertDialog.Builder(this, R.style.AppDialog)
                     .setTitle("Borrar entrada")
                     .setMessage("Se borra el registro de " + fmt.format(s.getLong("start")) + " a " + fmt.format(s.getLong("end")) + ". Seguro?")
                     .setPositiveButton("Borrar") { _, _ ->
@@ -431,6 +445,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
+                d.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(col(R.color.live))
                 Unit
             }
 
@@ -865,7 +880,7 @@ class MainActivity : AppCompatActivity() {
         b.setOnClickListener {
             val filterLabel = if (statsCategory == "all") labelFor(statsPeriod)
                 else "${labelFor(statsPeriod)} · $statsCategory"
-            AlertDialog.Builder(this)
+            AlertDialog.Builder(this, R.style.AppDialog)
                 .setTitle("Exportar CSV")
                 .setItems(arrayOf("Todo el historial", "Solo lo filtrado ($filterLabel)")) { _, which ->
                     exportCsv(filtered = which == 1)
@@ -952,7 +967,7 @@ class MainActivity : AppCompatActivity() {
             box.addView(arch)
         }
 
-        val builder = AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this, R.style.AppDialog)
             .setTitle(if (existing == null) "Nueva actividad" else "Editar actividad")
             .setView(box)
             .setPositiveButton("Guardar") { _, _ ->
@@ -972,10 +987,11 @@ class MainActivity : AppCompatActivity() {
         val dialog = builder.create()
         dlg = dialog
         dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(col(R.color.live))
     }
 
     private fun confirmDelete(act: JSONObject) {
-        AlertDialog.Builder(this)
+        val d = AlertDialog.Builder(this, R.style.AppDialog)
             .setTitle("Borrar \"${act.getString("name")}\"")
             .setMessage("También se borran sus sesiones. ¿Seguro?")
             .setPositiveButton("Borrar") { _, _ ->
@@ -985,6 +1001,7 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+        d.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(col(R.color.live))
     }
 
     private fun doSync() {

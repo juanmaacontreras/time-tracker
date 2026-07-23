@@ -435,29 +435,16 @@ class MainActivity : AppCompatActivity() {
             }
 
             val del = TextView(this)
-            del.text = "Borrar"
+            del.text = "✕"
             del.setTextColor(col(R.color.live))
-            del.textSize = 12f
+            del.textSize = 16f
             del.setTypeface(del.typeface, Typeface.BOLD)
-            del.setPadding(dp(10), 0, dp(4), 0)
+            del.gravity = Gravity.CENTER
+            del.minWidth = dp(36)
+            del.minHeight = dp(36)
+            del.setPadding(dp(8), dp(4), dp(4), dp(4))
             del.setOnClickListener { confirmDelete() }
             srow.addView(del)
-
-            // Swipe hacia la izquierda también borra (con la misma confirmación).
-            val swipeThreshold = dp(60)
-            srow.setOnTouchListener(object : View.OnTouchListener {
-                private var downX = 0f
-                override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
-                    when (e.actionMasked) {
-                        // Hay que devolver true en ACTION_DOWN para seguir recibiendo el gesto.
-                        android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; return true }
-                        android.view.MotionEvent.ACTION_UP -> {
-                            if (downX - e.x > swipeThreshold) { confirmDelete(); return true }
-                        }
-                    }
-                    return false
-                }
-            })
             panel.addView(srow)
         }
         return panel

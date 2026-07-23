@@ -226,8 +226,12 @@ class MainActivity : AppCompatActivity() {
             val arrow = TextView(this)
             arrow.text = if (expanded) "▾" else "▸"
             arrow.setTextColor(Color.parseColor("#8592AB"))
-            arrow.textSize = 16f
-            arrow.setPadding(0, 0, dp(10), 0)
+            arrow.textSize = 20f
+            arrow.gravity = Gravity.CENTER
+            arrow.minWidth = dp(44)
+            arrow.minHeight = dp(44)
+            arrow.setPadding(dp(4), dp(4), dp(4), dp(4))
+            arrow.isClickable = true
             arrow.setOnClickListener {
                 if (expanded) expandedIds.remove(id) else expandedIds.add(id)
                 renderTimer()

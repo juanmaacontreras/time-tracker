@@ -182,6 +182,66 @@
         </LinearLayout>
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/w_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+        android:weightSum="3"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/w_slot6"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/chip"
+            android:padding="6dp">
+            <ImageView android:id="@+id/w_icon6" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <TextView android:id="@+id/w_name6" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
+                android:maxLines="1" android:ellipsize="end" android:text="—" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/w_slot7"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/chip"
+            android:padding="6dp">
+            <ImageView android:id="@+id/w_icon7" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <TextView android:id="@+id/w_name7" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
+                android:maxLines="1" android:ellipsize="end" android:text="—" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/w_slot8"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/chip"
+            android:padding="6dp">
+            <ImageView android:id="@+id/w_icon8" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="5dp" android:src="@drawable/ic_play" />
+            <TextView android:id="@+id/w_name8" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:textColor="@color/ink" android:textSize="12sp"
+                android:maxLines="1" android:ellipsize="end" android:text="—" />
+        </LinearLayout>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/w_more"
         android:layout_width="match_parent"

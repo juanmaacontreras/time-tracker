@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -26,6 +27,15 @@ class TimerWidget : AppWidgetProvider() {
                 pending.finish()
             }
         }.start()
+    }
+
+    // El usuario agrandó/achicó el widget: re-renderizar para mostrar 6 o 9 actividades
+    // según el espacio disponible.
+    override fun onAppWidgetOptionsChanged(
+        context: Context, mgr: AppWidgetManager, appWidgetId: Int, newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, mgr, appWidgetId, newOptions)
+        renderOne(context, mgr, appWidgetId)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -135,38 +145,59 @@ class TimerWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.w_root, refreshPi)
 
-            val slotIds = intArrayOf(R.id.w_slot0, R.id.w_slot1, R.id.w_slot2, R.id.w_slot3, R.id.w_slot4, R.id.w_slot5)
-            val iconIds = intArrayOf(R.id.w_icon0, R.id.w_icon1, R.id.w_icon2, R.id.w_icon3, R.id.w_icon4, R.id.w_icon5)
-            val nameIds = intArrayOf(R.id.w_name0, R.id.w_name1, R.id.w_name2, R.id.w_name3, R.id.w_name4, R.id.w_name5)
-            for (i in slotIds.indices) {
+            val allSlotIds = intArrayOf(
+                R.id.w_slot0, R.id.w_slot1, R.id.w_slot2, R.id.w_slot3, R.id.w_slot4,
+                R.id.w_slot5, R.id.w_slot6, R.id.w_slot7, R.id.w_slot8
+            )
+            val allIconIds = intArrayOf(
+                R.id.w_icon0, R.id.w_icon1, R.id.w_icon2, R.id.w_icon3, R.id.w_icon4,
+                R.id.w_icon5, R.id.w_icon6, R.id.w_icon7, R.id.w_icon8
+            )
+            val allNameIds = intArrayOf(
+                R.id.w_name0, R.id.w_name1, R.id.w_name2, R.id.w_name3, R.id.w_name4,
+                R.id.w_name5, R.id.w_name6, R.id.w_name7, R.id.w_name8
+            )
+
+            // 4x2 (default, ~110dp de alto) muestra 6; al expandir a 4x3 (~180dp) aparece
+            // la tercera fila y se muestran 9.
+            val opts = mgr.getAppWidgetOptions(id)
+            val heightDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            val numSlots = if (heightDp >= 150) 9 else 6
+            views.setViewVisibility(R.id.w_row3, if (numSlots > 6) View.VISIBLE else View.GONE)
+
+            for (i in allSlotIds.indices) {
+                if (i >= numSlots) {
+                    views.setViewVisibility(allSlotIds[i], View.GONE)
+                    continue
+                }
                 if (i < acts.size) {
                     val act = acts[i]
                     val aid = act.getString("id")
                     val running = aid == runId
                     // Forma = si tocar para o arranca; color = el propio de la actividad,
                     // salvo si est\u00E1 pausada (\u00E1mbar) para distinguir el estado de un vistazo.
-                    views.setImageViewResource(iconIds[i], if (running) R.drawable.ic_stop else R.drawable.ic_play)
+                    views.setImageViewResource(allIconIds[i], if (running) R.drawable.ic_stop else R.drawable.ic_play)
                     val tint = if (running && paused) {
                         ContextCompat.getColor(context, R.color.pausedColor)
                     } else {
                         Color.parseColor(act.optString("color", "#2F4B8F"))
                     }
-                    views.setInt(iconIds[i], "setColorFilter", tint)
-                    views.setTextViewText(nameIds[i], act.getString("name"))
-                    views.setViewVisibility(slotIds[i], View.VISIBLE)
+                    views.setInt(allIconIds[i], "setColorFilter", tint)
+                    views.setTextViewText(allNameIds[i], act.getString("name"))
+                    views.setViewVisibility(allSlotIds[i], View.VISIBLE)
                     val intent = Intent(context, TimerWidget::class.java).apply {
                         action = ACTION_TOGGLE
                         putExtra("actId", aid)
                     }
                     val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     val pi = PendingIntent.getBroadcast(context, 100 + i, intent, flags)
-                    views.setOnClickPendingIntent(slotIds[i], pi)
+                    views.setOnClickPendingIntent(allSlotIds[i], pi)
                 } else {
-                    views.setViewVisibility(slotIds[i], View.GONE)
+                    views.setViewVisibility(allSlotIds[i], View.GONE)
                 }
             }
-            // Indicador "+N m\u00E1s" si hay actividades fuera de las 6 visibles.
-            val extra = acts.size - slotIds.size
+            // Indicador "+N m\u00E1s" si hay actividades fuera de las visibles.
+            val extra = acts.size - numSlots
             if (extra > 0) {
                 views.setTextViewText(R.id.w_more, "+$extra m\u00E1s")
                 views.setViewVisibility(R.id.w_more, View.VISIBLE)

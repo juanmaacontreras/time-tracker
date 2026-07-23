@@ -27,6 +27,9 @@ object Store {
         if (!obj.has("runActId")) obj.put("runActId", "")
         if (!obj.has("runStart")) obj.put("runStart", 0L)
         if (!obj.has("runChangedAt")) obj.put("runChangedAt", 0L)
+        if (!obj.has("runPaused")) obj.put("runPaused", false)
+        if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
+        if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
         return obj
     }
 
@@ -36,6 +39,7 @@ object Store {
             .put("name", name)
             .put("type", type)
             .put("color", color)
+            .put("archived", false)
             .put("updatedAt", now())
             .put("deleted", false)
 
@@ -44,12 +48,16 @@ object Store {
     }
 
     // ---------- activities ----------
-    fun activities(ctx: Context): List<JSONObject> {
+    // Por defecto excluye borradas y archivadas. La pestaña Resumen pasa
+    // includeArchived=true para que el historial archivado siga contando.
+    fun activities(ctx: Context, includeArchived: Boolean = false): List<JSONObject> {
         val arr = root(ctx).getJSONArray("activities")
         val out = ArrayList<JSONObject>()
         for (i in 0 until arr.length()) {
             val a = arr.getJSONObject(i)
-            if (!a.optBoolean("deleted", false)) out.add(a)
+            if (a.optBoolean("deleted", false)) continue
+            if (!includeArchived && a.optBoolean("archived", false)) continue
+            out.add(a)
         }
         return out
     }
@@ -85,7 +93,32 @@ object Store {
             if (s.getString("actId") == id) s.put("deleted", true).put("updatedAt", now())
         }
         if (obj.optString("runActId", "") == id) {
-            obj.put("runActId", "").put("runStart", 0L).put("runChangedAt", now())
+            obj.put("runActId", "").put("runStart", 0L)
+                .put("runPaused", false).put("runPausedAt", 0L).put("runPausedAccum", 0L)
+                .put("runChangedAt", now())
+        }
+        write(ctx, obj)
+    }
+
+    fun archiveActivity(ctx: Context, id: String) {
+        setArchived(ctx, id, true)
+    }
+
+    fun unarchiveActivity(ctx: Context, id: String) {
+        setArchived(ctx, id, false)
+    }
+
+    private fun setArchived(ctx: Context, id: String, value: Boolean) {
+        val obj = root(ctx)
+        val arr = obj.getJSONArray("activities")
+        for (i in 0 until arr.length()) {
+            val a = arr.getJSONObject(i)
+            if (a.getString("id") == id) a.put("archived", value).put("updatedAt", now())
+        }
+        // Si se archiva la que está corriendo, se corta (sin borrar su historial).
+        if (value && obj.optString("runActId", "") == id) {
+            stopInternal(obj)
+            obj.put("runChangedAt", now())
         }
         write(ctx, obj)
     }
@@ -102,18 +135,50 @@ object Store {
     // ---------- running ----------
     fun runningActId(ctx: Context): String = root(ctx).optString("runActId", "")
     fun runningStart(ctx: Context): Long = root(ctx).optLong("runStart", 0L)
+    fun runningPaused(ctx: Context): Boolean = root(ctx).optBoolean("runPaused", false)
+    fun runningPausedAt(ctx: Context): Long = root(ctx).optLong("runPausedAt", 0L)
+    fun runningPausedAccum(ctx: Context): Long = root(ctx).optLong("runPausedAccum", 0L)
 
+    // Milisegundos reales corridos de la sesión activa (descontando pausas). 0 si no hay nada.
+    fun runningElapsedMs(ctx: Context): Long {
+        if (runningActId(ctx).isEmpty()) return 0L
+        val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
+        return (end - runningStart(ctx) - runningPausedAccum(ctx)).coerceAtLeast(0L)
+    }
+
+    // Toque "inteligente": si es la misma actividad, pausa o resume; si es otra
+    // (o no hay nada), corta la anterior y arranca la nueva. Ver Store.stop() para
+    // el corte total explícito (banner/notificación/widget "Parar").
     fun toggle(ctx: Context, actId: String) {
         val obj = root(ctx)
         val cur = obj.optString("runActId", "")
         if (cur == actId) {
-            stopInternal(obj)
+            if (obj.optBoolean("runPaused", false)) resumeInternal(obj) else pauseInternal(obj)
         } else {
             if (cur.isNotEmpty()) stopInternal(obj)
             obj.put("runActId", actId).put("runStart", now())
+                .put("runPaused", false).put("runPausedAt", 0L).put("runPausedAccum", 0L)
         }
         obj.put("runChangedAt", now())
         write(ctx, obj)
+    }
+
+    fun pause(ctx: Context) {
+        val obj = root(ctx)
+        if (obj.optString("runActId", "").isNotEmpty() && !obj.optBoolean("runPaused", false)) {
+            pauseInternal(obj)
+            obj.put("runChangedAt", now())
+            write(ctx, obj)
+        }
+    }
+
+    fun resume(ctx: Context) {
+        val obj = root(ctx)
+        if (obj.optString("runActId", "").isNotEmpty() && obj.optBoolean("runPaused", false)) {
+            resumeInternal(obj)
+            obj.put("runChangedAt", now())
+            write(ctx, obj)
+        }
     }
 
     fun stop(ctx: Context) {
@@ -123,24 +188,40 @@ object Store {
         write(ctx, obj)
     }
 
+    private fun pauseInternal(obj: JSONObject) {
+        obj.put("runPaused", true).put("runPausedAt", now())
+    }
+
+    private fun resumeInternal(obj: JSONObject) {
+        val pausedAt = obj.optLong("runPausedAt", 0L)
+        if (pausedAt > 0) {
+            obj.put("runPausedAccum", obj.optLong("runPausedAccum", 0L) + (now() - pausedAt))
+        }
+        obj.put("runPaused", false).put("runPausedAt", 0L)
+    }
+
     private fun stopInternal(obj: JSONObject) {
         val cur = obj.optString("runActId", "")
         val start = obj.optLong("runStart", 0L)
         if (cur.isNotEmpty() && start > 0) {
-            val end = now()
-            if (end - start >= 1000) {
+            // Fórmula canónica compartida con la webapp: el tiempo pausado no se cuenta.
+            val paused = obj.optBoolean("runPaused", false)
+            val currentEnd = if (paused) obj.optLong("runPausedAt", 0L) else now()
+            val real = currentEnd - start - obj.optLong("runPausedAccum", 0L)
+            if (real >= 1000) {
                 obj.getJSONArray("sessions").put(
                     JSONObject()
                         .put("id", uid())
                         .put("actId", cur)
                         .put("start", start)
-                        .put("end", end)
+                        .put("end", start + real)
                         .put("updatedAt", now())
                         .put("deleted", false)
                 )
             }
         }
         obj.put("runActId", "").put("runStart", 0L)
+            .put("runPaused", false).put("runPausedAt", 0L).put("runPausedAccum", 0L)
     }
 
     // ---------- sessions ----------
@@ -202,7 +283,11 @@ object Store {
             val end = s.getLong("end")
             if (end >= from) t += (end - maxOf(s.getLong("start"), from))
         }
-        if (runningActId(ctx) == actId) t += (now() - maxOf(runningStart(ctx), from))
+        if (runningActId(ctx) == actId) {
+            val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
+            val c = end - maxOf(runningStart(ctx), from) - runningPausedAccum(ctx)
+            if (c > 0) t += c
+        }
         return t / 1000
     }
 
@@ -237,9 +322,10 @@ object Store {
         }
         val runId = runningActId(ctx)
         if (runId.isNotEmpty() && (actIds == null || runId in actIds)) {
+            val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
             val a = maxOf(runningStart(ctx), from)
-            val b = minOf(now(), to)
-            if (b > a) t += (b - a)
+            val b = minOf(end, to)
+            if (b > a) t += (b - a - runningPausedAccum(ctx)).coerceAtLeast(0L)
         }
         return t / 1000
     }
@@ -287,6 +373,9 @@ object Store {
         val run = JSONObject()
             .put("actId", r.optString("runActId", ""))
             .put("start", r.optLong("runStart", 0L))
+            .put("paused", r.optBoolean("runPaused", false))
+            .put("pausedAt", r.optLong("runPausedAt", 0L))
+            .put("pausedAccum", r.optLong("runPausedAccum", 0L))
             .put("changedAt", r.optLong("runChangedAt", 0L))
         return JSONObject()
             .put("activities", r.getJSONArray("activities"))
@@ -299,12 +388,16 @@ object Store {
         mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))
         mergeList(obj.getJSONArray("sessions"), remote.optJSONArray("sessions"))
         // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.
+        // El bloque run se reemplaza entero, nunca campo por campo.
         val rr = remote.optJSONObject("run")
         if (rr != null) {
             val remoteChanged = rr.optLong("changedAt", 0L)
             if (remoteChanged > obj.optLong("runChangedAt", 0L)) {
                 obj.put("runActId", rr.optString("actId", ""))
                 obj.put("runStart", rr.optLong("start", 0L))
+                obj.put("runPaused", rr.optBoolean("paused", false))
+                obj.put("runPausedAt", rr.optLong("pausedAt", 0L))
+                obj.put("runPausedAccum", rr.optLong("pausedAccum", 0L))
                 obj.put("runChangedAt", remoteChanged)
             }
         }

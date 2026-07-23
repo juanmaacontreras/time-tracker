@@ -37,6 +37,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.bitacora.timer.TOGGLE" />
                 <action android:name="com.bitacora.timer.STOP" />
+                <action android:name="com.bitacora.timer.PAUSE" />
                 <action android:name="com.bitacora.timer.REFRESH" />
             </intent-filter>
             <meta-data

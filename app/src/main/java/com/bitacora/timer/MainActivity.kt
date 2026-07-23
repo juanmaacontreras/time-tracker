@@ -39,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bannerLabel: TextView
     private lateinit var bannerName: TextView
     private lateinit var bannerChrono: Chronometer
+    private lateinit var bannerPause: TextView
+    private lateinit var bannerStop: TextView
     private lateinit var btnEdit: Button
     private lateinit var tabTimer: TextView
     private lateinit var tabResumen: TextView
@@ -74,6 +76,8 @@ class MainActivity : AppCompatActivity() {
         bannerLabel = findViewById(R.id.bannerLabel)
         bannerName = findViewById(R.id.bannerName)
         bannerChrono = findViewById(R.id.bannerChrono)
+        bannerPause = findViewById(R.id.bannerPause)
+        bannerStop = findViewById(R.id.bannerStop)
         btnEdit = findViewById(R.id.btnEdit)
         tabTimer = findViewById(R.id.tabTimer)
         tabResumen = findViewById(R.id.tabResumen)
@@ -82,6 +86,16 @@ class MainActivity : AppCompatActivity() {
             editMode = !editMode
             btnEdit.text = if (editMode) "✓ Listo" else "✎ Editar"
             render()
+        }
+        bannerPause.setOnClickListener {
+            if (Store.runningPaused(this)) Store.resume(this) else Store.pause(this)
+            render()
+            doSync()
+        }
+        bannerStop.setOnClickListener {
+            Store.stop(this)
+            render()
+            doSync()
         }
         tabTimer.setOnClickListener { switchTab("timer") }
         tabResumen.setOnClickListener { switchTab("resumen") }
@@ -179,16 +193,29 @@ class MainActivity : AppCompatActivity() {
     private fun renderBanner(runId: String) {
         if (runId.isNotEmpty()) {
             val a = Store.activityById(this, runId)
-            bannerLabel.text = "GRABANDO"
+            val paused = Store.runningPaused(this)
             bannerName.text = a?.optString("name") ?: "—"
-            val elapsed = Store.now() - Store.runningStart(this)
+            // El chrono siempre se posiciona con el tiempo real corrido (sin pausas).
+            val elapsed = Store.runningElapsedMs(this)
             bannerChrono.base = SystemClock.elapsedRealtime() - elapsed
-            bannerChrono.start()
+            if (paused) {
+                bannerLabel.text = "PAUSADO"
+                bannerChrono.stop()
+                bannerPause.text = "Resumir"
+            } else {
+                bannerLabel.text = "GRABANDO"
+                bannerChrono.start()
+                bannerPause.text = "Pausar"
+            }
+            bannerPause.visibility = View.VISIBLE
+            bannerStop.visibility = View.VISIBLE
         } else {
             bannerLabel.text = "EN REPOSO"
             bannerName.text = "Nada corriendo"
             bannerChrono.stop()
             bannerChrono.base = SystemClock.elapsedRealtime()
+            bannerPause.visibility = View.GONE
+            bannerStop.visibility = View.GONE
         }
     }
 
@@ -203,6 +230,7 @@ class MainActivity : AppCompatActivity() {
     private fun buildRow(act: JSONObject, runId: String): View {
         val id = act.getString("id")
         val running = id == runId
+        val paused = running && Store.runningPaused(this)
         val expanded = id in expandedIds
 
         val container = LinearLayout(this)
@@ -218,7 +246,8 @@ class MainActivity : AppCompatActivity() {
         row.gravity = Gravity.CENTER_VERTICAL
         row.setPadding(dp(14), dp(12), dp(12), dp(12))
         val bg = card()
-        if (running && !editMode) bg.setStroke(dp(2), Color.parseColor("#E1591F"))
+        // Borde consistente para los tres estados: solo cambia el color.
+        if (running && !editMode) bg.setStroke(dp(2), Color.parseColor(if (paused) "#C9821E" else "#E1591F"))
         if (editMode) bg.setStroke(dp(1), Color.parseColor("#2F4B8F"))
         row.background = bg
 
@@ -268,7 +297,13 @@ class MainActivity : AppCompatActivity() {
         if (!editMode) {
             val today = TextView(this)
             today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
-            today.setTextColor(if (running) Color.parseColor("#E1591F") else Color.parseColor("#182742"))
+            today.setTextColor(
+                when {
+                    paused -> Color.parseColor("#C9821E")
+                    running -> Color.parseColor("#E1591F")
+                    else -> Color.parseColor("#182742")
+                }
+            )
             today.textSize = 14f
             today.typeface = Typeface.MONOSPACE
             today.setPadding(0, 0, dp(12), 0)
@@ -278,7 +313,14 @@ class MainActivity : AppCompatActivity() {
 
         val glyph = TextView(this)
         glyph.text = if (editMode) "✎" else if (running) "\u25A0" else "\u25B6"
-        glyph.setTextColor(if (running && !editMode) Color.parseColor("#E1591F") else Color.parseColor("#2F4B8F"))
+        if (paused && !editMode) glyph.text = "‖"   // override: pausado
+        glyph.setTextColor(
+            when {
+                paused && !editMode -> Color.parseColor("#C9821E")
+                running && !editMode -> Color.parseColor("#E1591F")
+                else -> Color.parseColor("#2F4B8F")
+            }
+        )
         glyph.textSize = 18f
         row.addView(glyph)
 
@@ -392,7 +434,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateRunningRow() {
         if (tab != "timer" || editMode) return
         val runId = Store.runningActId(this)
-        if (runId.isEmpty()) return
+        if (runId.isEmpty() || Store.runningPaused(this)) return
         todayViews[runId]?.text = Store.exact(Store.secsFor(this, runId, Store.startOfToday()))
     }
 

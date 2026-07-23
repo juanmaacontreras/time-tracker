@@ -41,19 +41,29 @@ object Notifs {
         val stopIntent = Intent(ctx, TimerWidget::class.java).apply { action = TimerWidget.ACTION_STOP }
         val stopPi = PendingIntent.getBroadcast(ctx, 1, stopIntent, flags)
 
-        val start = Store.runningStart(ctx)
-        val n = NotificationCompat.Builder(ctx, CHANNEL)
+        val pauseIntent = Intent(ctx, TimerWidget::class.java).apply { action = TimerWidget.ACTION_PAUSE }
+        val pausePi = PendingIntent.getBroadcast(ctx, 2, pauseIntent, flags)
+
+        val paused = Store.runningPaused(ctx)
+        // El "when" del chrono se calcula desde el tiempo real corrido (sin pausas).
+        val chronoBase = Store.now() - Store.runningElapsedMs(ctx)
+        val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(name)
-            .setContentText("Cronometrando…")
+            .setContentText(if (paused) "Pausado" else "Cronometrando…")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setUsesChronometer(true)
-            .setWhen(start)
             .setContentIntent(openPi)
+            .addAction(0, if (paused) "Resumir" else "Pausar", pausePi)
             .addAction(0, "Parar", stopPi)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
+        if (paused) {
+            // Android no puede "congelar" el chronometer con animación; mostramos texto estático.
+            builder.setUsesChronometer(false)
+        } else {
+            builder.setUsesChronometer(true).setWhen(chronoBase)
+        }
+        val n = builder.build()
         try {
             nm.notify(NOTIF_ID, n)
         } catch (e: SecurityException) {

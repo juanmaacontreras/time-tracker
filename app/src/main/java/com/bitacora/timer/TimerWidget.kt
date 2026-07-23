@@ -49,6 +49,15 @@ class TimerWidget : AppWidgetProvider() {
                     Sync.pushOnly(context)
                 }
             }
+            ACTION_PAUSE -> {
+                runInBackground(context) {
+                    Sync.pullMerge(context)
+                    if (Store.runningPaused(context)) Store.resume(context) else Store.pause(context)
+                    refresh(context)
+                    Notifs.update(context); ResumenWidget.refresh(context)
+                    Sync.pushOnly(context)
+                }
+            }
             ACTION_REFRESH -> {
                 runInBackground(context) {
                     Sync.pullMerge(context)
@@ -69,6 +78,7 @@ class TimerWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_TOGGLE = "com.bitacora.timer.TOGGLE"
         const val ACTION_STOP = "com.bitacora.timer.STOP"
+        const val ACTION_PAUSE = "com.bitacora.timer.PAUSE"
         const val ACTION_REFRESH = "com.bitacora.timer.REFRESH"
 
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
@@ -78,9 +88,12 @@ class TimerWidget : AppWidgetProvider() {
 
             if (runId.isNotEmpty()) {
                 val a = Store.activityById(context, runId)
-                views.setTextViewText(R.id.w_status, (a?.optString("name") ?: "").uppercase())
-                val elapsed = Store.now() - Store.runningStart(context)
-                views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, true)
+                val name = (a?.optString("name") ?: "").uppercase()
+                val paused = Store.runningPaused(context)
+                val elapsed = Store.runningElapsedMs(context)
+                views.setTextViewText(R.id.w_status, if (paused) "PAUSADO · $name" else name)
+                // Al pausar, el cronómetro se congela (started = false) con el tiempo real corrido.
+                views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, !paused)
             } else {
                 views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
@@ -94,12 +107,18 @@ class TimerWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.w_root, refreshPi)
 
+            val paused = Store.runningPaused(context)
             val btnIds = intArrayOf(R.id.w_b0, R.id.w_b1, R.id.w_b2)
             for (i in btnIds.indices) {
                 if (i < acts.size) {
                     val act = acts[i]
                     val aid = act.getString("id")
-                    val label = (if (aid == runId) "\u25A0 " else "\u25B6 ") + act.getString("name")
+                    val glyph = when {
+                        aid == runId && paused -> "\u2016 "  // pausado
+                        aid == runId -> "\u25A0 "            // corriendo
+                        else -> "\u25B6 "                    // detenido
+                    }
+                    val label = glyph + act.getString("name")
                     views.setTextViewText(btnIds[i], label)
                     views.setViewVisibility(btnIds[i], View.VISIBLE)
                     val intent = Intent(context, TimerWidget::class.java).apply {

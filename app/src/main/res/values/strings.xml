@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Bitácora</string>
     <string name="widget_desc">Cronómetro de un toque</string>
+    <string name="widget_resumen_desc">Resumen de tiempo por período</string>
 </resources>

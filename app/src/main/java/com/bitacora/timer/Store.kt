@@ -27,11 +27,6 @@ object Store {
         if (!obj.has("runActId")) obj.put("runActId", "")
         if (!obj.has("runStart")) obj.put("runStart", 0L)
         if (!obj.has("runChangedAt")) obj.put("runChangedAt", 0L)
-        if (obj.getJSONArray("activities").length() == 0) {
-            val arr = obj.getJSONArray("activities")
-            arr.put(newActivity("Electrónica", "Materia", COLORS[0]))
-            arr.put(newActivity("Lectura", "Libro", COLORS[1]))
-        }
         return obj
     }
 
@@ -209,6 +204,26 @@ object Store {
         val c = Calendar.getInstance()
         c.set(Calendar.DAY_OF_MONTH, 1)
         return midnight(c)
+    }
+
+    // Total (todas las actividades) dentro de la ventana [from, to), en segundos.
+    fun totalBetween(ctx: Context, from: Long, to: Long): Long {
+        var t = 0L
+        val ss = root(ctx).getJSONArray("sessions")
+        for (i in 0 until ss.length()) {
+            val s = ss.getJSONObject(i)
+            if (s.optBoolean("deleted", false)) continue
+            val a = maxOf(s.getLong("start"), from)
+            val b = minOf(s.getLong("end"), to)
+            if (b > a) t += (b - a)
+        }
+        val runId = runningActId(ctx)
+        if (runId.isNotEmpty()) {
+            val a = maxOf(runningStart(ctx), from)
+            val b = minOf(now(), to)
+            if (b > a) t += (b - a)
+        }
+        return t / 1000
     }
 
     fun periodStart(period: String): Long = when (period) {

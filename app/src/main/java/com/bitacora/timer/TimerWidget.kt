@@ -19,7 +19,7 @@ class TimerWidget : AppWidgetProvider() {
             try {
                 Sync.pullMerge(context)
                 refresh(context)
-                Notifs.update(context)
+                Notifs.update(context); ResumenWidget.refresh(context)
             } finally {
                 pending.finish()
             }
@@ -35,7 +35,7 @@ class TimerWidget : AppWidgetProvider() {
                     Sync.pullMerge(context)
                     Store.toggle(context, actId)
                     refresh(context)
-                    Notifs.update(context)
+                    Notifs.update(context); ResumenWidget.refresh(context)
                     Sync.pushOnly(context)
                     refresh(context)
                 }
@@ -45,7 +45,7 @@ class TimerWidget : AppWidgetProvider() {
                     Sync.pullMerge(context)
                     Store.stop(context)
                     refresh(context)
-                    Notifs.update(context)
+                    Notifs.update(context); ResumenWidget.refresh(context)
                     Sync.pushOnly(context)
                 }
             }
@@ -53,7 +53,7 @@ class TimerWidget : AppWidgetProvider() {
                 runInBackground(context) {
                     Sync.pullMerge(context)
                     refresh(context)
-                    Notifs.update(context)
+                    Notifs.update(context); ResumenWidget.refresh(context)
                 }
             }
         }

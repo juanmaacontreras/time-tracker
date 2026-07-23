@@ -149,6 +149,7 @@ class MainActivity : AppCompatActivity() {
     private fun render() {
         if (tab == "timer") renderTimer() else renderResumen()
         TimerWidget.refresh(this)
+        ResumenWidget.refresh(this)
         Notifs.update(this)
     }
 
@@ -157,8 +158,19 @@ class MainActivity : AppCompatActivity() {
         todayViews.clear()
         list.removeAllViews()
         val runId = Store.runningActId(this)
-        for (act in Store.activities(this)) list.addView(buildRow(act, runId))
-        if (editMode) list.addView(buildAddCard())
+        val acts = Store.activities(this)
+        for (act in acts) list.addView(buildRow(act, runId))
+        if (acts.isEmpty()) {
+            val hint = TextView(this)
+            hint.text = "Todavía no tenés actividades.\nCreá la primera acá abajo 👇"
+            hint.setTextColor(Color.parseColor("#8592AB"))
+            hint.gravity = Gravity.CENTER
+            hint.setPadding(0, dp(10), 0, dp(14))
+            list.addView(hint)
+            list.addView(buildAddCard())
+        } else if (editMode) {
+            list.addView(buildAddCard())
+        }
         renderBanner(runId)
     }
 
@@ -322,8 +334,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        resumenView.addView(sectionLabel("POR ACTIVIDAD"))
-        resumenView.addView(buildBarChart(perAct.take(8)))
+        if (statsPeriod == "day") {
+            resumenView.addView(sectionLabel("POR ACTIVIDAD"))
+            val bars = perAct.take(8).map {
+                Triple(it.first.getString("name"), it.second, Color.parseColor(it.first.optString("color", "#2F4B8F")))
+            }
+            resumenView.addView(buildBarChart(bars, true, 1))
+        } else {
+            resumenView.addView(sectionLabel("POR DÍA"))
+            val bars = if (statsPeriod == "week") weekBars() else monthBars()
+            resumenView.addView(buildBarChart(bars, statsPeriod == "week", if (statsPeriod == "week") 1 else 5))
+        }
         for ((a, sec) in perAct) {
             resumenView.addView(statRow(a.getString("name"), Color.parseColor(a.optString("color", "#2F4B8F")), sec, total))
         }
@@ -393,7 +414,29 @@ class MainActivity : AppCompatActivity() {
         return seg
     }
 
-    private fun buildBarChart(entries: List<Pair<JSONObject, Long>>): View {
+    private val DAY_MS = 86400000L
+
+    private fun weekBars(): List<Triple<String, Long, Int>> {
+        val ws = Store.startOfWeek()
+        val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+        val c = Color.parseColor("#2F4B8F")
+        return (0..6).map { i ->
+            val ds = ws + i * DAY_MS
+            Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS), c)
+        }
+    }
+
+    private fun monthBars(): List<Triple<String, Long, Int>> {
+        val ms = Store.startOfMonth()
+        val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+        val c = Color.parseColor("#2F4B8F")
+        return (0 until today).map { i ->
+            val ds = ms + i * DAY_MS
+            Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS), c)
+        }
+    }
+
+    private fun buildBarChart(bars: List<Triple<String, Long, Int>>, showValues: Boolean, labelStep: Int): View {
         val chartH = dp(150)
         val wrap = LinearLayout(this)
         wrap.orientation = LinearLayout.HORIZONTAL
@@ -404,42 +447,50 @@ class MainActivity : AppCompatActivity() {
         wlp.topMargin = dp(6); wlp.bottomMargin = dp(4)
         wrap.layoutParams = wlp
 
-        val max = (entries.maxOfOrNull { it.second } ?: 1L).coerceAtLeast(1L)
-        for ((a, sec) in entries) {
+        val max = (bars.maxOfOrNull { it.second } ?: 1L).coerceAtLeast(1L)
+        for ((idx, b) in bars.withIndex()) {
+            val label = b.first
+            val secs = b.second
+            val colorInt = b.third
+
             val col = LinearLayout(this)
             col.orientation = LinearLayout.VERTICAL
             col.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            col.setPadding(dp(2), 0, dp(2), 0)
             col.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
 
-            val v = TextView(this)
-            v.text = Store.exact(sec)
-            v.textSize = 9f
-            v.setTextColor(Color.parseColor("#4A5A78"))
-            v.gravity = Gravity.CENTER
-            v.maxLines = 1
+            if (showValues) {
+                val v = TextView(this)
+                v.text = if (secs > 0) Store.exact(secs) else ""
+                v.textSize = 9f
+                v.setTextColor(Color.parseColor("#4A5A78"))
+                v.gravity = Gravity.CENTER
+                v.maxLines = 1
+                col.addView(v)
+            }
 
-            val barH = Math.max(dp(4), (sec.toDouble() / max * chartH).toInt())
+            val barH = Math.max(dp(3), (secs.toDouble() / max * chartH).toInt())
             val bar = View(this)
             val barBg = GradientDrawable()
             barBg.cornerRadius = dp(4).toFloat()
-            barBg.setColor(Color.parseColor(a.optString("color", "#2F4B8F")))
+            barBg.setColor(colorInt)
             bar.background = barBg
-            val blp = LinearLayout.LayoutParams(dp(26), barH)
+            val blp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, barH)
             blp.topMargin = dp(3)
+            blp.leftMargin = dp(1); blp.rightMargin = dp(1)
             bar.layoutParams = blp
+            col.addView(bar)
 
             val n = TextView(this)
-            n.text = a.getString("name")
+            n.text = if (idx % labelStep == 0) label else ""
             n.textSize = 9f
             n.setTextColor(Color.parseColor("#8592AB"))
             n.gravity = Gravity.CENTER
             n.maxLines = 1
             n.ellipsize = TextUtils.TruncateAt.END
-            n.setPadding(dp(2), dp(4), dp(2), 0)
-
-            col.addView(v)
-            col.addView(bar)
+            n.setPadding(0, dp(4), 0, 0)
             col.addView(n)
+
             wrap.addView(col)
         }
         return wrap

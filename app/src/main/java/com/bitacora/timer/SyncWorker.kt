@@ -13,6 +13,7 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
             Sync.pullMerge(applicationContext)
             Notifs.update(applicationContext)
             TimerWidget.refresh(applicationContext)
+            ResumenWidget.refresh(applicationContext)
         } catch (e: Exception) {
             return Result.retry()
         }

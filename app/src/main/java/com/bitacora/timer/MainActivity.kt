@@ -222,6 +222,19 @@ class MainActivity : AppCompatActivity() {
         if (editMode) bg.setStroke(dp(1), Color.parseColor("#2F4B8F"))
         row.background = bg
 
+        if (!editMode) {
+            val arrow = TextView(this)
+            arrow.text = if (expanded) "▾" else "▸"
+            arrow.setTextColor(Color.parseColor("#8592AB"))
+            arrow.textSize = 16f
+            arrow.setPadding(0, 0, dp(10), 0)
+            arrow.setOnClickListener {
+                if (expanded) expandedIds.remove(id) else expandedIds.add(id)
+                renderTimer()
+            }
+            row.addView(arrow)
+        }
+
         val dot = View(this)
         val dotBg = GradientDrawable()
         dotBg.shape = GradientDrawable.OVAL
@@ -257,19 +270,6 @@ class MainActivity : AppCompatActivity() {
             today.setPadding(0, 0, dp(12), 0)
             row.addView(today)
             todayViews[id] = today
-        }
-
-        if (!editMode) {
-            val arrow = TextView(this)
-            arrow.text = if (expanded) "▾" else "▸"
-            arrow.setTextColor(Color.parseColor("#8592AB"))
-            arrow.textSize = 16f
-            arrow.setPadding(dp(10), 0, dp(6), 0)
-            arrow.setOnClickListener {
-                if (expanded) expandedIds.remove(id) else expandedIds.add(id)
-                renderTimer()
-            }
-            row.addView(arrow)
         }
 
         val glyph = TextView(this)

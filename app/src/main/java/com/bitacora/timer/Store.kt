@@ -278,19 +278,25 @@ object Store {
     }
 
     // ---------- stats ----------
-    fun secsFor(ctx: Context, actId: String, from: Long): Long {
+    // "to" por defecto es infinito (todo lo transcurrido desde "from" hasta ahora),
+    // que es el comportamiento de siempre. Se puede acotar para navegar a períodos
+    // pasados sin arrastrar tiempo posterior a ese período.
+    fun secsFor(ctx: Context, actId: String, from: Long, to: Long = Long.MAX_VALUE): Long {
         var t = 0L
         val ss = root(ctx).getJSONArray("sessions")
         for (i in 0 until ss.length()) {
             val s = ss.getJSONObject(i)
             if (s.optBoolean("deleted", false)) continue
             if (s.getString("actId") != actId) continue
-            val end = s.getLong("end")
-            if (end >= from) t += (end - maxOf(s.getLong("start"), from))
+            val a = maxOf(s.getLong("start"), from)
+            val b = minOf(s.getLong("end"), to)
+            if (b > a) t += (b - a)
         }
         if (runningActId(ctx) == actId) {
             val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
-            val c = end - maxOf(runningStart(ctx), from) - runningPausedAccum(ctx)
+            val a = maxOf(runningStart(ctx), from)
+            val b = minOf(end, to)
+            val c = (b - a) - runningPausedAccum(ctx)
             if (c > 0) t += c
         }
         return t / 1000
@@ -341,6 +347,45 @@ object Store {
         "month" -> startOfMonth()
         else -> 0L
     }
+
+    // Rango [from, to) de un período con offset respecto del actual: 0 = el actual,
+    // -1 = el anterior, -2 = dos atrás, etc. Es la base de la navegación "◀ ▶" del Resumen.
+    fun periodRange(period: String, offset: Int): Pair<Long, Long> = when (period) {
+        "day" -> {
+            val c = Calendar.getInstance()
+            c.add(Calendar.DAY_OF_MONTH, offset)
+            val from = midnight(c)
+            from to (from + DAY_MS)
+        }
+        "week" -> {
+            val c = Calendar.getInstance()
+            c.add(Calendar.WEEK_OF_YEAR, offset)
+            val dow = c.get(Calendar.DAY_OF_WEEK)
+            val back = if (dow == Calendar.SUNDAY) 6 else dow - Calendar.MONDAY
+            c.add(Calendar.DAY_OF_MONTH, -back)
+            val from = midnight(c)
+            from to (from + 7 * DAY_MS)
+        }
+        "month" -> {
+            val c = Calendar.getInstance()
+            c.add(Calendar.MONTH, offset)
+            c.set(Calendar.DAY_OF_MONTH, 1)
+            val from = midnight(c)
+            val c2 = c.clone() as Calendar
+            c2.add(Calendar.MONTH, 1)
+            from to midnight(c2)
+        }
+        else -> 0L to now()
+    }
+
+    // Cantidad de días del mes al que pertenece "from" (para recorrer un mes pasado completo).
+    fun daysInMonth(from: Long): Int {
+        val c = Calendar.getInstance()
+        c.timeInMillis = from
+        return c.getActualMaximum(Calendar.DAY_OF_MONTH)
+    }
+
+    private const val DAY_MS = 86400000L
 
     private fun midnight(c: Calendar): Long {
         c.set(Calendar.HOUR_OF_DAY, 0)

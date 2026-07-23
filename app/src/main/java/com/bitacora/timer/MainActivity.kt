@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var statsPeriod = "day"
     private var statsCategory = "all"
     private var catExpanded: Boolean? = null  // null = usar default según cantidad
+    private var statsOffset = 0  // 0 = período actual, -1 = el anterior, etc.
     private var showArchived = false
 
     private val todayViews = HashMap<String, TextView>()
@@ -494,17 +495,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- RESUMEN TAB ----------------
-    private fun labelFor(p: String) = when (p) {
-        "day" -> "Hoy"
-        "week" -> "Esta semana"
-        else -> "Este mes"
-    }
-
     private fun renderResumen() {
         resumenView.removeAllViews()
         resumenView.addView(buildPeriodSelector())
 
-        val from = Store.periodStart(statsPeriod)
+        val (from, to) = Store.periodRange(statsPeriod, statsOffset)
+        resumenView.addView(buildOffsetNav(periodLabel(statsPeriod, statsOffset, from, to)))
+
         // Incluye archivadas: su historial sigue contando en las estadísticas.
         val allActs = Store.activities(this, includeArchived = true)
 
@@ -516,14 +513,13 @@ class MainActivity : AppCompatActivity() {
         val acts = if (statsCategory == "all") allActs
             else allActs.filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
 
-        val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from) }
+        val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from, to) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
         val total = perAct.sumOf { it.second }
 
-        val totalLabel = if (statsCategory == "all") labelFor(statsPeriod).uppercase()
-            else "${labelFor(statsPeriod).uppercase()} · ${statsCategory.uppercase()}"
-        resumenView.addView(sectionLabel("TOTAL · $totalLabel"))
+        val totalLabel = if (statsCategory == "all") "TOTAL" else "TOTAL · ${statsCategory.uppercase()}"
+        resumenView.addView(sectionLabel(totalLabel))
         val big = TextView(this)
         big.text = Store.exact(total)
         big.textSize = 30f
@@ -549,7 +545,8 @@ class MainActivity : AppCompatActivity() {
             resumenView.addView(buildBarChart(bars, true, 1))
         } else {
             resumenView.addView(sectionLabel("POR DÍA"))
-            val bars = if (statsPeriod == "week") weekBars(actIds) else monthBars(actIds)
+            val bars = if (statsPeriod == "week") weekBars(actIds, from)
+                else monthBars(actIds, from, if (statsOffset == 0) java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) else Store.daysInMonth(from))
             resumenView.addView(buildBarChart(bars, statsPeriod == "week", if (statsPeriod == "week") 1 else 5))
         }
         for ((a, sec) in perAct) {
@@ -559,7 +556,7 @@ class MainActivity : AppCompatActivity() {
         if (statsCategory == "all") {
             val cats = LinkedHashMap<String, Long>()
             for (a in allActs) {
-                val t = Store.secsFor(this, a.getString("id"), from)
+                val t = Store.secsFor(this, a.getString("id"), from, to)
                 if (t > 0) {
                     val c = a.optString("type", "General").ifEmpty { "General" }
                     cats[c] = (cats[c] ?: 0L) + t
@@ -690,30 +687,86 @@ class MainActivity : AppCompatActivity() {
             } else {
                 b.setTextColor(col(R.color.inkSoft))
             }
-            b.setOnClickListener { statsPeriod = p; renderResumen() }
+            b.setOnClickListener { statsPeriod = p; statsOffset = 0; renderResumen() }
             seg.addView(b)
         }
         return seg
     }
 
+    // ---- navegación de período (◀ actual/pasado ▶) ----
+    private fun periodLabel(period: String, offset: Int, from: Long, to: Long): String {
+        val locale = java.util.Locale("es")
+        return when (period) {
+            "day" -> when (offset) {
+                0 -> "Hoy"
+                -1 -> "Ayer"
+                else -> java.text.SimpleDateFormat("d 'de' MMMM", locale).format(java.util.Date(from))
+            }
+            "week" -> if (offset == 0) "Esta semana" else {
+                val fmt = java.text.SimpleDateFormat("d MMM", locale)
+                val endInclusive = java.util.Date(to - 1)
+                "${fmt.format(java.util.Date(from))} – ${fmt.format(endInclusive)}"
+            }
+            "month" -> if (offset == 0) "Este mes" else {
+                java.text.SimpleDateFormat("MMMM yyyy", locale).format(java.util.Date(from))
+                    .replaceFirstChar { it.uppercase() }
+            }
+            else -> ""
+        }
+    }
+
+    private fun buildOffsetNav(label: String): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp.topMargin = dp(10)
+        row.layoutParams = lp
+
+        fun arrow(symbol: String, enabled: Boolean, onClick: () -> Unit): View {
+            val t = TextView(this)
+            t.text = symbol
+            t.textSize = 16f
+            t.gravity = Gravity.CENTER
+            t.minWidth = dp(36)
+            t.minHeight = dp(36)
+            t.setTextColor(if (enabled) col(R.color.indigo) else col(R.color.line))
+            if (enabled) t.setOnClickListener { onClick() }
+            return t
+        }
+
+        row.addView(arrow("◀", true) { statsOffset -= 1; renderResumen() })
+
+        val t = TextView(this)
+        t.text = label
+        t.textSize = 13f
+        t.gravity = Gravity.CENTER
+        t.setTypeface(t.typeface, Typeface.BOLD)
+        t.setTextColor(col(R.color.ink))
+        t.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        row.addView(t)
+
+        // No se puede navegar a "el futuro": el offset máximo es 0 (el período actual).
+        row.addView(arrow("▶", statsOffset < 0) { statsOffset += 1; renderResumen() })
+        return row
+    }
+
     private val DAY_MS = 86400000L
 
-    private fun weekBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
-        val ws = Store.startOfWeek()
+    private fun weekBars(actIds: Set<String>, weekStart: Long): List<Triple<String, Long, Int>> {
         val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
         val c = col(R.color.indigo)
         return (0..6).map { i ->
-            val ds = ws + i * DAY_MS
+            val ds = weekStart + i * DAY_MS
             Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
         }
     }
 
-    private fun monthBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
-        val ms = Store.startOfMonth()
-        val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+    // dayCount: días a recorrer (parcial hasta hoy si es el mes actual, completo si es un mes pasado).
+    private fun monthBars(actIds: Set<String>, monthStart: Long, dayCount: Int): List<Triple<String, Long, Int>> {
         val c = col(R.color.indigo)
-        return (0 until today).map { i ->
-            val ds = ms + i * DAY_MS
+        return (0 until dayCount).map { i ->
+            val ds = monthStart + i * DAY_MS
             Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
         }
     }
@@ -878,8 +931,10 @@ class MainActivity : AppCompatActivity() {
         lp.topMargin = dp(20)
         b.layoutParams = lp
         b.setOnClickListener {
-            val filterLabel = if (statsCategory == "all") labelFor(statsPeriod)
-                else "${labelFor(statsPeriod)} · $statsCategory"
+            val (rFrom, rTo) = Store.periodRange(statsPeriod, statsOffset)
+            val periodTxt = periodLabel(statsPeriod, statsOffset, rFrom, rTo)
+            val filterLabel = if (statsCategory == "all") periodTxt
+                else "$periodTxt · $statsCategory"
             AlertDialog.Builder(this, R.style.AppDialog)
                 .setTitle("Exportar CSV")
                 .setItems(arrayOf("Todo el historial", "Solo lo filtrado ($filterLabel)")) { _, which ->
@@ -1015,12 +1070,12 @@ class MainActivity : AppCompatActivity() {
     private fun exportCsv(filtered: Boolean) {
         try {
             val csv = if (filtered) {
-                val from = Store.periodStart(statsPeriod)
+                val (from, to) = Store.periodRange(statsPeriod, statsOffset)
                 val ids: Set<String>? = if (statsCategory == "all") null
                     else Store.activities(this, includeArchived = true)
                         .filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
                         .map { it.getString("id") }.toSet()
-                Store.exportCsv(this, from, Long.MAX_VALUE, ids)
+                Store.exportCsv(this, from, to, ids)
             } else {
                 Store.exportCsv(this)
             }

@@ -23,7 +23,15 @@ object Store {
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    // Cache en memoria del JSON completo. Sin esto, cada llamada a root() volvía a leer
+    // SharedPreferences y a parsear TODO el historial desde cero — y casi todas las
+    // funciones de Store llaman a root(), así que un solo toque disparaba decenas de
+    // parseos sincrónicos en el hilo principal (la causa de la lentitud).
+    @Volatile private var cachedRoot: JSONObject? = null
+
+    @Synchronized
     fun root(ctx: Context): JSONObject {
+        cachedRoot?.let { return it }
         val raw = prefs(ctx).getString(KEY, null)
         val obj = if (raw != null) JSONObject(raw) else JSONObject()
         if (!obj.has("activities")) obj.put("activities", JSONArray())
@@ -34,6 +42,7 @@ object Store {
         if (!obj.has("runPaused")) obj.put("runPaused", false)
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
+        cachedRoot = obj
         return obj
     }
 
@@ -47,13 +56,16 @@ object Store {
             .put("updatedAt", now())
             .put("deleted", false)
 
+    @Synchronized
     fun write(ctx: Context, obj: JSONObject) {
+        cachedRoot = obj
         prefs(ctx).edit().putString(KEY, obj.toString()).apply()
     }
 
     // ---------- activities ----------
     // Por defecto excluye borradas y archivadas. La pestaña Resumen pasa
     // includeArchived=true para que el historial archivado siga contando.
+    @Synchronized
     fun activities(ctx: Context, includeArchived: Boolean = false): List<JSONObject> {
         val arr = root(ctx).getJSONArray("activities")
         val out = ArrayList<JSONObject>()
@@ -66,12 +78,14 @@ object Store {
         return out
     }
 
+    @Synchronized
     fun addActivity(ctx: Context, name: String, type: String, color: String) {
         val obj = root(ctx)
         obj.getJSONArray("activities").put(newActivity(name, type, color))
         write(ctx, obj)
     }
 
+    @Synchronized
     fun updateActivity(ctx: Context, id: String, name: String, type: String, color: String) {
         val obj = root(ctx)
         val arr = obj.getJSONArray("activities")
@@ -84,6 +98,7 @@ object Store {
         write(ctx, obj)
     }
 
+    @Synchronized
     fun deleteActivity(ctx: Context, id: String) {
         val obj = root(ctx)
         val arr = obj.getJSONArray("activities")
@@ -112,6 +127,7 @@ object Store {
         setArchived(ctx, id, false)
     }
 
+    @Synchronized
     private fun setArchived(ctx: Context, id: String, value: Boolean) {
         val obj = root(ctx)
         val arr = obj.getJSONArray("activities")
@@ -127,6 +143,7 @@ object Store {
         write(ctx, obj)
     }
 
+    @Synchronized
     fun activityById(ctx: Context, id: String): JSONObject? {
         val arr = root(ctx).getJSONArray("activities")
         for (i in 0 until arr.length()) {
@@ -137,13 +154,14 @@ object Store {
     }
 
     // ---------- running ----------
-    fun runningActId(ctx: Context): String = root(ctx).optString("runActId", "")
-    fun runningStart(ctx: Context): Long = root(ctx).optLong("runStart", 0L)
-    fun runningPaused(ctx: Context): Boolean = root(ctx).optBoolean("runPaused", false)
-    fun runningPausedAt(ctx: Context): Long = root(ctx).optLong("runPausedAt", 0L)
-    fun runningPausedAccum(ctx: Context): Long = root(ctx).optLong("runPausedAccum", 0L)
+    @Synchronized fun runningActId(ctx: Context): String = root(ctx).optString("runActId", "")
+    @Synchronized fun runningStart(ctx: Context): Long = root(ctx).optLong("runStart", 0L)
+    @Synchronized fun runningPaused(ctx: Context): Boolean = root(ctx).optBoolean("runPaused", false)
+    @Synchronized fun runningPausedAt(ctx: Context): Long = root(ctx).optLong("runPausedAt", 0L)
+    @Synchronized fun runningPausedAccum(ctx: Context): Long = root(ctx).optLong("runPausedAccum", 0L)
 
     // Milisegundos reales corridos de la sesión activa (descontando pausas). 0 si no hay nada.
+    @Synchronized
     fun runningElapsedMs(ctx: Context): Long {
         if (runningActId(ctx).isEmpty()) return 0L
         val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
@@ -154,6 +172,7 @@ object Store {
     // Pausar/resumir es una acción explícita aparte (ver Store.pause/resume), nunca
     // pasa por acá — así el toque tiene un solo significado en toda la app y los widgets.
     // Tocar otra actividad distinta corta la anterior (con su tiempo real) y arranca la nueva.
+    @Synchronized
     fun toggle(ctx: Context, actId: String) {
         val obj = root(ctx)
         val cur = obj.optString("runActId", "")
@@ -168,6 +187,7 @@ object Store {
         write(ctx, obj)
     }
 
+    @Synchronized
     fun pause(ctx: Context) {
         val obj = root(ctx)
         if (obj.optString("runActId", "").isNotEmpty() && !obj.optBoolean("runPaused", false)) {
@@ -177,6 +197,7 @@ object Store {
         }
     }
 
+    @Synchronized
     fun resume(ctx: Context) {
         val obj = root(ctx)
         if (obj.optString("runActId", "").isNotEmpty() && obj.optBoolean("runPaused", false)) {
@@ -186,6 +207,7 @@ object Store {
         }
     }
 
+    @Synchronized
     fun stop(ctx: Context) {
         val obj = root(ctx)
         stopInternal(obj)
@@ -230,6 +252,7 @@ object Store {
     }
 
     // ---------- sessions ----------
+    @Synchronized
     fun addSession(ctx: Context, actId: String, start: Long, end: Long) {
         val obj = root(ctx)
         obj.getJSONArray("sessions").put(
@@ -240,6 +263,7 @@ object Store {
         write(ctx, obj)
     }
 
+    @Synchronized
     fun deleteSession(ctx: Context, id: String) {
         val obj = root(ctx)
         val ss = obj.getJSONArray("sessions")
@@ -252,6 +276,7 @@ object Store {
 
     // Sesiones de una actividad que terminaron hoy (incluye las que empezaron ayer
     // y quedaron corriendo hasta que se pararon hoy).
+    @Synchronized
     fun sessionsForActivityToday(ctx: Context, actId: String): List<JSONObject> {
         val from = startOfToday()
         val ss = root(ctx).getJSONArray("sessions")
@@ -266,6 +291,7 @@ object Store {
         return list
     }
 
+    @Synchronized
     fun recentSessions(ctx: Context, limit: Int): List<JSONObject> {
         val ss = root(ctx).getJSONArray("sessions")
         val list = ArrayList<JSONObject>()
@@ -281,6 +307,7 @@ object Store {
     // "to" por defecto es infinito (todo lo transcurrido desde "from" hasta ahora),
     // que es el comportamiento de siempre. Se puede acotar para navegar a períodos
     // pasados sin arrastrar tiempo posterior a ese período.
+    @Synchronized
     fun secsFor(ctx: Context, actId: String, from: Long, to: Long = Long.MAX_VALUE): Long {
         var t = 0L
         val ss = root(ctx).getJSONArray("sessions")
@@ -320,6 +347,7 @@ object Store {
 
     // Total dentro de la ventana [from, to), en segundos. Si actIds no es null,
     // solo suma las actividades incluidas en ese set.
+    @Synchronized
     fun totalBetween(ctx: Context, from: Long, to: Long, actIds: Set<String>? = null): Long {
         var t = 0L
         val ss = root(ctx).getJSONArray("sessions")
@@ -398,6 +426,7 @@ object Store {
     // ---------- csv ----------
     // Si from/to/actIds se pasan, exporta solo las sesiones que caen en ese rango
     // y pertenecen a esas actividades (para respetar el filtro activo del resumen).
+    @Synchronized
     fun exportCsv(
         ctx: Context,
         from: Long = 0L,
@@ -429,6 +458,7 @@ object Store {
     }
 
     // ---------- sync payload + merge ----------
+    @Synchronized
     fun payload(ctx: Context): JSONObject {
         val r = root(ctx)
         val run = JSONObject()
@@ -438,12 +468,16 @@ object Store {
             .put("pausedAt", r.optLong("runPausedAt", 0L))
             .put("pausedAccum", r.optLong("runPausedAccum", 0L))
             .put("changedAt", r.optLong("runChangedAt", 0L))
+        // Copias profundas: el payload se serializa fuera de este bloque sincronizado
+        // (en el hilo de red), y no debe compartir referencia con los arrays cacheados
+        // que otro hilo podría seguir mutando mientras tanto.
         return JSONObject()
-            .put("activities", r.getJSONArray("activities"))
-            .put("sessions", r.getJSONArray("sessions"))
+            .put("activities", JSONArray(r.getJSONArray("activities").toString()))
+            .put("sessions", JSONArray(r.getJSONArray("sessions").toString()))
             .put("run", run)
     }
 
+    @Synchronized
     fun merge(ctx: Context, remote: JSONObject) {
         val obj = root(ctx)
         mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))

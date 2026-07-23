@@ -158,12 +158,21 @@ class TimerWidget : AppWidgetProvider() {
                 R.id.w_name5, R.id.w_name6, R.id.w_name7, R.id.w_name8
             )
 
-            // 4x2 (default, ~110dp de alto) muestra 6; al expandir a 4x3 (~180dp) aparece
-            // la tercera fila y se muestran 9.
+            // 4x2 (default, ~110dp de alto) permite hasta 6; al expandir a 4x3 (~180dp)
+            // permite hasta 9.
             val opts = mgr.getAppWidgetOptions(id)
             val heightDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
             val numSlots = if (heightDp >= 150) 9 else 6
-            views.setViewVisibility(R.id.w_row3, if (numSlots > 6) View.VISIBLE else View.GONE)
+
+            // Solo se arman tantas filas como hagan falta para las actividades reales
+            // (nunca más de las que el tamaño actual permite). Cada fila visible tiene
+            // height=0dp + weight=1 en el XML, así que se reparten TODO el alto sobrante
+            // entre sí — ni una fila vacía queda ocupando espacio ni los botones quedan cortos.
+            val visibleActs = minOf(acts.size, numSlots)
+            val rowsNeeded = if (visibleActs == 0) 0 else (visibleActs + 2) / 3
+            views.setViewVisibility(R.id.w_row1, if (rowsNeeded >= 1) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.w_row2, if (rowsNeeded >= 2) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.w_row3, if (rowsNeeded >= 3) View.VISIBLE else View.GONE)
 
             for (i in allSlotIds.indices) {
                 if (i >= numSlots) {

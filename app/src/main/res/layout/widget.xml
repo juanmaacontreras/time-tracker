@@ -66,17 +66,22 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- Las filas de actividades tienen height=0dp + weight=1: se reparten TODO el
+         espacio vertical sobrante entre las filas que realmente tienen contenido
+         (las vacías quedan GONE), así no queda fondo vacío por pocas actividades. -->
+
     <LinearLayout
+        android:id="@+id/w_row1"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="horizontal"
-        android:layout_marginTop="8dp"
-        android:weightSum="3">
+        android:layout_marginTop="8dp">
 
         <LinearLayout
             android:id="@+id/w_slot0"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -93,7 +98,7 @@
         <LinearLayout
             android:id="@+id/w_slot1"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -110,7 +115,7 @@
         <LinearLayout
             android:id="@+id/w_slot2"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="horizontal"
             android:gravity="center_vertical"
@@ -125,16 +130,17 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/w_row2"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="horizontal"
-        android:layout_marginTop="4dp"
-        android:weightSum="3">
+        android:layout_marginTop="4dp">
 
         <LinearLayout
             android:id="@+id/w_slot3"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -151,7 +157,7 @@
         <LinearLayout
             android:id="@+id/w_slot4"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -168,7 +174,7 @@
         <LinearLayout
             android:id="@+id/w_slot5"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="horizontal"
             android:gravity="center_vertical"
@@ -185,16 +191,16 @@
     <LinearLayout
         android:id="@+id/w_row3"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="horizontal"
         android:layout_marginTop="4dp"
-        android:weightSum="3"
         android:visibility="gone">
 
         <LinearLayout
             android:id="@+id/w_slot6"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -211,7 +217,7 @@
         <LinearLayout
             android:id="@+id/w_slot7"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
             android:orientation="horizontal"
@@ -228,7 +234,7 @@
         <LinearLayout
             android:id="@+id/w_slot8"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="horizontal"
             android:gravity="center_vertical"

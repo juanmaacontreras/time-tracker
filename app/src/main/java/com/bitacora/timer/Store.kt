@@ -205,6 +205,19 @@ object Store {
         return midnight(c)
     }
 
+    fun startOfMonth(): Long {
+        val c = Calendar.getInstance()
+        c.set(Calendar.DAY_OF_MONTH, 1)
+        return midnight(c)
+    }
+
+    fun periodStart(period: String): Long = when (period) {
+        "day" -> startOfToday()
+        "week" -> startOfWeek()
+        "month" -> startOfMonth()
+        else -> 0L
+    }
+
     private fun midnight(c: Calendar): Long {
         c.set(Calendar.HOUR_OF_DAY, 0)
         c.set(Calendar.MINUTE, 0)
@@ -293,5 +306,16 @@ object Store {
             m > 0 -> "${m}m"
             else -> "${sec}s"
         }
+    }
+
+    // Valor exacto siempre: H:MM:SS si hay horas, si no M:SS.
+    fun exact(sec: Long): String {
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
+        val s = sec % 60
+        return if (h > 0)
+            "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
+        else
+            "$m:${s.toString().padStart(2, '0')}"
     }
 }

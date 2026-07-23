@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.InputType
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -33,13 +34,19 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
-    private lateinit var stats: TextView
+    private lateinit var timerView: LinearLayout
+    private lateinit var resumenView: LinearLayout
     private lateinit var bannerLabel: TextView
     private lateinit var bannerName: TextView
     private lateinit var bannerChrono: Chronometer
     private lateinit var btnEdit: Button
+    private lateinit var tabTimer: TextView
+    private lateinit var tabResumen: TextView
 
     private var editMode = false
+    private var tab = "timer"
+    private var statsPeriod = "day"
+
     private val todayViews = HashMap<String, TextView>()
     private val handler = Handler(Looper.getMainLooper())
 
@@ -49,7 +56,6 @@ class MainActivity : AppCompatActivity() {
             handler.postDelayed(this, 1000)
         }
     }
-
     private val syncLoop = object : Runnable {
         override fun run() {
             doSync()
@@ -61,18 +67,26 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         list = findViewById(R.id.list)
-        stats = findViewById(R.id.stats)
+        timerView = findViewById(R.id.timerView)
+        resumenView = findViewById(R.id.resumenView)
         bannerLabel = findViewById(R.id.bannerLabel)
         bannerName = findViewById(R.id.bannerName)
         bannerChrono = findViewById(R.id.bannerChrono)
         btnEdit = findViewById(R.id.btnEdit)
+        tabTimer = findViewById(R.id.tabTimer)
+        tabResumen = findViewById(R.id.tabResumen)
+
         btnEdit.setOnClickListener {
             editMode = !editMode
             btnEdit.text = if (editMode) "✓ Listo" else "✎ Editar"
             render()
         }
+        tabTimer.setOnClickListener { switchTab("timer") }
+        tabResumen.setOnClickListener { switchTab("resumen") }
+
         requestNotifPermission()
         scheduleBackgroundSync()
+        switchTab("timer")
     }
 
     private fun requestNotifPermission() {
@@ -105,16 +119,47 @@ class MainActivity : AppCompatActivity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    private fun switchTab(t: String) {
+        tab = t
+        if (t == "resumen" && editMode) { editMode = false; btnEdit.text = "✎ Editar" }
+        timerView.visibility = if (t == "timer") View.VISIBLE else View.GONE
+        resumenView.visibility = if (t == "resumen") View.VISIBLE else View.GONE
+        btnEdit.visibility = if (t == "timer") View.VISIBLE else View.GONE
+        styleTabs()
+        render()
+    }
+
+    private fun styleTabs() {
+        fun paint(tv: TextView, active: Boolean) {
+            if (active) {
+                val d = GradientDrawable()
+                d.cornerRadius = dp(8).toFloat()
+                d.setColor(Color.parseColor("#182742"))
+                tv.background = d
+                tv.setTextColor(Color.WHITE)
+            } else {
+                tv.background = null
+                tv.setTextColor(Color.parseColor("#4A5A78"))
+            }
+        }
+        paint(tabTimer, tab == "timer")
+        paint(tabResumen, tab == "resumen")
+    }
+
     private fun render() {
+        if (tab == "timer") renderTimer() else renderResumen()
+        TimerWidget.refresh(this)
+        Notifs.update(this)
+    }
+
+    // ---------------- TIMER TAB ----------------
+    private fun renderTimer() {
         todayViews.clear()
         list.removeAllViews()
         val runId = Store.runningActId(this)
         for (act in Store.activities(this)) list.addView(buildRow(act, runId))
         if (editMode) list.addView(buildAddCard())
         renderBanner(runId)
-        renderStats()
-        TimerWidget.refresh(this)
-        Notifs.update(this)
     }
 
     private fun renderBanner(runId: String) {
@@ -187,7 +232,7 @@ class MainActivity : AppCompatActivity() {
 
         if (!editMode) {
             val today = TextView(this)
-            today.text = Store.human(Store.secsFor(this, id, Store.startOfToday()))
+            today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
             today.setTextColor(if (running) Color.parseColor("#E1591F") else Color.parseColor("#182742"))
             today.textSize = 14f
             today.typeface = Typeface.MONOSPACE
@@ -236,33 +281,252 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateRunningRow() {
-        if (editMode) return
+        if (tab != "timer" || editMode) return
         val runId = Store.runningActId(this)
         if (runId.isEmpty()) return
-        todayViews[runId]?.text = Store.human(Store.secsFor(this, runId, Store.startOfToday()))
+        todayViews[runId]?.text = Store.exact(Store.secsFor(this, runId, Store.startOfToday()))
     }
 
-    private fun renderStats() {
-        val sb = StringBuilder()
-        val today = Store.startOfToday()
-        val week = Store.startOfWeek()
+    // ---------------- RESUMEN TAB ----------------
+    private fun labelFor(p: String) = when (p) {
+        "day" -> "Hoy"
+        "week" -> "Esta semana"
+        else -> "Este mes"
+    }
+
+    private fun renderResumen() {
+        resumenView.removeAllViews()
+        resumenView.addView(buildPeriodSelector())
+
+        val from = Store.periodStart(statsPeriod)
         val acts = Store.activities(this)
-        var todayTotal = 0L
-        for (a in acts) todayTotal += Store.secsFor(this, a.getString("id"), today)
-        sb.append("HOY   ").append(Store.human(todayTotal)).append("\n\n")
-        sb.append("ESTA SEMANA\n")
-        val rows = acts.map { Pair(it, Store.secsFor(this, it.getString("id"), week)) }
+        val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
-        if (rows.isEmpty()) sb.append("  (sin registros)")
-        for (r in rows) {
-            val nm = r.first.getString("name")
-            sb.append("  ").append(nm.padEnd(16).take(16)).append("  ")
-                .append(Store.human(r.second)).append("\n")
+        val total = perAct.sumOf { it.second }
+
+        resumenView.addView(sectionLabel("TOTAL · ${labelFor(statsPeriod).uppercase()}"))
+        val big = TextView(this)
+        big.text = Store.exact(total)
+        big.textSize = 30f
+        big.typeface = Typeface.MONOSPACE
+        big.setTextColor(Color.parseColor("#182742"))
+        resumenView.addView(big)
+
+        if (perAct.isEmpty()) {
+            val e = TextView(this)
+            e.text = "Sin registros en este período."
+            e.setTextColor(Color.parseColor("#8592AB"))
+            e.setPadding(0, dp(24), 0, 0)
+            resumenView.addView(e)
+            return
         }
-        stats.text = sb.toString()
+
+        resumenView.addView(sectionLabel("POR ACTIVIDAD"))
+        resumenView.addView(buildBarChart(perAct.take(8)))
+        for ((a, sec) in perAct) {
+            resumenView.addView(statRow(a.getString("name"), Color.parseColor(a.optString("color", "#2F4B8F")), sec, total))
+        }
+
+        val cats = LinkedHashMap<String, Long>()
+        for (a in acts) {
+            val t = Store.secsFor(this, a.getString("id"), from)
+            if (t > 0) {
+                val c = a.optString("type", "General").ifEmpty { "General" }
+                cats[c] = (cats[c] ?: 0L) + t
+            }
+        }
+        if (cats.isNotEmpty()) {
+            resumenView.addView(sectionLabel("POR CATEGORÍA"))
+            for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
+                statRow(c, Color.parseColor("#2F4B8F"), sec, total).also { resumenView.addView(it) }
+            }
+        }
+
+        resumenView.addView(buildCsvButton())
     }
 
+    private fun sectionLabel(text: String): View {
+        val t = TextView(this)
+        t.text = text
+        t.setTextColor(Color.parseColor("#8592AB"))
+        t.textSize = 10f
+        t.letterSpacing = 0.14f
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.topMargin = dp(22)
+        lp.bottomMargin = dp(8)
+        t.layoutParams = lp
+        return t
+    }
+
+    private fun buildPeriodSelector(): View {
+        val seg = LinearLayout(this)
+        seg.orientation = LinearLayout.HORIZONTAL
+        seg.setPadding(dp(3), dp(3), dp(3), dp(3))
+        val segBg = GradientDrawable()
+        segBg.cornerRadius = dp(10).toFloat()
+        segBg.setColor(Color.parseColor("#FDFEFF"))
+        segBg.setStroke(dp(1), Color.parseColor("#D3DBE8"))
+        seg.background = segBg
+        val periods = listOf("day" to "Día", "week" to "Semana", "month" to "Mes")
+        for ((p, lbl) in periods) {
+            val b = TextView(this)
+            b.text = lbl
+            b.gravity = Gravity.CENTER
+            b.textSize = 13f
+            b.setPadding(dp(6), dp(9), dp(6), dp(9))
+            b.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            if (p == statsPeriod) {
+                val d = GradientDrawable()
+                d.cornerRadius = dp(8).toFloat()
+                d.setColor(Color.parseColor("#182742"))
+                b.background = d
+                b.setTextColor(Color.WHITE)
+            } else {
+                b.setTextColor(Color.parseColor("#4A5A78"))
+            }
+            b.setOnClickListener { statsPeriod = p; renderResumen() }
+            seg.addView(b)
+        }
+        return seg
+    }
+
+    private fun buildBarChart(entries: List<Pair<JSONObject, Long>>): View {
+        val chartH = dp(150)
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.HORIZONTAL
+        wrap.gravity = Gravity.BOTTOM
+        val wlp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        wlp.topMargin = dp(6); wlp.bottomMargin = dp(4)
+        wrap.layoutParams = wlp
+
+        val max = (entries.maxOfOrNull { it.second } ?: 1L).coerceAtLeast(1L)
+        for ((a, sec) in entries) {
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            col.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            col.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+
+            val v = TextView(this)
+            v.text = Store.exact(sec)
+            v.textSize = 9f
+            v.setTextColor(Color.parseColor("#4A5A78"))
+            v.gravity = Gravity.CENTER
+            v.maxLines = 1
+
+            val barH = Math.max(dp(4), (sec.toDouble() / max * chartH).toInt())
+            val bar = View(this)
+            val barBg = GradientDrawable()
+            barBg.cornerRadius = dp(4).toFloat()
+            barBg.setColor(Color.parseColor(a.optString("color", "#2F4B8F")))
+            bar.background = barBg
+            val blp = LinearLayout.LayoutParams(dp(26), barH)
+            blp.topMargin = dp(3)
+            bar.layoutParams = blp
+
+            val n = TextView(this)
+            n.text = a.getString("name")
+            n.textSize = 9f
+            n.setTextColor(Color.parseColor("#8592AB"))
+            n.gravity = Gravity.CENTER
+            n.maxLines = 1
+            n.ellipsize = TextUtils.TruncateAt.END
+            n.setPadding(dp(2), dp(4), dp(2), 0)
+
+            col.addView(v)
+            col.addView(bar)
+            col.addView(n)
+            wrap.addView(col)
+        }
+        return wrap
+    }
+
+    private fun statRow(name: String, colorInt: Int, sec: Long, total: Long): View {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(14), dp(12), dp(14), dp(12))
+        box.background = card()
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.bottomMargin = dp(8)
+        box.layoutParams = lp
+
+        val top = LinearLayout(this)
+        top.orientation = LinearLayout.HORIZONTAL
+        top.gravity = Gravity.CENTER_VERTICAL
+
+        val dot = View(this)
+        val dotBg = GradientDrawable()
+        dotBg.shape = GradientDrawable.OVAL
+        dotBg.setColor(colorInt)
+        dot.background = dotBg
+        val dlp = LinearLayout.LayoutParams(dp(10), dp(10)); dlp.rightMargin = dp(10)
+        dot.layoutParams = dlp
+        top.addView(dot)
+
+        val nm = TextView(this)
+        nm.text = name
+        nm.textSize = 14f
+        nm.setTextColor(Color.parseColor("#182742"))
+        nm.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        top.addView(nm)
+
+        val vl = TextView(this)
+        val pct = if (total > 0) Math.round(sec * 100.0 / total).toInt() else 0
+        vl.text = "${Store.exact(sec)}  ·  $pct%"
+        vl.textSize = 13f
+        vl.typeface = Typeface.MONOSPACE
+        vl.setTextColor(Color.parseColor("#4A5A78"))
+        top.addView(vl)
+        box.addView(top)
+
+        val track = LinearLayout(this)
+        track.orientation = LinearLayout.HORIZONTAL
+        val tlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
+        tlp.topMargin = dp(9)
+        track.layoutParams = tlp
+        val trackBg = GradientDrawable()
+        trackBg.cornerRadius = dp(5).toFloat()
+        trackBg.setColor(Color.parseColor("#E1E7F0"))
+        track.background = trackBg
+
+        val fill = View(this)
+        val fillBg = GradientDrawable()
+        fillBg.cornerRadius = dp(5).toFloat()
+        fillBg.setColor(colorInt)
+        fill.background = fillBg
+        val rest = View(this)
+
+        val safeTotal = total.coerceAtLeast(1L)
+        fill.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, sec.toFloat())
+        rest.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, (safeTotal - sec).coerceAtLeast(0L).toFloat())
+        track.weightSum = safeTotal.toFloat()
+        track.addView(fill)
+        track.addView(rest)
+        box.addView(track)
+
+        return box
+    }
+
+    private fun buildCsvButton(): View {
+        val b = Button(this)
+        b.text = "Exportar CSV"
+        b.textSize = 13f
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.topMargin = dp(20)
+        b.layoutParams = lp
+        b.setOnClickListener { exportCsv() }
+        return b
+    }
+
+    // ---------------- edit / create ----------------
     private fun openActivitySheet(existing: JSONObject?) {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
@@ -302,8 +566,7 @@ class MainActivity : AppCompatActivity() {
         }
         for (c in Store.COLORS) {
             val sw = View(this)
-            val slp = LinearLayout.LayoutParams(dp(34), dp(34))
-            slp.rightMargin = dp(8)
+            val slp = LinearLayout.LayoutParams(dp(34), dp(34)); slp.rightMargin = dp(8)
             sw.layoutParams = slp
             style(sw, c)
             sw.setOnClickListener {
@@ -356,7 +619,6 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    // Reservado para la futura pestaña de Resumen.
     private fun exportCsv() {
         try {
             val csv = Store.exportCsv(this)

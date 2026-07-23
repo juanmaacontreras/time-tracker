@@ -48,68 +48,93 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/banner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
+            android:orientation="horizontal"
             android:background="@drawable/widget_bg"
-            android:padding="16dp"
+            android:padding="3dp"
             android:layout_marginTop="14dp"
-            android:layout_marginBottom="16dp">
+            android:weightSum="2">
 
             <TextView
-                android:id="@+id/bannerLabel"
-                android:layout_width="wrap_content"
+                android:id="@+id/tabTimer"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="EN REPOSO"
-                android:textColor="@color/muted"
-                android:textSize="10sp"
-                android:letterSpacing="0.12" />
+                android:layout_weight="1"
+                android:gravity="center"
+                android:padding="10dp"
+                android:text="Cronómetro"
+                android:textSize="13sp" />
 
             <TextView
-                android:id="@+id/bannerName"
-                android:layout_width="wrap_content"
+                android:id="@+id/tabResumen"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Nada corriendo"
-                android:textColor="@color/ink"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <Chronometer
-                android:id="@+id/bannerChrono"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00"
-                android:textColor="@color/ink"
-                android:textSize="30sp"
-                android:fontFamily="monospace"
-                android:layout_marginTop="2dp" />
+                android:layout_weight="1"
+                android:gravity="center"
+                android:padding="10dp"
+                android:text="Resumen"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/list"
+            android:id="@+id/timerView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="vertical"
+            android:layout_marginTop="16dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="RESUMEN"
-            android:textColor="@color/muted"
-            android:textSize="10sp"
-            android:letterSpacing="0.14"
-            android:layout_marginTop="22dp"
-            android:layout_marginBottom="8dp" />
+            <LinearLayout
+                android:id="@+id/banner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/widget_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp">
 
-        <TextView
-            android:id="@+id/stats"
+                <TextView
+                    android:id="@+id/bannerLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="EN REPOSO"
+                    android:textColor="@color/muted"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.12" />
+
+                <TextView
+                    android:id="@+id/bannerName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nada corriendo"
+                    android:textColor="@color/ink"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <Chronometer
+                    android:id="@+id/bannerChrono"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@color/ink"
+                    android:textSize="30sp"
+                    android:fontFamily="monospace"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/resumenView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="@color/inkSoft"
-            android:textSize="14sp"
-            android:fontFamily="monospace"
-            android:lineSpacingExtra="4dp" />
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone" />
     </LinearLayout>
 </ScrollView>

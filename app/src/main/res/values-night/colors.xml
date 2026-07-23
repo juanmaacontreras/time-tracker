@@ -10,7 +10,7 @@
     <color name="line">#FF2A3648</color>
     <color name="grid">#FF232F40</color>
     <color name="indigo">#FF7B96D4</color>
-    <color name="live">#FFF07A45</color>
+    <color name="live">#FF62AEEA</color>
     <color name="pausedColor">#FFE0A03A</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

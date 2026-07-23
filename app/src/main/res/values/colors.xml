@@ -9,7 +9,8 @@
     <color name="line">#FFD3DBE8</color>
     <color name="grid">#FFE1E7F0</color>
     <color name="indigo">#FF2F4B8F</color>
-    <color name="live">#FFE1591F</color>
+    <!-- Azul más vívido que el indigo, para que "corriendo" se distinga de un vistazo. -->
+    <color name="live">#FF1C74C9</color>
     <color name="pausedColor">#FFC9821E</color>
     <color name="white">#FFFFFFFF</color>
     <!-- Fondo fijo del ícono adaptativo (no cambia con el tema del sistema). -->

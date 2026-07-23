@@ -150,14 +150,15 @@ object Store {
         return (end - runningStart(ctx) - runningPausedAccum(ctx)).coerceAtLeast(0L)
     }
 
-    // Toque "inteligente": si es la misma actividad, pausa o resume; si es otra
-    // (o no hay nada), corta la anterior y arranca la nueva. Ver Store.stop() para
-    // el corte total explícito (banner/notificación/widget "Parar").
+    // Tocar la actividad que ya está corriendo (o pausada) la para del todo.
+    // Pausar/resumir es una acción explícita aparte (ver Store.pause/resume), nunca
+    // pasa por acá — así el toque tiene un solo significado en toda la app y los widgets.
+    // Tocar otra actividad distinta corta la anterior (con su tiempo real) y arranca la nueva.
     fun toggle(ctx: Context, actId: String) {
         val obj = root(ctx)
         val cur = obj.optString("runActId", "")
         if (cur == actId) {
-            if (obj.optBoolean("runPaused", false)) resumeInternal(obj) else pauseInternal(obj)
+            stopInternal(obj)
         } else {
             if (cur.isNotEmpty()) stopInternal(obj)
             obj.put("runActId", actId).put("runStart", now())

@@ -17,6 +17,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Chronometer
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -337,17 +338,19 @@ class MainActivity : AppCompatActivity() {
         row.addView(today)
         todayViews[id] = today
 
-        val glyph = TextView(this)
-        glyph.text = if (running) "\u25A0" else "\u25B6"
-        if (paused) glyph.text = "‖"   // override: pausado
-        glyph.setTextColor(
+        // Ícono real: forma = si tocar para o arranca (■ para / ▶ arranca); color = estado.
+        // Tocar la activa (corriendo o pausada) siempre para — pausar es solo con el botón dedicado.
+        val glyph = ImageView(this)
+        glyph.setImageResource(if (running) R.drawable.ic_stop else R.drawable.ic_play)
+        glyph.setColorFilter(
             when {
                 paused -> col(R.color.pausedColor)
                 running -> col(R.color.live)
                 else -> col(R.color.indigo)
             }
         )
-        glyph.textSize = 18f
+        val glp = LinearLayout.LayoutParams(dp(18), dp(18))
+        glyph.layoutParams = glp
         row.addView(glyph)
 
         row.setOnClickListener {

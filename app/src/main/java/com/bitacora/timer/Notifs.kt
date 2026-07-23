@@ -5,11 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
@@ -25,15 +21,6 @@ object Notifs {
         }
     }
 
-    // "● Nombre" con el punto coloreado según la actividad — indicador chico, sin recolorear
-    // toda la notificación.
-    private fun titleWithDot(name: String, colorInt: Int): CharSequence {
-        val text = "●  $name"
-        val sp = SpannableString(text)
-        sp.setSpan(ForegroundColorSpan(colorInt), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        return sp
-    }
-
     // Muestra u oculta la notificacion segun el estado actual (corriendo o no).
     fun update(ctx: Context) {
         ensureChannel(ctx)
@@ -46,7 +33,6 @@ object Notifs {
         val a = Store.activityById(ctx, runId)
         val name = a?.optString("name") ?: "Cronómetro"
         val type = a?.optString("type", "") ?: ""
-        val colorInt = Color.parseColor(a?.optString("color", "#2F4B8F") ?: "#2F4B8F")
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
@@ -65,7 +51,7 @@ object Notifs {
         val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle(titleWithDot(name, colorInt))
+            .setContentTitle(name)
             .setContentText(if (paused) "Pausado" else "Cronometrando…")
             .setOngoing(true)
             .setOnlyAlertOnce(true)

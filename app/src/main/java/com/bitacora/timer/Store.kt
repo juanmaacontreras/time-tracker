@@ -206,19 +206,21 @@ object Store {
         return midnight(c)
     }
 
-    // Total (todas las actividades) dentro de la ventana [from, to), en segundos.
-    fun totalBetween(ctx: Context, from: Long, to: Long): Long {
+    // Total dentro de la ventana [from, to), en segundos. Si actIds no es null,
+    // solo suma las actividades incluidas en ese set.
+    fun totalBetween(ctx: Context, from: Long, to: Long, actIds: Set<String>? = null): Long {
         var t = 0L
         val ss = root(ctx).getJSONArray("sessions")
         for (i in 0 until ss.length()) {
             val s = ss.getJSONObject(i)
             if (s.optBoolean("deleted", false)) continue
+            if (actIds != null && s.getString("actId") !in actIds) continue
             val a = maxOf(s.getLong("start"), from)
             val b = minOf(s.getLong("end"), to)
             if (b > a) t += (b - a)
         }
         val runId = runningActId(ctx)
-        if (runId.isNotEmpty()) {
+        if (runId.isNotEmpty() && (actIds == null || runId in actIds)) {
             val a = maxOf(runningStart(ctx), from)
             val b = minOf(now(), to)
             if (b > a) t += (b - a)

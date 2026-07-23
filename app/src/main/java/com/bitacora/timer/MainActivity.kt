@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var editMode = false
     private var tab = "timer"
     private var statsPeriod = "day"
+    private var statsCategory = "all"
 
     private val todayViews = HashMap<String, TextView>()
     private val handler = Handler(Looper.getMainLooper())
@@ -311,13 +312,24 @@ class MainActivity : AppCompatActivity() {
         resumenView.addView(buildPeriodSelector())
 
         val from = Store.periodStart(statsPeriod)
-        val acts = Store.activities(this)
+        val allActs = Store.activities(this)
+
+        val allCats = allActs.map { it.optString("type", "General").ifEmpty { "General" } }
+            .distinct().sorted()
+        if (allCats.size > 1) resumenView.addView(buildCategorySelector(allCats))
+        if (statsCategory != "all" && statsCategory !in allCats) statsCategory = "all"
+
+        val acts = if (statsCategory == "all") allActs
+            else allActs.filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
+
         val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
         val total = perAct.sumOf { it.second }
 
-        resumenView.addView(sectionLabel("TOTAL · ${labelFor(statsPeriod).uppercase()}"))
+        val totalLabel = if (statsCategory == "all") labelFor(statsPeriod).uppercase()
+            else "${labelFor(statsPeriod).uppercase()} · ${statsCategory.uppercase()}"
+        resumenView.addView(sectionLabel("TOTAL · $totalLabel"))
         val big = TextView(this)
         big.text = Store.exact(total)
         big.textSize = 30f
@@ -334,6 +346,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val actIds = acts.map { it.getString("id") }.toSet()
         if (statsPeriod == "day") {
             resumenView.addView(sectionLabel("POR ACTIVIDAD"))
             val bars = perAct.take(8).map {
@@ -342,29 +355,73 @@ class MainActivity : AppCompatActivity() {
             resumenView.addView(buildBarChart(bars, true, 1))
         } else {
             resumenView.addView(sectionLabel("POR DÍA"))
-            val bars = if (statsPeriod == "week") weekBars() else monthBars()
+            val bars = if (statsPeriod == "week") weekBars(actIds) else monthBars(actIds)
             resumenView.addView(buildBarChart(bars, statsPeriod == "week", if (statsPeriod == "week") 1 else 5))
         }
         for ((a, sec) in perAct) {
             resumenView.addView(statRow(a.getString("name"), Color.parseColor(a.optString("color", "#2F4B8F")), sec, total))
         }
 
-        val cats = LinkedHashMap<String, Long>()
-        for (a in acts) {
-            val t = Store.secsFor(this, a.getString("id"), from)
-            if (t > 0) {
-                val c = a.optString("type", "General").ifEmpty { "General" }
-                cats[c] = (cats[c] ?: 0L) + t
+        if (statsCategory == "all") {
+            val cats = LinkedHashMap<String, Long>()
+            for (a in allActs) {
+                val t = Store.secsFor(this, a.getString("id"), from)
+                if (t > 0) {
+                    val c = a.optString("type", "General").ifEmpty { "General" }
+                    cats[c] = (cats[c] ?: 0L) + t
+                }
             }
-        }
-        if (cats.isNotEmpty()) {
-            resumenView.addView(sectionLabel("POR CATEGORÍA"))
-            for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
-                statRow(c, Color.parseColor("#2F4B8F"), sec, total).also { resumenView.addView(it) }
+            if (cats.isNotEmpty()) {
+                resumenView.addView(sectionLabel("POR CATEGORÍA"))
+                for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
+                    val row = statRow(c, Color.parseColor("#2F4B8F"), sec, total)
+                    row.setOnClickListener { statsCategory = c; renderResumen() }
+                    resumenView.addView(row)
+                }
             }
         }
 
         resumenView.addView(buildCsvButton())
+    }
+
+    private fun buildCategorySelector(cats: List<String>): View {
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.HORIZONTAL
+        wrap.setPadding(0, dp(10), 0, 0)
+
+        val scroll = android.widget.HorizontalScrollView(this)
+        scroll.isHorizontalScrollBarEnabled = false
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+
+        fun chip(label: String, value: String): View {
+            val c = TextView(this)
+            c.text = label
+            c.textSize = 12f
+            c.setPadding(dp(12), dp(7), dp(12), dp(7))
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.rightMargin = dp(6)
+            c.layoutParams = lp
+            val d = GradientDrawable()
+            d.cornerRadius = dp(16).toFloat()
+            if (value == statsCategory) {
+                d.setColor(Color.parseColor("#182742"))
+                c.setTextColor(Color.WHITE)
+            } else {
+                d.setColor(Color.parseColor("#FDFEFF"))
+                d.setStroke(dp(1), Color.parseColor("#D3DBE8"))
+                c.setTextColor(Color.parseColor("#4A5A78"))
+            }
+            c.background = d
+            c.setOnClickListener { statsCategory = value; renderResumen() }
+            return c
+        }
+
+        row.addView(chip("Todo", "all"))
+        for (c in cats) row.addView(chip(c, c))
+        scroll.addView(row)
+        wrap.addView(scroll)
+        return wrap
     }
 
     private fun sectionLabel(text: String): View {
@@ -416,23 +473,23 @@ class MainActivity : AppCompatActivity() {
 
     private val DAY_MS = 86400000L
 
-    private fun weekBars(): List<Triple<String, Long, Int>> {
+    private fun weekBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
         val ws = Store.startOfWeek()
         val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
         val c = Color.parseColor("#2F4B8F")
         return (0..6).map { i ->
             val ds = ws + i * DAY_MS
-            Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS), c)
+            Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
         }
     }
 
-    private fun monthBars(): List<Triple<String, Long, Int>> {
+    private fun monthBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
         val ms = Store.startOfMonth()
         val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
         val c = Color.parseColor("#2F4B8F")
         return (0 until today).map { i ->
             val ds = ms + i * DAY_MS
-            Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS), c)
+            Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
         }
     }
 

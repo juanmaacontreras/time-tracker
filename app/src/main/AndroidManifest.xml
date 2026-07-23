@@ -52,7 +52,6 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.bitacora.timer.W2_PERIOD" />
-                <action android:name="com.bitacora.timer.W2_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

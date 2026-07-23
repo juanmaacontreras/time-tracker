@@ -35,18 +35,11 @@ class ResumenWidget : AppWidgetProvider() {
                     try { Sync.pullMerge(context); refresh(context) } finally { pending.finish() }
                 }.start()
             }
-            ACTION_REFRESH2 -> {
-                val pending = goAsync()
-                Thread {
-                    try { Sync.pullMerge(context); refresh(context) } finally { pending.finish() }
-                }.start()
-            }
         }
     }
 
     companion object {
         const val ACTION_PERIOD = "com.bitacora.timer.W2_PERIOD"
-        const val ACTION_REFRESH2 = "com.bitacora.timer.W2_REFRESH"
         private const val PREFS = "bitacora_widget"
         private const val KEY_PERIOD = "w2_period"
 
@@ -96,7 +89,14 @@ class ResumenWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.w2_day, pi(context, ACTION_PERIOD, "day", 10))
             views.setOnClickPendingIntent(R.id.w2_week, pi(context, ACTION_PERIOD, "week", 11))
             views.setOnClickPendingIntent(R.id.w2_month, pi(context, ACTION_PERIOD, "month", 12))
-            views.setOnClickPendingIntent(R.id.w2_root, pi(context, ACTION_REFRESH2, null, 13))
+            // Tocar el fondo (fuera de los botones) abre la app; el refresco ya ocurre solo
+            // (sync periódico + al cambiar de período).
+            val openIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val openPi = PendingIntent.getActivity(
+                context, 13, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.w2_root, openPi)
 
             val rowBox = intArrayOf(R.id.w2_row0, R.id.w2_row1, R.id.w2_row2, R.id.w2_row3, R.id.w2_row4, R.id.w2_row5)
             val rowN = intArrayOf(R.id.w2_n0, R.id.w2_n1, R.id.w2_n2, R.id.w2_n3, R.id.w2_n4, R.id.w2_n5)

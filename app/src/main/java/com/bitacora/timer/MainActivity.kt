@@ -41,15 +41,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bannerChrono: Chronometer
     private lateinit var bannerPause: TextView
     private lateinit var bannerStop: TextView
-    private lateinit var btnEdit: TextView
     private lateinit var tabTimer: TextView
     private lateinit var tabResumen: TextView
 
-    private var editMode = false
     private var tab = "timer"
     private var statsPeriod = "day"
     private var statsCategory = "all"
     private var catExpanded: Boolean? = null  // null = usar default según cantidad
+    private var showArchived = false
 
     private val todayViews = HashMap<String, TextView>()
     private val expandedIds = HashSet<String>()
@@ -79,15 +78,9 @@ class MainActivity : AppCompatActivity() {
         bannerChrono = findViewById(R.id.bannerChrono)
         bannerPause = findViewById(R.id.bannerPause)
         bannerStop = findViewById(R.id.bannerStop)
-        btnEdit = findViewById(R.id.btnEdit)
         tabTimer = findViewById(R.id.tabTimer)
         tabResumen = findViewById(R.id.tabResumen)
 
-        btnEdit.setOnClickListener {
-            editMode = !editMode
-            btnEdit.text = if (editMode) "✓ Listo" else "✎ Editar"
-            render()
-        }
         bannerPause.setOnClickListener {
             if (Store.runningPaused(this)) Store.resume(this) else Store.pause(this)
             render()
@@ -139,10 +132,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchTab(t: String) {
         tab = t
-        if (t == "resumen" && editMode) { editMode = false; btnEdit.text = "✎ Editar" }
         timerView.visibility = if (t == "timer") View.VISIBLE else View.GONE
         resumenView.visibility = if (t == "resumen") View.VISIBLE else View.GONE
-        btnEdit.visibility = if (t == "timer") View.VISIBLE else View.GONE
         styleTabs()
         render()
     }
@@ -176,21 +167,55 @@ class MainActivity : AppCompatActivity() {
         todayViews.clear()
         list.removeAllViews()
         val runId = Store.runningActId(this)
-        // En modo edición mostramos también las archivadas (para poder desarchivarlas).
-        val acts = Store.activities(this, includeArchived = editMode)
+        val allWithArchived = Store.activities(this, includeArchived = true)
+        val hasArchived = allWithArchived.any { it.optBoolean("archived", false) }
+
+        // Orden por tiempo dedicado hoy (descendente), igual criterio que los widgets.
+        val acts = allWithArchived
+            .filter { !it.optBoolean("archived", false) }
+            .sortedByDescending { Store.secsFor(this, it.getString("id"), Store.startOfToday()) }
+
+        if (hasArchived) list.addView(buildArchivedToggle())
+
         for (act in acts) list.addView(buildRow(act, runId))
-        if (acts.isEmpty()) {
+        if (acts.isEmpty() && !hasArchived) {
             val hint = TextView(this)
             hint.text = "Todavía no tenés actividades. Creá la primera acá abajo."
             hint.setTextColor(col(R.color.muted))
             hint.gravity = Gravity.CENTER
             hint.setPadding(0, dp(10), 0, dp(14))
             list.addView(hint)
-            list.addView(buildAddCard())
-        } else if (editMode) {
-            list.addView(buildAddCard())
+        }
+        list.addView(buildAddCard())
+
+        if (showArchived) {
+            val archivedActs = allWithArchived
+                .filter { it.optBoolean("archived", false) }
+                .sortedByDescending { Store.secsFor(this, it.getString("id"), Store.startOfToday()) }
+            if (archivedActs.isNotEmpty()) {
+                list.addView(sectionLabel("ARCHIVADAS"))
+                for (act in archivedActs) list.addView(buildRow(act, runId))
+            }
         }
         renderBanner(runId)
+    }
+
+    private fun buildArchivedToggle(): View {
+        val chip = TextView(this)
+        chip.text = if (showArchived) "▾ Ocultar archivadas" else "▸ Ver archivadas"
+        chip.textSize = 12f
+        chip.setTextColor(col(R.color.inkSoft))
+        chip.setPadding(dp(12), dp(7), dp(12), dp(7))
+        val d = GradientDrawable()
+        d.cornerRadius = dp(16).toFloat()
+        d.setColor(col(R.color.card))
+        d.setStroke(dp(1), col(R.color.line))
+        chip.background = d
+        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp.bottomMargin = dp(10)
+        chip.layoutParams = lp
+        chip.setOnClickListener { showArchived = !showArchived; renderTimer() }
+        return chip
     }
 
     private fun renderBanner(runId: String) {
@@ -251,26 +276,23 @@ class MainActivity : AppCompatActivity() {
         row.setPadding(dp(14), dp(12), dp(12), dp(12))
         val bg = card()
         // Borde consistente para los tres estados: solo cambia el color.
-        if (running && !editMode) bg.setStroke(dp(2), if (paused) col(R.color.pausedColor) else col(R.color.live))
-        if (editMode) bg.setStroke(dp(1), col(R.color.indigo))
+        if (running) bg.setStroke(dp(2), if (paused) col(R.color.pausedColor) else col(R.color.live))
         row.background = bg
 
-        if (!editMode) {
-            val arrow = TextView(this)
-            arrow.text = if (expanded) "▾" else "▸"
-            arrow.setTextColor(col(R.color.muted))
-            arrow.textSize = 20f
-            arrow.gravity = Gravity.CENTER
-            arrow.minWidth = dp(44)
-            arrow.minHeight = dp(44)
-            arrow.setPadding(dp(4), dp(4), dp(4), dp(4))
-            arrow.isClickable = true
-            arrow.setOnClickListener {
-                if (expanded) expandedIds.remove(id) else expandedIds.add(id)
-                renderTimer()
-            }
-            row.addView(arrow)
+        val arrow = TextView(this)
+        arrow.text = if (expanded) "▾" else "▸"
+        arrow.setTextColor(col(R.color.muted))
+        arrow.textSize = 20f
+        arrow.gravity = Gravity.CENTER
+        arrow.minWidth = dp(44)
+        arrow.minHeight = dp(44)
+        arrow.setPadding(dp(4), dp(4), dp(4), dp(4))
+        arrow.isClickable = true
+        arrow.setOnClickListener {
+            if (expanded) expandedIds.remove(id) else expandedIds.add(id)
+            renderTimer()
         }
+        row.addView(arrow)
 
         val dot = View(this)
         val dotBg = GradientDrawable()
@@ -300,30 +322,28 @@ class MainActivity : AppCompatActivity() {
         mid.addView(name)
         row.addView(mid)
 
-        if (!editMode) {
-            val today = TextView(this)
-            today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
-            today.setTextColor(
-                when {
-                    paused -> col(R.color.pausedColor)
-                    running -> col(R.color.live)
-                    else -> col(R.color.ink)
-                }
-            )
-            today.textSize = 14f
-            today.typeface = Typeface.MONOSPACE
-            today.setPadding(0, 0, dp(12), 0)
-            row.addView(today)
-            todayViews[id] = today
-        }
+        val today = TextView(this)
+        today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
+        today.setTextColor(
+            when {
+                paused -> col(R.color.pausedColor)
+                running -> col(R.color.live)
+                else -> col(R.color.ink)
+            }
+        )
+        today.textSize = 14f
+        today.typeface = Typeface.MONOSPACE
+        today.setPadding(0, 0, dp(12), 0)
+        row.addView(today)
+        todayViews[id] = today
 
         val glyph = TextView(this)
-        glyph.text = if (editMode) "✎" else if (running) "\u25A0" else "\u25B6"
-        if (paused && !editMode) glyph.text = "‖"   // override: pausado
+        glyph.text = if (running) "\u25A0" else "\u25B6"
+        if (paused) glyph.text = "‖"   // override: pausado
         glyph.setTextColor(
             when {
-                paused && !editMode -> col(R.color.pausedColor)
-                running && !editMode -> col(R.color.live)
+                paused -> col(R.color.pausedColor)
+                running -> col(R.color.live)
                 else -> col(R.color.indigo)
             }
         )
@@ -331,7 +351,7 @@ class MainActivity : AppCompatActivity() {
         row.addView(glyph)
 
         row.setOnClickListener {
-            if (editMode) {
+            if (archived) {
                 openActivitySheet(act)
             } else {
                 Store.toggle(this, id)
@@ -345,7 +365,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
         container.addView(row)
-        if (expanded && !editMode) container.addView(buildSessionsPanel(act))
+        if (expanded) container.addView(buildSessionsPanel(act))
         return container
     }
 
@@ -426,7 +446,8 @@ class MainActivity : AppCompatActivity() {
                 private var downX = 0f
                 override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
                     when (e.actionMasked) {
-                        android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; return false }
+                        // Hay que devolver true en ACTION_DOWN para seguir recibiendo el gesto.
+                        android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; return true }
                         android.view.MotionEvent.ACTION_UP -> {
                             if (downX - e.x > swipeThreshold) { confirmDelete(); return true }
                         }
@@ -461,7 +482,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateRunningRow() {
-        if (tab != "timer" || editMode) return
+        if (tab != "timer") return
         val runId = Store.runningActId(this)
         if (runId.isEmpty() || Store.runningPaused(this)) return
         todayViews[runId]?.text = Store.exact(Store.secsFor(this, runId, Store.startOfToday()))
@@ -753,6 +774,9 @@ class MainActivity : AppCompatActivity() {
         // Contenedor vertical: barras + línea de base sutil para anclarlas.
         val outer = LinearLayout(this)
         outer.orientation = LinearLayout.VERTICAL
+        val olp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        olp.bottomMargin = dp(14)
+        outer.layoutParams = olp
         outer.addView(wrap)
         val baseline = View(this)
         val bllp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))

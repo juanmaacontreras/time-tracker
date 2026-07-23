@@ -147,6 +147,83 @@
             android:progressBackgroundTint="@color/grid" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/w2_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="9dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:id="@+id/w2_n3" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:maxLines="1" android:ellipsize="end"
+                android:text="" android:textColor="@color/ink" android:textSize="13sp" />
+            <TextView android:id="@+id/w2_t3" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="" android:textColor="@color/inkSoft" android:textSize="12sp" android:fontFamily="monospace" />
+        </LinearLayout>
+        <ProgressBar android:id="@+id/w2_p3" style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="3dp"
+            android:max="100" android:progress="0" android:progressTint="@color/indigo"
+            android:progressBackgroundTint="@color/grid" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/w2_row4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="9dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:id="@+id/w2_n4" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:maxLines="1" android:ellipsize="end"
+                android:text="" android:textColor="@color/ink" android:textSize="13sp" />
+            <TextView android:id="@+id/w2_t4" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="" android:textColor="@color/inkSoft" android:textSize="12sp" android:fontFamily="monospace" />
+        </LinearLayout>
+        <ProgressBar android:id="@+id/w2_p4" style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="3dp"
+            android:max="100" android:progress="0" android:progressTint="@color/indigo"
+            android:progressBackgroundTint="@color/grid" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/w2_row5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="9dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:id="@+id/w2_n5" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:maxLines="1" android:ellipsize="end"
+                android:text="" android:textColor="@color/ink" android:textSize="13sp" />
+            <TextView android:id="@+id/w2_t5" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="" android:textColor="@color/inkSoft" android:textSize="12sp" android:fontFamily="monospace" />
+        </LinearLayout>
+        <ProgressBar android:id="@+id/w2_p5" style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="3dp"
+            android:max="100" android:progress="0" android:progressTint="@color/indigo"
+            android:progressBackgroundTint="@color/grid" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/w2_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text=""
+        android:textColor="@color/muted"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/w2_empty"
         android:layout_width="match_parent"

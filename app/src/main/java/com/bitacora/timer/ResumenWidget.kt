@@ -6,9 +6,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 
 class ResumenWidget : AppWidgetProvider() {
 
@@ -65,9 +68,13 @@ class ResumenWidget : AppWidgetProvider() {
             )
         }
 
-        private fun styleChip(views: RemoteViews, id: Int, active: Boolean) {
+        private fun styleChip(ctx: Context, views: RemoteViews, id: Int, active: Boolean) {
             views.setInt(id, "setBackgroundResource", if (active) R.drawable.chip_on else R.drawable.chip)
-            views.setTextColor(id, if (active) Color.WHITE else Color.parseColor("#8592AB"))
+            views.setTextColor(
+                id,
+                if (active) ContextCompat.getColor(ctx, R.color.paper)
+                else ContextCompat.getColor(ctx, R.color.muted)
+            )
         }
 
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
@@ -83,21 +90,21 @@ class ResumenWidget : AppWidgetProvider() {
 
             views.setTextViewText(R.id.w2_total, Store.exact(total))
 
-            styleChip(views, R.id.w2_day, period == "day")
-            styleChip(views, R.id.w2_week, period == "week")
-            styleChip(views, R.id.w2_month, period == "month")
+            styleChip(context, views, R.id.w2_day, period == "day")
+            styleChip(context, views, R.id.w2_week, period == "week")
+            styleChip(context, views, R.id.w2_month, period == "month")
             views.setOnClickPendingIntent(R.id.w2_day, pi(context, ACTION_PERIOD, "day", 10))
             views.setOnClickPendingIntent(R.id.w2_week, pi(context, ACTION_PERIOD, "week", 11))
             views.setOnClickPendingIntent(R.id.w2_month, pi(context, ACTION_PERIOD, "month", 12))
             views.setOnClickPendingIntent(R.id.w2_root, pi(context, ACTION_REFRESH2, null, 13))
 
-            val rowBox = intArrayOf(R.id.w2_row0, R.id.w2_row1, R.id.w2_row2)
-            val rowN = intArrayOf(R.id.w2_n0, R.id.w2_n1, R.id.w2_n2)
-            val rowT = intArrayOf(R.id.w2_t0, R.id.w2_t1, R.id.w2_t2)
-            val rowP = intArrayOf(R.id.w2_p0, R.id.w2_p1, R.id.w2_p2)
+            val rowBox = intArrayOf(R.id.w2_row0, R.id.w2_row1, R.id.w2_row2, R.id.w2_row3, R.id.w2_row4, R.id.w2_row5)
+            val rowN = intArrayOf(R.id.w2_n0, R.id.w2_n1, R.id.w2_n2, R.id.w2_n3, R.id.w2_n4, R.id.w2_n5)
+            val rowT = intArrayOf(R.id.w2_t0, R.id.w2_t1, R.id.w2_t2, R.id.w2_t3, R.id.w2_t4, R.id.w2_t5)
+            val rowP = intArrayOf(R.id.w2_p0, R.id.w2_p1, R.id.w2_p2, R.id.w2_p3, R.id.w2_p4, R.id.w2_p5)
             val max = (per.firstOrNull()?.second ?: 1L).coerceAtLeast(1L)
 
-            for (i in 0..2) {
+            for (i in rowBox.indices) {
                 if (i < per.size) {
                     val a = per[i].first
                     val sec = per[i].second
@@ -105,9 +112,22 @@ class ResumenWidget : AppWidgetProvider() {
                     views.setTextViewText(rowN[i], a.getString("name"))
                     views.setTextViewText(rowT[i], Store.exact(sec))
                     views.setProgressBar(rowP[i], 100, ((sec * 100) / max).toInt(), false)
+                    // Tint dinámico por color de actividad (setColorStateList existe desde API 31).
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val c = Color.parseColor(a.optString("color", "#2F4B8F"))
+                        views.setColorStateList(rowP[i], "setProgressTintList", ColorStateList.valueOf(c))
+                    }
                 } else {
                     views.setViewVisibility(rowBox[i], View.GONE)
                 }
+            }
+            // Indicador "+N más" si hay más actividades con tiempo que las 6 visibles.
+            val extra = per.size - rowBox.size
+            if (extra > 0) {
+                views.setTextViewText(R.id.w2_more, "+$extra más")
+                views.setViewVisibility(R.id.w2_more, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.w2_more, View.GONE)
             }
             views.setViewVisibility(R.id.w2_empty, if (per.isEmpty()) View.VISIBLE else View.GONE)
 

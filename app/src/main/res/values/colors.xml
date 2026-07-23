@@ -2,6 +2,7 @@
 <resources>
     <color name="paper">#FFF4F6FA</color>
     <color name="card">#FFFDFEFF</color>
+    <color name="panel">#FFF3F6FB</color>
     <color name="ink">#FF182742</color>
     <color name="inkSoft">#FF4A5A78</color>
     <color name="muted">#FF8592AB</color>
@@ -9,5 +10,8 @@
     <color name="grid">#FFE1E7F0</color>
     <color name="indigo">#FF2F4B8F</color>
     <color name="live">#FFE1591F</color>
+    <color name="pausedColor">#FFC9821E</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Fondo fijo del ícono adaptativo (no cambia con el tema del sistema). -->
+    <color name="ic_bg">#FF2F4B8F</color>
 </resources>

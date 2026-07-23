@@ -15,7 +15,6 @@ import android.text.InputType
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
 import android.widget.Chronometer
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -23,6 +22,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bannerChrono: Chronometer
     private lateinit var bannerPause: TextView
     private lateinit var bannerStop: TextView
-    private lateinit var btnEdit: Button
+    private lateinit var btnEdit: TextView
     private lateinit var tabTimer: TextView
     private lateinit var tabResumen: TextView
 
@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private var tab = "timer"
     private var statsPeriod = "day"
     private var statsCategory = "all"
+    private var catExpanded: Boolean? = null  // null = usar default según cantidad
 
     private val todayViews = HashMap<String, TextView>()
     private val expandedIds = HashSet<String>()
@@ -134,6 +135,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun col(id: Int) = ContextCompat.getColor(this, id)
 
     private fun switchTab(t: String) {
         tab = t
@@ -150,12 +152,12 @@ class MainActivity : AppCompatActivity() {
             if (active) {
                 val d = GradientDrawable()
                 d.cornerRadius = dp(8).toFloat()
-                d.setColor(Color.parseColor("#182742"))
+                d.setColor(col(R.color.ink))
                 tv.background = d
-                tv.setTextColor(Color.WHITE)
+                tv.setTextColor(col(R.color.paper))
             } else {
                 tv.background = null
-                tv.setTextColor(Color.parseColor("#4A5A78"))
+                tv.setTextColor(col(R.color.inkSoft))
             }
         }
         paint(tabTimer, tab == "timer")
@@ -174,12 +176,13 @@ class MainActivity : AppCompatActivity() {
         todayViews.clear()
         list.removeAllViews()
         val runId = Store.runningActId(this)
-        val acts = Store.activities(this)
+        // En modo edición mostramos también las archivadas (para poder desarchivarlas).
+        val acts = Store.activities(this, includeArchived = editMode)
         for (act in acts) list.addView(buildRow(act, runId))
         if (acts.isEmpty()) {
             val hint = TextView(this)
-            hint.text = "Todavía no tenés actividades.\nCreá la primera acá abajo 👇"
-            hint.setTextColor(Color.parseColor("#8592AB"))
+            hint.text = "Todavía no tenés actividades. Creá la primera acá abajo."
+            hint.setTextColor(col(R.color.muted))
             hint.gravity = Gravity.CENTER
             hint.setPadding(0, dp(10), 0, dp(14))
             list.addView(hint)
@@ -221,9 +224,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun card(): GradientDrawable {
         val d = GradientDrawable()
-        d.setColor(Color.parseColor("#FDFEFF"))
-        d.cornerRadius = dp(13).toFloat()
-        d.setStroke(dp(1), Color.parseColor("#D3DBE8"))
+        d.setColor(col(R.color.card))
+        d.cornerRadius = dp(12).toFloat()
+        d.setStroke(dp(1), col(R.color.line))
         return d
     }
 
@@ -232,6 +235,7 @@ class MainActivity : AppCompatActivity() {
         val running = id == runId
         val paused = running && Store.runningPaused(this)
         val expanded = id in expandedIds
+        val archived = act.optBoolean("archived", false)
 
         val container = LinearLayout(this)
         container.orientation = LinearLayout.VERTICAL
@@ -247,14 +251,14 @@ class MainActivity : AppCompatActivity() {
         row.setPadding(dp(14), dp(12), dp(12), dp(12))
         val bg = card()
         // Borde consistente para los tres estados: solo cambia el color.
-        if (running && !editMode) bg.setStroke(dp(2), Color.parseColor(if (paused) "#C9821E" else "#E1591F"))
-        if (editMode) bg.setStroke(dp(1), Color.parseColor("#2F4B8F"))
+        if (running && !editMode) bg.setStroke(dp(2), if (paused) col(R.color.pausedColor) else col(R.color.live))
+        if (editMode) bg.setStroke(dp(1), col(R.color.indigo))
         row.background = bg
 
         if (!editMode) {
             val arrow = TextView(this)
             arrow.text = if (expanded) "▾" else "▸"
-            arrow.setTextColor(Color.parseColor("#8592AB"))
+            arrow.setTextColor(col(R.color.muted))
             arrow.textSize = 20f
             arrow.gravity = Gravity.CENTER
             arrow.minWidth = dp(44)
@@ -282,12 +286,14 @@ class MainActivity : AppCompatActivity() {
         mid.orientation = LinearLayout.VERTICAL
         mid.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         val type = TextView(this)
-        type.text = act.optString("type", "").uppercase()
-        type.setTextColor(Color.parseColor("#8592AB"))
+        val typeText = act.optString("type", "").uppercase()
+        type.text = if (archived) (if (typeText.isEmpty()) "ARCHIVADA" else "$typeText · ARCHIVADA") else typeText
+        type.setTextColor(col(R.color.muted))
         type.textSize = 10f
+        if (archived) { row.alpha = 0.55f }
         val name = TextView(this)
         name.text = act.getString("name")
-        name.setTextColor(Color.parseColor("#182742"))
+        name.setTextColor(col(R.color.ink))
         name.textSize = 16f
         name.setTypeface(name.typeface, Typeface.BOLD)
         mid.addView(type)
@@ -299,9 +305,9 @@ class MainActivity : AppCompatActivity() {
             today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
             today.setTextColor(
                 when {
-                    paused -> Color.parseColor("#C9821E")
-                    running -> Color.parseColor("#E1591F")
-                    else -> Color.parseColor("#182742")
+                    paused -> col(R.color.pausedColor)
+                    running -> col(R.color.live)
+                    else -> col(R.color.ink)
                 }
             )
             today.textSize = 14f
@@ -316,9 +322,9 @@ class MainActivity : AppCompatActivity() {
         if (paused && !editMode) glyph.text = "‖"   // override: pausado
         glyph.setTextColor(
             when {
-                paused && !editMode -> Color.parseColor("#C9821E")
-                running && !editMode -> Color.parseColor("#E1591F")
-                else -> Color.parseColor("#2F4B8F")
+                paused && !editMode -> col(R.color.pausedColor)
+                running && !editMode -> col(R.color.live)
+                else -> col(R.color.indigo)
             }
         )
         glyph.textSize = 18f
@@ -333,6 +339,11 @@ class MainActivity : AppCompatActivity() {
                 doSync()
             }
         }
+        // Mantener presionado abre la edición directa, sin entrar al modo global.
+        row.setOnLongClickListener {
+            openActivitySheet(act)
+            true
+        }
         container.addView(row)
         if (expanded && !editMode) container.addView(buildSessionsPanel(act))
         return container
@@ -344,8 +355,8 @@ class MainActivity : AppCompatActivity() {
         panel.orientation = LinearLayout.VERTICAL
         panel.setPadding(dp(14), dp(10), dp(14), dp(10))
         val bg = GradientDrawable()
-        bg.setColor(Color.parseColor("#F3F6FB"))
-        bg.cornerRadius = dp(10).toFloat()
+        bg.setColor(col(R.color.panel))
+        bg.cornerRadius = dp(12).toFloat()
         panel.background = bg
         val plp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -356,7 +367,7 @@ class MainActivity : AppCompatActivity() {
         val sessions = Store.sessionsForActivityToday(this, id)
         val title = TextView(this)
         title.text = "ENTRADAS DE HOY"
-        title.setTextColor(Color.parseColor("#8592AB"))
+        title.setTextColor(col(R.color.muted))
         title.textSize = 10f
         title.letterSpacing = 0.1f
         panel.addView(title)
@@ -364,7 +375,7 @@ class MainActivity : AppCompatActivity() {
         if (sessions.isEmpty()) {
             val e = TextView(this)
             e.text = "Sin entradas cerradas todavia."
-            e.setTextColor(Color.parseColor("#8592AB"))
+            e.setTextColor(col(R.color.muted))
             e.textSize = 12f
             e.setPadding(0, dp(8), 0, 0)
             panel.addView(e)
@@ -382,17 +393,11 @@ class MainActivity : AppCompatActivity() {
             val secs = (s.getLong("end") - s.getLong("start")) / 1000
             label.text = fmt.format(s.getLong("start")) + " - " + fmt.format(s.getLong("end")) + "   " + Store.exact(secs)
             label.textSize = 13f
-            label.setTextColor(Color.parseColor("#182742"))
+            label.setTextColor(col(R.color.ink))
             label.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             srow.addView(label)
 
-            val del = TextView(this)
-            del.text = "Borrar"
-            del.setTextColor(Color.parseColor("#B5432E"))
-            del.textSize = 12f
-            del.setTypeface(del.typeface, Typeface.BOLD)
-            del.setPadding(dp(10), 0, dp(4), 0)
-            del.setOnClickListener {
+            val confirmDelete = {
                 AlertDialog.Builder(this)
                     .setTitle("Borrar entrada")
                     .setMessage("Se borra el registro de " + fmt.format(s.getLong("start")) + " a " + fmt.format(s.getLong("end")) + ". Seguro?")
@@ -403,8 +408,32 @@ class MainActivity : AppCompatActivity() {
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
+                Unit
             }
+
+            val del = TextView(this)
+            del.text = "Borrar"
+            del.setTextColor(col(R.color.live))
+            del.textSize = 12f
+            del.setTypeface(del.typeface, Typeface.BOLD)
+            del.setPadding(dp(10), 0, dp(4), 0)
+            del.setOnClickListener { confirmDelete() }
             srow.addView(del)
+
+            // Swipe hacia la izquierda también borra (con la misma confirmación).
+            val swipeThreshold = dp(60)
+            srow.setOnTouchListener(object : View.OnTouchListener {
+                private var downX = 0f
+                override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
+                    when (e.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> { downX = e.x; return false }
+                        android.view.MotionEvent.ACTION_UP -> {
+                            if (downX - e.x > swipeThreshold) { confirmDelete(); return true }
+                        }
+                    }
+                    return false
+                }
+            })
             panel.addView(srow)
         }
         return panel
@@ -414,13 +443,13 @@ class MainActivity : AppCompatActivity() {
         val add = TextView(this)
         add.text = "+  Nueva actividad"
         add.gravity = Gravity.CENTER
-        add.setTextColor(Color.parseColor("#2F4B8F"))
+        add.setTextColor(col(R.color.indigo))
         add.textSize = 14f
         add.setTypeface(add.typeface, Typeface.BOLD)
         add.setPadding(dp(14), dp(18), dp(14), dp(18))
         val d = GradientDrawable()
-        d.cornerRadius = dp(13).toFloat()
-        d.setStroke(dp(2), Color.parseColor("#C7D2E3"))
+        d.cornerRadius = dp(12).toFloat()
+        d.setStroke(dp(2), col(R.color.line))
         add.background = d
         val lp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -450,7 +479,8 @@ class MainActivity : AppCompatActivity() {
         resumenView.addView(buildPeriodSelector())
 
         val from = Store.periodStart(statsPeriod)
-        val allActs = Store.activities(this)
+        // Incluye archivadas: su historial sigue contando en las estadísticas.
+        val allActs = Store.activities(this, includeArchived = true)
 
         val allCats = allActs.map { it.optString("type", "General").ifEmpty { "General" } }
             .distinct().sorted()
@@ -472,13 +502,13 @@ class MainActivity : AppCompatActivity() {
         big.text = Store.exact(total)
         big.textSize = 30f
         big.typeface = Typeface.MONOSPACE
-        big.setTextColor(Color.parseColor("#182742"))
+        big.setTextColor(col(R.color.ink))
         resumenView.addView(big)
 
         if (perAct.isEmpty()) {
             val e = TextView(this)
             e.text = "Sin registros en este período."
-            e.setTextColor(Color.parseColor("#8592AB"))
+            e.setTextColor(col(R.color.muted))
             e.setPadding(0, dp(24), 0, 0)
             resumenView.addView(e)
             return
@@ -510,11 +540,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             if (cats.isNotEmpty()) {
-                resumenView.addView(sectionLabel("POR CATEGORÍA"))
-                for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
-                    val row = statRow(c, Color.parseColor("#2F4B8F"), sec, total)
-                    row.setOnClickListener { statsCategory = c; renderResumen() }
-                    resumenView.addView(row)
+                // Colapsable: por defecto expandida si hay pocas categorías.
+                val expanded = catExpanded ?: (cats.size <= 3)
+                val header = sectionLabel("POR CATEGORÍA  " + if (expanded) "▾" else "▸") as TextView
+                header.isClickable = true
+                header.setOnClickListener { catExpanded = !expanded; renderResumen() }
+                resumenView.addView(header)
+                if (expanded) {
+                    for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
+                        val row = statRow(c, col(R.color.indigo), sec, total)
+                        row.setOnClickListener { statsCategory = c; renderResumen() }
+                        resumenView.addView(row)
+                    }
                 }
             }
         }
@@ -527,36 +564,60 @@ class MainActivity : AppCompatActivity() {
         wrap.orientation = LinearLayout.HORIZONTAL
         wrap.setPadding(0, dp(10), 0, 0)
 
+        // Color representativo de cada categoría (el de su primera actividad).
+        val catColor = HashMap<String, Int>()
+        for (a in Store.activities(this, includeArchived = true)) {
+            val c = a.optString("type", "General").ifEmpty { "General" }
+            if (c !in catColor) catColor[c] = Color.parseColor(a.optString("color", "#2F4B8F"))
+        }
+
         val scroll = android.widget.HorizontalScrollView(this)
         scroll.isHorizontalScrollBarEnabled = false
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
 
-        fun chip(label: String, value: String): View {
-            val c = TextView(this)
-            c.text = label
-            c.textSize = 12f
+        fun chip(label: String, value: String, dotColor: Int?): View {
+            val c = LinearLayout(this)
+            c.orientation = LinearLayout.HORIZONTAL
+            c.gravity = Gravity.CENTER_VERTICAL
             c.setPadding(dp(12), dp(7), dp(12), dp(7))
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             lp.rightMargin = dp(6)
             c.layoutParams = lp
+            val active = value == statsCategory
             val d = GradientDrawable()
             d.cornerRadius = dp(16).toFloat()
-            if (value == statsCategory) {
-                d.setColor(Color.parseColor("#182742"))
-                c.setTextColor(Color.WHITE)
+            if (active) {
+                d.setColor(col(R.color.ink))
             } else {
-                d.setColor(Color.parseColor("#FDFEFF"))
-                d.setStroke(dp(1), Color.parseColor("#D3DBE8"))
-                c.setTextColor(Color.parseColor("#4A5A78"))
+                d.setColor(col(R.color.card))
+                d.setStroke(dp(1), col(R.color.line))
             }
             c.background = d
+
+            if (dotColor != null) {
+                val dot = View(this)
+                val dotBg = GradientDrawable()
+                dotBg.shape = GradientDrawable.OVAL
+                dotBg.setColor(dotColor)
+                dot.background = dotBg
+                val dlp = LinearLayout.LayoutParams(dp(8), dp(8)); dlp.rightMargin = dp(6)
+                dot.layoutParams = dlp
+                c.addView(dot)
+            }
+
+            val t = TextView(this)
+            t.text = label
+            t.textSize = 12f
+            t.setTextColor(if (active) col(R.color.paper) else col(R.color.inkSoft))
+            c.addView(t)
+
             c.setOnClickListener { statsCategory = value; renderResumen() }
             return c
         }
 
-        row.addView(chip("Todo", "all"))
-        for (c in cats) row.addView(chip(c, c))
+        row.addView(chip("Todo", "all", null))
+        for (c in cats) row.addView(chip(c, c, catColor[c]))
         scroll.addView(row)
         wrap.addView(scroll)
         return wrap
@@ -565,7 +626,7 @@ class MainActivity : AppCompatActivity() {
     private fun sectionLabel(text: String): View {
         val t = TextView(this)
         t.text = text
-        t.setTextColor(Color.parseColor("#8592AB"))
+        t.setTextColor(col(R.color.muted))
         t.textSize = 10f
         t.letterSpacing = 0.14f
         val lp = LinearLayout.LayoutParams(
@@ -582,9 +643,9 @@ class MainActivity : AppCompatActivity() {
         seg.orientation = LinearLayout.HORIZONTAL
         seg.setPadding(dp(3), dp(3), dp(3), dp(3))
         val segBg = GradientDrawable()
-        segBg.cornerRadius = dp(10).toFloat()
-        segBg.setColor(Color.parseColor("#FDFEFF"))
-        segBg.setStroke(dp(1), Color.parseColor("#D3DBE8"))
+        segBg.cornerRadius = dp(12).toFloat()
+        segBg.setColor(col(R.color.card))
+        segBg.setStroke(dp(1), col(R.color.line))
         seg.background = segBg
         val periods = listOf("day" to "Día", "week" to "Semana", "month" to "Mes")
         for ((p, lbl) in periods) {
@@ -597,11 +658,11 @@ class MainActivity : AppCompatActivity() {
             if (p == statsPeriod) {
                 val d = GradientDrawable()
                 d.cornerRadius = dp(8).toFloat()
-                d.setColor(Color.parseColor("#182742"))
+                d.setColor(col(R.color.ink))
                 b.background = d
-                b.setTextColor(Color.WHITE)
+                b.setTextColor(col(R.color.paper))
             } else {
-                b.setTextColor(Color.parseColor("#4A5A78"))
+                b.setTextColor(col(R.color.inkSoft))
             }
             b.setOnClickListener { statsPeriod = p; renderResumen() }
             seg.addView(b)
@@ -614,7 +675,7 @@ class MainActivity : AppCompatActivity() {
     private fun weekBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
         val ws = Store.startOfWeek()
         val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
-        val c = Color.parseColor("#2F4B8F")
+        val c = col(R.color.indigo)
         return (0..6).map { i ->
             val ds = ws + i * DAY_MS
             Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
@@ -624,7 +685,7 @@ class MainActivity : AppCompatActivity() {
     private fun monthBars(actIds: Set<String>): List<Triple<String, Long, Int>> {
         val ms = Store.startOfMonth()
         val today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
-        val c = Color.parseColor("#2F4B8F")
+        val c = col(R.color.indigo)
         return (0 until today).map { i ->
             val ds = ms + i * DAY_MS
             Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
@@ -658,7 +719,7 @@ class MainActivity : AppCompatActivity() {
                 val v = TextView(this)
                 v.text = if (secs > 0) Store.exact(secs) else ""
                 v.textSize = 9f
-                v.setTextColor(Color.parseColor("#4A5A78"))
+                v.setTextColor(col(R.color.inkSoft))
                 v.gravity = Gravity.CENTER
                 v.maxLines = 1
                 col.addView(v)
@@ -679,7 +740,7 @@ class MainActivity : AppCompatActivity() {
             val n = TextView(this)
             n.text = if (idx % labelStep == 0) label else ""
             n.textSize = 9f
-            n.setTextColor(Color.parseColor("#8592AB"))
+            n.setTextColor(col(R.color.muted))
             n.gravity = Gravity.CENTER
             n.maxLines = 1
             n.ellipsize = TextUtils.TruncateAt.END
@@ -688,7 +749,17 @@ class MainActivity : AppCompatActivity() {
 
             wrap.addView(col)
         }
-        return wrap
+
+        // Contenedor vertical: barras + línea de base sutil para anclarlas.
+        val outer = LinearLayout(this)
+        outer.orientation = LinearLayout.VERTICAL
+        outer.addView(wrap)
+        val baseline = View(this)
+        val bllp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+        baseline.layoutParams = bllp
+        baseline.setBackgroundColor(col(R.color.line))
+        outer.addView(baseline)
+        return outer
     }
 
     private fun statRow(name: String, colorInt: Int, sec: Long, total: Long): View {
@@ -718,7 +789,7 @@ class MainActivity : AppCompatActivity() {
         val nm = TextView(this)
         nm.text = name
         nm.textSize = 14f
-        nm.setTextColor(Color.parseColor("#182742"))
+        nm.setTextColor(col(R.color.ink))
         nm.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         top.addView(nm)
 
@@ -727,7 +798,7 @@ class MainActivity : AppCompatActivity() {
         vl.text = "${Store.exact(sec)}  ·  $pct%"
         vl.textSize = 13f
         vl.typeface = Typeface.MONOSPACE
-        vl.setTextColor(Color.parseColor("#4A5A78"))
+        vl.setTextColor(col(R.color.inkSoft))
         top.addView(vl)
         box.addView(top)
 
@@ -738,7 +809,7 @@ class MainActivity : AppCompatActivity() {
         track.layoutParams = tlp
         val trackBg = GradientDrawable()
         trackBg.cornerRadius = dp(5).toFloat()
-        trackBg.setColor(Color.parseColor("#E1E7F0"))
+        trackBg.setColor(col(R.color.grid))
         track.background = trackBg
 
         val fill = View(this)
@@ -760,15 +831,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildCsvButton(): View {
-        val b = Button(this)
+        val b = TextView(this)
         b.text = "Exportar CSV"
         b.textSize = 13f
+        b.gravity = Gravity.CENTER
+        b.setTypeface(b.typeface, Typeface.BOLD)
+        b.setTextColor(col(R.color.indigo))
+        b.setPadding(dp(14), dp(14), dp(14), dp(14))
+        val d = GradientDrawable()
+        d.cornerRadius = dp(12).toFloat()
+        d.setColor(col(R.color.card))
+        d.setStroke(dp(1), col(R.color.line))
+        b.background = d
         val lp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         )
         lp.topMargin = dp(20)
         b.layoutParams = lp
-        b.setOnClickListener { exportCsv() }
+        b.setOnClickListener {
+            val filterLabel = if (statsCategory == "all") labelFor(statsPeriod)
+                else "${labelFor(statsPeriod)} · $statsCategory"
+            AlertDialog.Builder(this)
+                .setTitle("Exportar CSV")
+                .setItems(arrayOf("Todo el historial", "Solo lo filtrado ($filterLabel)")) { _, which ->
+                    exportCsv(filtered = which == 1)
+                }
+                .show()
+        }
         return b
     }
 
@@ -793,7 +882,7 @@ class MainActivity : AppCompatActivity() {
 
         val colorLabel = TextView(this)
         colorLabel.text = "Color"
-        colorLabel.setTextColor(Color.parseColor("#8592AB"))
+        colorLabel.setTextColor(col(R.color.muted))
         colorLabel.textSize = 12f
         colorLabel.setPadding(0, dp(14), 0, dp(6))
         box.addView(colorLabel)
@@ -807,7 +896,7 @@ class MainActivity : AppCompatActivity() {
             val d = GradientDrawable()
             d.cornerRadius = dp(8).toFloat()
             d.setColor(Color.parseColor(c))
-            if (c == picked) d.setStroke(dp(3), Color.parseColor("#182742"))
+            if (c == picked) d.setStroke(dp(3), col(R.color.ink))
             v.background = d
         }
         for (c in Store.COLORS) {
@@ -822,7 +911,32 @@ class MainActivity : AppCompatActivity() {
             swatches.add(sw)
             colorRow.addView(sw)
         }
-        box.addView(colorRow)
+        // Con 14 colores conviene poder desplazar horizontalmente.
+        val colorScroll = android.widget.HorizontalScrollView(this)
+        colorScroll.isHorizontalScrollBarEnabled = false
+        colorScroll.addView(colorRow)
+        box.addView(colorScroll)
+
+        var dlg: AlertDialog? = null
+
+        // Archivar / Desarchivar (solo para actividades existentes).
+        if (existing != null) {
+            val archived = existing.optBoolean("archived", false)
+            val arch = TextView(this)
+            arch.text = if (archived) "Desarchivar actividad" else "Archivar actividad"
+            arch.setTextColor(col(R.color.indigo))
+            arch.setTypeface(arch.typeface, Typeface.BOLD)
+            arch.textSize = 14f
+            arch.setPadding(0, dp(18), 0, dp(4))
+            arch.setOnClickListener {
+                if (archived) Store.unarchiveActivity(this, existing.getString("id"))
+                else Store.archiveActivity(this, existing.getString("id"))
+                render()
+                doSync()
+                dlg?.dismiss()
+            }
+            box.addView(arch)
+        }
 
         val builder = AlertDialog.Builder(this)
             .setTitle(if (existing == null) "Nueva actividad" else "Editar actividad")
@@ -841,7 +955,9 @@ class MainActivity : AppCompatActivity() {
         if (existing != null) {
             builder.setNeutralButton("Borrar") { _, _ -> confirmDelete(existing) }
         }
-        builder.show()
+        val dialog = builder.create()
+        dlg = dialog
+        dialog.show()
     }
 
     private fun confirmDelete(act: JSONObject) {
@@ -865,9 +981,18 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun exportCsv() {
+    private fun exportCsv(filtered: Boolean) {
         try {
-            val csv = Store.exportCsv(this)
+            val csv = if (filtered) {
+                val from = Store.periodStart(statsPeriod)
+                val ids: Set<String>? = if (statsCategory == "all") null
+                    else Store.activities(this, includeArchived = true)
+                        .filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
+                        .map { it.getString("id") }.toSet()
+                Store.exportCsv(this, from, Long.MAX_VALUE, ids)
+            } else {
+                Store.exportCsv(this)
+            }
             val file = File(cacheDir, "bitacora.csv")
             file.writeText("\uFEFF$csv")
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)

@@ -59,6 +59,9 @@ class TimerWidget : AppWidgetProvider() {
                 }
             }
             ACTION_REFRESH -> {
+                // Feedback inmediato: RemoteViews no permite animaciones, así que mostramos
+                // un texto de estado breve antes de que termine el merge asíncrono.
+                showRefreshing(context)
                 runInBackground(context) {
                     Sync.pullMerge(context)
                     refresh(context)
@@ -84,7 +87,9 @@ class TimerWidget : AppWidgetProvider() {
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget)
             val runId = Store.runningActId(context)
+            // Ordenadas por tiempo acumulado hoy (descendente); mostramos las 6 primeras.
             val acts = Store.activities(context)
+                .sortedByDescending { Store.secsFor(context, it.getString("id"), Store.startOfToday()) }
 
             if (runId.isNotEmpty()) {
                 val a = Store.activityById(context, runId)
@@ -94,9 +99,18 @@ class TimerWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.w_status, if (paused) "PAUSADO · $name" else name)
                 // Al pausar, el cronómetro se congela (started = false) con el tiempo real corrido.
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, !paused)
+                // Botón "Parar": los botones de actividad solo pausan/resumen, así que el corte va acá.
+                views.setViewVisibility(R.id.w_stop, View.VISIBLE)
+                val stopIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_STOP }
+                val stopPi = PendingIntent.getBroadcast(
+                    context, 201, stopIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.w_stop, stopPi)
             } else {
                 views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
+                views.setViewVisibility(R.id.w_stop, View.GONE)
             }
 
             // Tocar el cuerpo del widget (fuera de los botones) lo actualiza.
@@ -108,7 +122,7 @@ class TimerWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.w_root, refreshPi)
 
             val paused = Store.runningPaused(context)
-            val btnIds = intArrayOf(R.id.w_b0, R.id.w_b1, R.id.w_b2)
+            val btnIds = intArrayOf(R.id.w_b0, R.id.w_b1, R.id.w_b2, R.id.w_b3, R.id.w_b4, R.id.w_b5)
             for (i in btnIds.indices) {
                 if (i < acts.size) {
                     val act = acts[i]
@@ -132,6 +146,14 @@ class TimerWidget : AppWidgetProvider() {
                     views.setViewVisibility(btnIds[i], View.GONE)
                 }
             }
+            // Indicador "+N m\u00E1s" si hay actividades fuera de las 6 visibles.
+            val extra = acts.size - btnIds.size
+            if (extra > 0) {
+                views.setTextViewText(R.id.w_more, "+$extra m\u00E1s")
+                views.setViewVisibility(R.id.w_more, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.w_more, View.GONE)
+            }
             mgr.updateAppWidget(id, views)
         }
 
@@ -139,6 +161,17 @@ class TimerWidget : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(context)
             val ids = mgr.getAppWidgetIds(ComponentName(context, TimerWidget::class.java))
             for (id in ids) renderOne(context, mgr, id)
+        }
+
+        // Actualización parcial: solo cambia el texto de estado para dar feedback al toque.
+        private fun showRefreshing(context: Context) {
+            val mgr = AppWidgetManager.getInstance(context)
+            val ids = mgr.getAppWidgetIds(ComponentName(context, TimerWidget::class.java))
+            for (id in ids) {
+                val v = RemoteViews(context.packageName, R.layout.widget)
+                v.setTextViewText(R.id.w_status, "Actualizando…")
+                mgr.partiallyUpdateAppWidget(id, v)
+            }
         }
     }
 }

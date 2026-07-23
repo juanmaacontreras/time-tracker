@@ -11,7 +11,11 @@ object Store {
     private const val PREFS = "bitacora"
     private const val KEY = "data"
 
-    val COLORS = arrayOf("#2F4B8F", "#B5432E", "#2E7D5B", "#8A5A2B", "#6A4C93", "#1F6F8B")
+    // Paleta apagada tipo "papel/tinta", 14 tonos distinguibles entre sí.
+    val COLORS = arrayOf(
+        "#2F4B8F", "#B5432E", "#2E7D5B", "#8A5A2B", "#6A4C93", "#1F6F8B", "#9C4368",
+        "#3E6B2F", "#B08A1E", "#4A5A78", "#7A3E9C", "#2B7A78", "#A6552E", "#5B6BB5"
+    )
 
     fun now(): Long = System.currentTimeMillis()
     fun uid(): String = UUID.randomUUID().toString()
@@ -346,13 +350,24 @@ object Store {
     }
 
     // ---------- csv ----------
-    fun exportCsv(ctx: Context): String {
+    // Si from/to/actIds se pasan, exporta solo las sesiones que caen en ese rango
+    // y pertenecen a esas actividades (para respetar el filtro activo del resumen).
+    fun exportCsv(
+        ctx: Context,
+        from: Long = 0L,
+        to: Long = Long.MAX_VALUE,
+        actIds: Set<String>? = null
+    ): String {
         val sb = StringBuilder("actividad,tipo,inicio,fin,duracion_min\n")
         val ss = root(ctx).getJSONArray("sessions")
         val list = ArrayList<JSONObject>()
         for (i in 0 until ss.length()) {
             val s = ss.getJSONObject(i)
-            if (!s.optBoolean("deleted", false)) list.add(s)
+            if (s.optBoolean("deleted", false)) continue
+            if (actIds != null && s.getString("actId") !in actIds) continue
+            // Se incluye si la sesión se solapa con [from, to).
+            if (s.getLong("end") < from || s.getLong("start") >= to) continue
+            list.add(s)
         }
         list.sortBy { it.getLong("start") }
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())

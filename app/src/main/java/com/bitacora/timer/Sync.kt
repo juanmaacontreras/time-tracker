@@ -10,48 +10,60 @@ import java.net.URLEncoder
 
 object Sync {
 
-    /** Pull + merge + push. Returns true on success. Must be called OFF the main thread. */
+    private fun currentDataKey(ctx: Context) = Config.bucketKey(Store.currentProfileId(ctx))
+
+    /** Pull + merge + push del índice de perfiles y del perfil activo. Fuera del hilo principal. */
     fun syncNow(ctx: Context): Boolean {
         if (!Config.syncEnabled()) return false
-        return try {
-            val remote = pull()
-            if (remote != null) Store.merge(ctx, remote)
-            push(Store.payload(ctx))
-            true
-        } catch (e: Exception) {
-            false
-        }
+        var ok = true
+        ok = syncBucket(Config.INDEX_KEY, { ProfileStore.payload(ctx) }, { r -> ProfileStore.merge(ctx, r) }) && ok
+        ok = syncBucket(currentDataKey(ctx), { Store.payload(ctx) }, { r -> Store.merge(ctx, r) }) && ok
+        return ok
     }
 
-    /** Solo baja el estado compartido y lo fusiona (sin subir). Fuera del hilo principal. */
+    /** Solo baja el estado del perfil activo y lo fusiona (sin subir). Fuera del hilo principal. */
     fun pullMerge(ctx: Context): Boolean {
         if (!Config.syncEnabled()) return false
         return try {
-            val remote = pull()
+            val remote = pull(currentDataKey(ctx))
             if (remote != null) Store.merge(ctx, remote)
             true
-        } catch (e: Exception) {
-            false
-        }
+        } catch (e: Exception) { false }
     }
 
-    /** Solo sube el estado local. Fuera del hilo principal. */
+    /** Solo sube el estado del perfil activo. Fuera del hilo principal. */
     fun pushOnly(ctx: Context): Boolean {
         if (!Config.syncEnabled()) return false
+        return try { push(currentDataKey(ctx), Store.payload(ctx)); true } catch (e: Exception) { false }
+    }
+
+    /** Baja y fusiona solo el índice de perfiles (para la pantalla de selección). */
+    fun pullIndex(ctx: Context): Boolean {
+        if (!Config.syncEnabled()) return false
         return try {
-            push(Store.payload(ctx))
+            val remote = pull(Config.INDEX_KEY)
+            if (remote != null) ProfileStore.merge(ctx, remote)
             true
-        } catch (e: Exception) {
-            false
-        }
+        } catch (e: Exception) { false }
+    }
+
+    /** Baja el dataset crudo de un bucket cualquiera (para previsualizar un perfil sin activarlo). */
+    fun pullBucketRaw(userKey: String): JSONObject? =
+        try { pull(userKey) } catch (e: Exception) { null }
+
+    private fun syncBucket(userKey: String, payloadFn: () -> JSONObject, mergeFn: (JSONObject) -> Unit): Boolean {
+        return try {
+            val remote = pull(userKey)
+            if (remote != null) mergeFn(remote)
+            push(userKey, payloadFn())
+            true
+        } catch (e: Exception) { false }
     }
 
     private fun base() = Config.SUPABASE_URL.trimEnd('/')
 
     private fun auth(conn: HttpURLConnection) {
         conn.setRequestProperty("apikey", Config.SUPABASE_KEY)
-        // Las llaves nuevas (sb_publishable_...) van solo en "apikey".
-        // Las viejas (JWT, empiezan con eyJ) necesitan tambien Authorization.
         if (Config.SUPABASE_KEY.startsWith("eyJ")) {
             conn.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_KEY}")
         }
@@ -59,8 +71,8 @@ object Sync {
         conn.readTimeout = 12000
     }
 
-    private fun pull(): JSONObject? {
-        val key = URLEncoder.encode(Config.USER_KEY, "UTF-8")
+    private fun pull(userKey: String): JSONObject? {
+        val key = URLEncoder.encode(userKey, "UTF-8")
         val conn = URL("${base()}/rest/v1/buckets?user_key=eq.$key&select=data")
             .openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
@@ -75,7 +87,7 @@ object Sync {
         return arr.getJSONObject(0).optJSONObject("data")
     }
 
-    private fun push(data: JSONObject) {
+    private fun push(userKey: String, data: JSONObject) {
         val conn = URL("${base()}/rest/v1/buckets?on_conflict=user_key")
             .openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
@@ -84,7 +96,7 @@ object Sync {
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
         val row = JSONObject()
-            .put("user_key", Config.USER_KEY)
+            .put("user_key", userKey)
             .put("data", data)
             .put("updated_at", Store.now())
         val payload = JSONArray().put(row).toString()

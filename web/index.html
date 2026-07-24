@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bitácora</title>
+<style>
+/* ==========================================================================
+   Bitácora — versión web. Un solo archivo, sin dependencias.
+   Sincroniza contra el MISMO bucket de Supabase que la app Android
+   (misma tabla, misma user_key, mismo formato JSON). Ver bloque "Store"
+   y "Sync" abajo: los nombres de campo son un contrato fijo compartido.
+   ========================================================================== */
+
+/* Paleta "papel/tinta". Mismos nombres que la app (colors.xml / values-night). */
+:root {
+  --paper:#F4F6FA; --card:#FDFEFF; --panel:#F3F6FB;
+  --ink:#182742; --inkSoft:#4A5A78; --muted:#8592AB;
+  --line:#D3DBE8; --grid:#E1E7F0;
+  --indigo:#2F4B8F; --live:#1C74C9; --paused:#C9821E;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:#0E1420; --card:#161E2C; --panel:#1B2433;
+    --ink:#EAF0FA; --inkSoft:#AAB6CC; --muted:#7E8CA6;
+    --line:#2A3648; --grid:#232F40;
+    --indigo:#7B96D4; --live:#62AEEA; --paused:#E0A03A;
+  }
+}
+:root[data-theme="light"] {
+  --paper:#F4F6FA; --card:#FDFEFF; --panel:#F3F6FB;
+  --ink:#182742; --inkSoft:#4A5A78; --muted:#8592AB;
+  --line:#D3DBE8; --grid:#E1E7F0;
+  --indigo:#2F4B8F; --live:#1C74C9; --paused:#C9821E;
+}
+:root[data-theme="dark"] {
+  --paper:#0E1420; --card:#161E2C; --panel:#1B2433;
+  --ink:#EAF0FA; --inkSoft:#AAB6CC; --muted:#7E8CA6;
+  --line:#2A3648; --grid:#232F40;
+  --indigo:#7B96D4; --live:#62AEEA; --paused:#E0A03A;
+}
+
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; padding:0; }
+body {
+  background:var(--paper); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.35;
+}
+.mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+
+/* Columna centrada tipo teléfono. En pantalla ancha (desktop) se abre a dos paneles. */
+.wrap { max-width:520px; margin:0 auto; padding:18px 18px 60px; }
+
+/* Angosto (celu/tablet): una sola columna con tabs; se muestra solo el panel activo.
+   El modo ancho (dos paneles) está al final del CSS para ganar en orden de cascada. */
+.panes { display:block; }
+.pane-title { display:none; }
+.seg { margin-top:16px; }
+body[data-tab="timer"] #resumenView { display:none; }
+body[data-tab="resumen"] #timerView { display:none; }
+
+/* Header */
+.hd { display:flex; align-items:center; gap:8px; }
+.hd .title { font-size:26px; font-weight:800; letter-spacing:-.5px; }
+.hd .sub { font-size:10px; letter-spacing:.14em; color:var(--muted); margin-top:2px; }
+.hd .spacer { flex:1; }
+.iconbtn {
+  border:1px solid var(--line); background:var(--card); color:var(--inkSoft);
+  border-radius:16px; padding:8px 12px; font-size:13px; cursor:pointer; font-weight:700;
+}
+.iconbtn:hover { border-color:var(--muted); }
+.dot-sync { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background .3s; }
+.dot-sync.ok { background:#3E9B5B; }
+.dot-sync.sync { background:var(--paused); }
+.dot-sync.err { background:#B5432E; }
+
+/* Tabs */
+.tabs { display:flex; gap:0; background:var(--card); border:1px solid var(--line);
+  border-radius:12px; padding:3px; margin-top:14px; }
+.tab { flex:1; text-align:center; padding:10px; border-radius:8px; cursor:pointer;
+  color:var(--inkSoft); font-size:14px; user-select:none; }
+.tab.active { background:var(--ink); color:var(--paper); }
+
+/* Banner */
+.banner { display:flex; align-items:center; gap:10px; background:var(--card);
+  border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:16px; }
+.banner .lbl { font-size:10px; letter-spacing:.12em; color:var(--muted); }
+.banner .nm { font-size:15px; font-weight:700; }
+.banner .chrono { font-size:30px; margin-top:2px; }
+.banner .grow { flex:1; min-width:0; }
+.pill { border-radius:16px; border:1px solid var(--line); background:var(--card);
+  padding:10px 14px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.pill.stop { color:var(--live); }
+
+/* Chip toggle (ver archivadas) */
+.chip { display:inline-flex; align-items:center; gap:6px; border-radius:16px;
+  border:1px solid var(--line); background:var(--card); color:var(--inkSoft);
+  padding:7px 12px; font-size:12px; cursor:pointer; user-select:none; }
+.chip.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.chip .cdot { width:8px; height:8px; border-radius:50%; }
+
+/* Activity rows */
+.rowc { margin-top:8px; }
+.row { display:flex; align-items:center; gap:0; background:var(--card);
+  border:1px solid var(--line); border-radius:12px; padding:12px 12px 12px 14px; cursor:pointer; }
+.row.running { border-width:2px; border-color:var(--live); }
+.row.paused  { border-width:2px; border-color:var(--paused); }
+.row.arch { opacity:.55; }
+.row .arrow { width:36px; text-align:center; color:var(--muted); font-size:16px;
+  cursor:pointer; user-select:none; padding:4px; }
+.row .adot { width:12px; height:12px; border-radius:50%; margin-right:12px; flex:none; }
+.row .mid { flex:1; min-width:0; }
+.row .type { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.row .name { font-size:16px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .today { font-size:14px; margin-right:12px; }
+.row .glyph { width:18px; height:18px; flex:none; }
+.row .edit { color:var(--muted); font-size:14px; padding:4px 6px; margin-left:2px;
+  opacity:.0; cursor:pointer; transition:opacity .15s; }
+.row:hover .edit { opacity:.6; }
+.row .edit:hover { opacity:1; color:var(--indigo); }
+@media (hover:none){ .row .edit{ opacity:.5; } }
+
+/* Sessions panel */
+.panel { background:var(--panel); border-radius:12px; padding:10px 14px; margin-top:4px; }
+.panel .ptitle { font-size:10px; letter-spacing:.1em; color:var(--muted); }
+.srow { display:flex; align-items:center; padding:8px 0; }
+.srow .slabel { flex:1; font-size:13px; }
+.srow .sdel { color:var(--live); font-weight:800; font-size:16px; padding:2px 8px; cursor:pointer;
+  min-width:32px; text-align:center; }
+.pempty { color:var(--muted); font-size:12px; padding-top:8px; }
+
+/* Add card */
+.addcard { border:2px solid var(--line); border-radius:12px; text-align:center;
+  color:var(--indigo); font-weight:700; padding:18px; margin-top:4px; cursor:pointer; }
+.addcard:hover { border-color:var(--muted); }
+
+/* Section labels */
+.slabel-h { font-size:10px; letter-spacing:.14em; color:var(--muted); margin:22px 0 8px; }
+.slabel-h.click { cursor:pointer; user-select:none; }
+
+/* Resumen: period selector + offset nav */
+.seg { display:flex; background:var(--card); border:1px solid var(--line);
+  border-radius:12px; padding:3px; }
+.seg .s { flex:1; text-align:center; padding:9px 6px; border-radius:8px; cursor:pointer;
+  color:var(--inkSoft); font-size:13px; user-select:none; }
+.seg .s.active { background:var(--ink); color:var(--paper); }
+.nav { display:flex; align-items:center; margin-top:10px; }
+.nav .ar { width:40px; height:36px; display:flex; align-items:center; justify-content:center;
+  font-size:16px; cursor:pointer; color:var(--indigo); user-select:none; }
+.nav .ar.off { color:var(--line); cursor:default; }
+.nav .navlbl { flex:1; text-align:center; font-weight:700; font-size:13px; }
+
+.total { font-size:30px; margin-top:2px; }
+.empty { color:var(--muted); padding-top:24px; }
+
+/* Bar chart */
+.chart { display:flex; align-items:flex-end; margin-top:6px; height:150px; }
+.chart .cbar { flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:flex-end; padding:0 2px; height:100%; }
+.chart .cval { font-size:9px; color:var(--inkSoft); text-align:center; white-space:nowrap; }
+.chart .cfill { width:100%; border-radius:4px 4px 0 0; margin-top:3px; }
+.chart .clab { font-size:9px; color:var(--muted); margin-top:4px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
+.baseline { height:1px; background:var(--line); margin-bottom:14px; }
+
+/* Stat rows */
+.stat { background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:12px 14px; margin-top:8px; }
+.stat.click { cursor:pointer; }
+.stat .top { display:flex; align-items:center; gap:10px; }
+.stat .sdot { width:10px; height:10px; border-radius:50%; flex:none; }
+.stat .snm { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stat .sval { font-size:13px; color:var(--inkSoft); }
+.track { height:8px; background:var(--grid); border-radius:5px; margin-top:9px; overflow:hidden; }
+.track .fill { height:100%; border-radius:5px; }
+
+/* Category chips row */
+.catrow { display:flex; gap:6px; overflow-x:auto; padding-top:10px; scrollbar-width:none; }
+.catrow::-webkit-scrollbar { display:none; }
+
+/* CSV button */
+.csvbtn { display:block; width:100%; text-align:center; margin-top:20px; padding:14px;
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  color:var(--indigo); font-weight:700; cursor:pointer; font-size:13px; }
+.csvbtn:hover { border-color:var(--muted); }
+
+/* Modal */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
+  align-items:center; justify-content:center; padding:18px; z-index:50; }
+.dialog { background:var(--card); border:1px solid var(--line); border-radius:16px;
+  padding:20px; width:100%; max-width:400px; max-height:90vh; overflow:auto; }
+.dialog h3 { margin:0 0 14px; font-size:18px; }
+.dialog p { color:var(--inkSoft); margin:0 0 16px; }
+.field { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px;
+  background:var(--paper); color:var(--ink); font-size:15px; margin-bottom:10px; }
+.field:focus { outline:none; border-color:var(--indigo); }
+.flabel { font-size:12px; color:var(--muted); margin:14px 0 6px; }
+.swatches { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.swatches::-webkit-scrollbar { display:none; }
+.sw { width:34px; height:34px; border-radius:8px; flex:none; cursor:pointer; border:3px solid transparent; }
+.sw.sel { border-color:var(--ink); }
+.linkbtn { display:block; background:none; border:none; padding:14px 0 4px; font-size:14px;
+  font-weight:700; color:var(--indigo); cursor:pointer; text-align:left; }
+.dbtns { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.dbtn { padding:9px 16px; border-radius:10px; border:none; background:none; cursor:pointer;
+  font-size:14px; font-weight:700; color:var(--indigo); }
+.dbtn.ghost { color:var(--inkSoft); }
+.dbtn.danger { color:var(--live); }
+.dchoice { display:block; width:100%; text-align:left; padding:14px 4px; border:none;
+  background:none; border-bottom:1px solid var(--line); color:var(--ink); font-size:15px; cursor:pointer; }
+.dchoice:last-child { border-bottom:none; }
+.dchoice:hover { color:var(--indigo); }
+
+.hidden { display:none !important; }
+
+/* Ancho (PC): dos paneles lado a lado, sin tabs. Va al final para ganar en la cascada. */
+@media (min-width:900px) {
+  .wrap { max-width:1140px; }
+  .tabs { display:none; }
+  .panes { display:flex; gap:22px; align-items:flex-start; margin-top:6px; }
+  .pane { flex:1; min-width:0; }
+  .pane-title { display:block; font-size:12px; font-weight:800; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); margin:14px 0 0; }
+  body[data-tab="timer"] #resumenView,
+  body[data-tab="resumen"] #timerView { display:block; }
+}
+
+/* ===== Temas (paletas) por perfil: cambian solo el acento (indigo) y "corriendo"
+   (live); los neutros no cambian. "azul" es el default (valores base). ===== */
+:root[data-palette="verde"]   { --indigo:#2E7D5B; --live:#1F9D57; }
+:root[data-palette="violeta"] { --indigo:#6A4C93; --live:#8A5CD0; }
+:root[data-palette="arcilla"] { --indigo:#A6552E; --live:#D06A34; }
+:root[data-palette="grafito"] { --indigo:#4A5A78; --live:#5B6BB5; }
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="verde"]   { --indigo:#6FBF9B; --live:#57C98A; }
+  :root[data-palette="violeta"] { --indigo:#A98FD6; --live:#B79BEA; }
+  :root[data-palette="arcilla"] { --indigo:#D69574; --live:#E8956A; }
+  :root[data-palette="grafito"] { --indigo:#AAB6CC; --live:#8AA0E0; }
+}
+:root[data-theme="light"][data-palette="verde"]   { --indigo:#2E7D5B; --live:#1F9D57; }
+:root[data-theme="light"][data-palette="violeta"] { --indigo:#6A4C93; --live:#8A5CD0; }
+:root[data-theme="light"][data-palette="arcilla"] { --indigo:#A6552E; --live:#D06A34; }
+:root[data-theme="light"][data-palette="grafito"] { --indigo:#4A5A78; --live:#5B6BB5; }
+:root[data-theme="dark"][data-palette="verde"]   { --indigo:#6FBF9B; --live:#57C98A; }
+:root[data-theme="dark"][data-palette="violeta"] { --indigo:#A98FD6; --live:#B79BEA; }
+:root[data-theme="dark"][data-palette="arcilla"] { --indigo:#D69574; --live:#E8956A; }
+:root[data-theme="dark"][data-palette="grafito"] { --indigo:#AAB6CC; --live:#8AA0E0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <div>
+      <div class="title">Bitácora</div>
+      <div class="sub">REGISTRO DE TIEMPO</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="dot-sync" id="syncDot" title="Sincronización"></div>
+    <button class="iconbtn" id="profileBtn" title="Perfil">Principal ▾</button>
+    <button class="iconbtn" id="themeBtn" title="Tema claro/oscuro">◐</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabTimer">Cronómetro</div>
+    <div class="tab" id="tabResumen">Resumen</div>
+  </div>
+
+  <div class="panes">
+    <div class="pane">
+      <div class="pane-title">Cronómetro</div>
+      <div id="timerView"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-title">Resumen</div>
+      <div id="resumenView"></div>
+    </div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+
+/* ====================== CONFIG (mismo bucket que la app) ================= */
+const CFG = {
+  url: "https://rjjrudenrxixofwhsknk.supabase.co",
+  key: "sb_publishable_moRNgc6pbh-OfyK9193D9Q_hQblC5xz",
+  userKey: "juanma-electro-9Kx7mQ2p"
+};
+
+/* Perfiles: mismo esquema que la app. El perfil "default" (Principal) usa la
+   userKey base tal cual; los demás usan userKey::<id>. El índice va en userKey::index. */
+const BASE = CFG.userKey;
+const INDEX_KEY = BASE + "::index";
+const bucketKey = pid => (!pid || pid === "default") ? BASE : BASE + "::" + pid;
+
+/* 5 temas: cada uno cambia el acento (indigo) y el "corriendo" (live). Los neutros
+   no cambian, igual que en la app. Aplicados por CSS vía data-palette. */
+const THEME_ORDER = ["azul", "verde", "violeta", "arcilla", "grafito"];
+const THEME_NAMES = { azul:"Azul", verde:"Verde", violeta:"Violeta", arcilla:"Arcilla", grafito:"Grafito" };
+const THEME_ACCENT = { azul:"#2F4B8F", verde:"#2E7D5B", violeta:"#6A4C93", arcilla:"#A6552E", grafito:"#4A5A78" };
+
+/* 14 colores de actividad — mismos que Store.COLORS en la app. */
+const COLORS = ["#2F4B8F","#B5432E","#2E7D5B","#8A5A2B","#6A4C93","#1F6F8B","#9C4368",
+  "#3E6B2F","#B08A1E","#4A5A78","#7A3E9C","#2B7A78","#A6552E","#5B6BB5"];
+
+const DAY_MS = 86400000;
+const now = () => Date.now();
+const uid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : "id-" + Math.random().toString(36).slice(2) + now().toString(36));
+
+/* ====================== STORE (espejo de Store.kt) ====================== */
+/* El objeto raíz usa los MISMOS nombres de campo que la app, porque payload()
+   y merge() tienen que hablar exactamente el mismo idioma que el lado Kotlin. */
+const Store = {
+  _root: null,
+  _rootProfile: null,
+
+  // ---- perfil activo (local, por dispositivo) ----
+  hasChosenProfile() { return localStorage.getItem("bitacora_profile") != null; },
+  currentProfileId() { return localStorage.getItem("bitacora_profile") || "default"; },
+  setCurrentProfile(id) { localStorage.setItem("bitacora_profile", id); this._root = null; this._rootProfile = null; },
+  // El perfil "default" usa la clave histórica "bitacora" (adopta lo que ya había).
+  dataKey(pid) { return (!pid || pid === "default") ? "bitacora" : "bitacora_" + pid; },
+  clearProfileData(pid) {
+    localStorage.removeItem(this.dataKey(pid));
+    if (this._rootProfile === pid) { this._root = null; this._rootProfile = null; }
+  },
+
+  root() {
+    const pid = this.currentProfileId();
+    if (this._root && this._rootProfile === pid) return this._root;
+    let obj = {};
+    try { const raw = localStorage.getItem(this.dataKey(pid)); if (raw) obj = JSON.parse(raw); } catch (e) {}
+    if (!Array.isArray(obj.activities)) obj.activities = [];
+    if (!Array.isArray(obj.sessions)) obj.sessions = [];
+    if (obj.runActId == null) obj.runActId = "";
+    if (obj.runStart == null) obj.runStart = 0;
+    if (obj.runChangedAt == null) obj.runChangedAt = 0;
+    if (obj.runPaused == null) obj.runPaused = false;
+    if (obj.runPausedAt == null) obj.runPausedAt = 0;
+    if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
+    this._root = obj; this._rootProfile = pid;
+    return obj;
+  },
+  write(obj) {
+    const pid = this.currentProfileId();
+    this._root = obj; this._rootProfile = pid;
+    try { localStorage.setItem(this.dataKey(pid), JSON.stringify(obj)); } catch (e) {}
+  },
+
+  // ---- activities ----
+  activities(includeArchived = false) {
+    return this.root().activities.filter(a =>
+      !a.deleted && (includeArchived || !a.archived));
+  },
+  activityById(id) { return this.root().activities.find(a => a.id === id) || null; },
+  addActivity(name, type, color) {
+    const o = this.root();
+    o.activities.push({ id: uid(), name, type, color, archived:false, updatedAt: now(), deleted:false });
+    this.write(o);
+  },
+  updateActivity(id, name, type, color) {
+    const o = this.root();
+    const a = o.activities.find(x => x.id === id);
+    if (a) { a.name = name; a.type = type; a.color = color; a.updatedAt = now(); }
+    this.write(o);
+  },
+  deleteActivity(id) {
+    const o = this.root();
+    o.activities.forEach(a => { if (a.id === id) { a.deleted = true; a.updatedAt = now(); } });
+    o.sessions.forEach(s => { if (s.actId === id) { s.deleted = true; s.updatedAt = now(); } });
+    if (o.runActId === id) {
+      o.runActId = ""; o.runStart = 0; o.runPaused = false; o.runPausedAt = 0;
+      o.runPausedAccum = 0; o.runChangedAt = now();
+    }
+    this.write(o);
+  },
+  setArchived(id, val) {
+    const o = this.root();
+    o.activities.forEach(a => { if (a.id === id) { a.archived = val; a.updatedAt = now(); } });
+    if (val && o.runActId === id) { this._stopInternal(o); o.runChangedAt = now(); }
+    this.write(o);
+  },
+  archiveActivity(id) { this.setArchived(id, true); },
+  unarchiveActivity(id) { this.setArchived(id, false); },
+
+  // ---- running ----
+  runningActId() { return this.root().runActId || ""; },
+  runningPaused() { return !!this.root().runPaused; },
+  runningElapsedMs() {
+    const o = this.root();
+    if (!o.runActId) return 0;
+    const end = o.runPaused ? o.runPausedAt : now();
+    return Math.max(0, end - o.runStart - o.runPausedAccum);
+  },
+  // Tocar la activa (corriendo o pausada) la para. Pausar/resumir es aparte.
+  toggle(actId) {
+    const o = this.root();
+    if (o.runActId === actId) {
+      this._stopInternal(o);
+    } else {
+      if (o.runActId) this._stopInternal(o);
+      o.runActId = actId; o.runStart = now();
+      o.runPaused = false; o.runPausedAt = 0; o.runPausedAccum = 0;
+    }
+    o.runChangedAt = now();
+    this.write(o);
+  },
+  pause() {
+    const o = this.root();
+    if (o.runActId && !o.runPaused) { o.runPaused = true; o.runPausedAt = now(); o.runChangedAt = now(); this.write(o); }
+  },
+  resume() {
+    const o = this.root();
+    if (o.runActId && o.runPaused) {
+      if (o.runPausedAt > 0) o.runPausedAccum += now() - o.runPausedAt;
+      o.runPaused = false; o.runPausedAt = 0; o.runChangedAt = now(); this.write(o);
+    }
+  },
+  stop() { const o = this.root(); this._stopInternal(o); o.runChangedAt = now(); this.write(o); },
+  _stopInternal(o) {
+    const cur = o.runActId, start = o.runStart;
+    if (cur && start > 0) {
+      // Fórmula canónica compartida con la app: el tiempo pausado no se cuenta.
+      const currentEnd = o.runPaused ? o.runPausedAt : now();
+      const real = currentEnd - start - o.runPausedAccum;
+      if (real >= 1000) {
+        o.sessions.push({ id: uid(), actId: cur, start, end: start + real, updatedAt: now(), deleted:false });
+      }
+    }
+    o.runActId = ""; o.runStart = 0; o.runPaused = false; o.runPausedAt = 0; o.runPausedAccum = 0;
+  },
+
+  // ---- sessions ----
+  deleteSession(id) {
+    const o = this.root();
+    o.sessions.forEach(s => { if (s.id === id) { s.deleted = true; s.updatedAt = now(); } });
+    this.write(o);
+  },
+  sessionsForActivityToday(actId) {
+    const from = startOfToday();
+    return this.root().sessions
+      .filter(s => !s.deleted && s.actId === actId && s.end >= from)
+      .sort((a, b) => b.start - a.start);
+  },
+
+  // ---- stats ----
+  secsFor(actId, from, to = Number.MAX_SAFE_INTEGER) {
+    let t = 0;
+    for (const s of this.root().sessions) {
+      if (s.deleted || s.actId !== actId) continue;
+      const a = Math.max(s.start, from), b = Math.min(s.end, to);
+      if (b > a) t += b - a;
+    }
+    const o = this.root();
+    if (o.runActId === actId) {
+      const end = o.runPaused ? o.runPausedAt : now();
+      const a = Math.max(o.runStart, from), b = Math.min(end, to);
+      const c = (b - a) - o.runPausedAccum;
+      if (c > 0) t += c;
+    }
+    return Math.floor(t / 1000);
+  },
+  totalBetween(from, to, actIds = null) {
+    let t = 0;
+    for (const s of this.root().sessions) {
+      if (s.deleted) continue;
+      if (actIds && !actIds.has(s.actId)) continue;
+      const a = Math.max(s.start, from), b = Math.min(s.end, to);
+      if (b > a) t += b - a;
+    }
+    const o = this.root();
+    if (o.runActId && (!actIds || actIds.has(o.runActId))) {
+      const end = o.runPaused ? o.runPausedAt : now();
+      const a = Math.max(o.runStart, from), b = Math.min(end, to);
+      if (b > a) t += Math.max(0, (b - a) - o.runPausedAccum);
+    }
+    return Math.floor(t / 1000);
+  },
+
+  // ---- csv ----
+  exportCsv(from = 0, to = Number.MAX_SAFE_INTEGER, actIds = null) {
+    let sb = "actividad,tipo,inicio,fin,duracion_min\n";
+    const fmt = d => {
+      const p = n => String(n).padStart(2, "0");
+      const x = new Date(d);
+      return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}`;
+    };
+    const list = this.root().sessions
+      .filter(s => !s.deleted && (!actIds || actIds.has(s.actId)) && !(s.end < from || s.start >= to))
+      .sort((a, b) => a.start - b.start);
+    for (const s of list) {
+      const a = this.activityById(s.actId);
+      const name = a ? a.name : "?";
+      const type = a ? (a.type || "") : "";
+      const min = ((s.end - s.start) / 60000).toFixed(1);
+      sb += `"${name}","${type}","${fmt(s.start)}","${fmt(s.end)}",${min}\n`;
+    }
+    return sb;
+  },
+
+  // ---- sync payload + merge (contrato con la app) ----
+  payload() {
+    const r = this.root();
+    return {
+      activities: JSON.parse(JSON.stringify(r.activities)),
+      sessions: JSON.parse(JSON.stringify(r.sessions)),
+      run: {
+        actId: r.runActId || "", start: r.runStart || 0,
+        paused: !!r.runPaused, pausedAt: r.runPausedAt || 0, pausedAccum: r.runPausedAccum || 0,
+        changedAt: r.runChangedAt || 0
+      }
+    };
+  },
+  merge(remote) {
+    const o = this.root();
+    o.activities = mergeList(o.activities, remote.activities);
+    o.sessions = mergeList(o.sessions, remote.sessions);
+    const rr = remote.run;
+    if (rr) {
+      const remoteChanged = rr.changedAt || 0;
+      if (remoteChanged > (o.runChangedAt || 0)) {
+        o.runActId = rr.actId || ""; o.runStart = rr.start || 0;
+        o.runPaused = !!rr.paused; o.runPausedAt = rr.pausedAt || 0;
+        o.runPausedAccum = rr.pausedAccum || 0; o.runChangedAt = remoteChanged;
+      }
+    }
+    this.write(o);
+  }
+};
+
+function mergeList(local, remoteArr) {
+  if (!Array.isArray(remoteArr)) return local;
+  const index = {};
+  local.forEach((o, i) => { index[o.id] = i; });
+  for (const r of remoteArr) {
+    if (!r || !r.id) continue;
+    const at = index[r.id];
+    if (at === undefined) { local.push(r); index[r.id] = local.length - 1; }
+    else if ((r.updatedAt || 0) > (local[at].updatedAt || 0)) local[at] = r;
+  }
+  return local;
+}
+
+/* ====================== PROFILE STORE (índice de perfiles) ====================== */
+const ProfileStore = {
+  _index: null,
+  KEY: "bitacora_profiles",
+  DEFAULT_THEME: "azul",
+  index() {
+    if (this._index) return this._index;
+    let obj = {};
+    try { const raw = localStorage.getItem(this.KEY); if (raw) obj = JSON.parse(raw); } catch (e) {}
+    if (!Array.isArray(obj.profiles)) obj.profiles = [];
+    if (!obj.profiles.some(p => p.id === "default"))
+      obj.profiles.push({ id:"default", name:"Principal", theme:this.DEFAULT_THEME, updatedAt: now(), deleted:false });
+    this._index = obj; return obj;
+  },
+  write(obj) { this._index = obj; try { localStorage.setItem(this.KEY, JSON.stringify(obj)); } catch (e) {} },
+  profiles() { return this.index().profiles.filter(p => !p.deleted); },
+  byId(id) { return this.index().profiles.find(p => p.id === id) || null; },
+  nameOf(id) { const p = this.byId(id); return p ? p.name : "Perfil"; },
+  themeOf(id) { const p = this.byId(id); return (p && p.theme) || this.DEFAULT_THEME; },
+  add(name, theme) { const o = this.index(); const id = uid();
+    o.profiles.push({ id, name, theme, updatedAt: now(), deleted:false }); this.write(o); return id; },
+  rename(id, name) { const o = this.index(); const p = o.profiles.find(x => x.id === id);
+    if (p) { p.name = name; p.updatedAt = now(); } this.write(o); },
+  setTheme(id, theme) { const o = this.index(); const p = o.profiles.find(x => x.id === id);
+    if (p) { p.theme = theme; p.updatedAt = now(); } this.write(o); },
+  del(id) { if (id === "default") return; const o = this.index(); const p = o.profiles.find(x => x.id === id);
+    if (p) { p.deleted = true; p.updatedAt = now(); } this.write(o); Store.clearProfileData(id); },
+  payload() { return { profiles: JSON.parse(JSON.stringify(this.index().profiles)) }; },
+  merge(remote) { const o = this.index(); o.profiles = mergeList(o.profiles, remote.profiles || []); this.write(o); }
+};
+
+/* ====================== SYNC (espejo de Sync.kt) ====================== */
+let syncing = false;
+function authHeaders(extra) {
+  const h = { apikey: CFG.key };
+  if (CFG.key.startsWith("eyJ")) h["Authorization"] = "Bearer " + CFG.key;
+  return Object.assign(h, extra || {});
+}
+async function pull(userKey) {
+  const url = `${CFG.url}/rest/v1/buckets?user_key=eq.${encodeURIComponent(userKey)}&select=data`;
+  const r = await fetch(url, { headers: authHeaders({ Accept: "application/json" }) });
+  if (!r.ok) return null;
+  const arr = await r.json();
+  return arr.length ? arr[0].data : null;
+}
+async function push(userKey, data) {
+  const url = `${CFG.url}/rest/v1/buckets?on_conflict=user_key`;
+  const body = [{ user_key: userKey, data, updated_at: now() }];
+  const r = await fetch(url, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" }),
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error("push " + r.status);
+}
+function setSync(state) { const d = document.getElementById("syncDot"); d.className = "dot-sync " + state; }
+async function syncBucket(userKey, payloadFn, mergeFn) {
+  const remote = await pull(userKey);
+  if (remote) mergeFn(remote);
+  await push(userKey, payloadFn());
+}
+async function sync() {
+  if (syncing) return;
+  syncing = true; setSync("sync");
+  try {
+    await syncBucket(INDEX_KEY, () => ProfileStore.payload(), r => ProfileStore.merge(r));
+    await syncBucket(bucketKey(Store.currentProfileId()), () => Store.payload(), r => Store.merge(r));
+    setSync("ok");
+    render();
+  } catch (e) { setSync("err"); }
+  finally { syncing = false; }
+}
+async function pullIndex() {
+  try { const r = await pull(INDEX_KEY); if (r) ProfileStore.merge(r); } catch (e) {}
+}
+
+/* ====================== HELPERS DE FECHA / FORMATO ====================== */
+function midnight(d) { d.setHours(0, 0, 0, 0); return d.getTime(); }
+function startOfToday() { return midnight(new Date()); }
+
+function periodRange(period, offset) {
+  const base = new Date();
+  if (period === "day") {
+    const d = new Date(base); d.setDate(d.getDate() + offset);
+    const from = midnight(d); return [from, from + DAY_MS];
+  }
+  if (period === "week") {
+    const d = new Date(base); d.setDate(d.getDate() + offset * 7);
+    const dow = d.getDay(); const back = dow === 0 ? 6 : dow - 1;
+    d.setDate(d.getDate() - back); const from = midnight(d);
+    return [from, from + 7 * DAY_MS];
+  }
+  const d = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+  const from = midnight(d);
+  const d2 = new Date(base.getFullYear(), base.getMonth() + offset + 1, 1);
+  return [from, midnight(d2)];
+}
+function daysInMonth(from) { const d = new Date(from); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
+
+function periodLabel(period, offset, from, to) {
+  const L = "es-AR";
+  if (period === "day") {
+    if (offset === 0) return "Hoy";
+    if (offset === -1) return "Ayer";
+    return new Date(from).toLocaleDateString(L, { day: "numeric", month: "long" });
+  }
+  if (period === "week") {
+    if (offset === 0) return "Esta semana";
+    const f = d => new Date(d).toLocaleDateString(L, { day: "numeric", month: "short" });
+    return `${f(from)} – ${f(to - 1)}`;
+  }
+  if (offset === 0) return "Este mes";
+  const s = new Date(from).toLocaleDateString(L, { month: "long", year: "numeric" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function exact(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const p = n => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
+function hhmm(ms) { const d = new Date(ms), p = n => String(n).padStart(2, "0"); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+/* ====================== MINI HELPER DE DOM ====================== */
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    const v = attrs[k];
+    if (v == null) continue;
+    if (k === "class") e.className = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2).toLowerCase(), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return e;
+}
+function iconGlyph(kind, color) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "glyph");
+  const p = document.createElementNS(ns, "path");
+  p.setAttribute("fill", color);
+  p.setAttribute("d", kind === "stop" ? "M6 6h12v12H6z" : "M8 5v14l11-7z");
+  svg.appendChild(p); return svg;
+}
+
+/* ====================== ESTADO DE UI ====================== */
+let tab = "timer";
+let statsPeriod = "day";
+let statsCategory = "all";
+let statsOffset = 0;
+let catExpanded = null;
+let showArchived = false;
+const expandedIds = new Set();
+
+/* ====================== RENDER ====================== */
+// Se renderizan ambos paneles siempre; en angosto el CSS oculta el inactivo,
+// en ancho (desktop) se muestran los dos lado a lado.
+function render() { applyProfileChrome(); renderTimer(); renderResumen(); updateTitle(); }
+
+// Aplica el tema (paleta) y el nombre del perfil activo al chrome.
+function applyProfileChrome() {
+  const pid = Store.currentProfileId();
+  document.documentElement.dataset.palette = ProfileStore.themeOf(pid);
+  const btn = document.getElementById("profileBtn");
+  if (btn) btn.textContent = ProfileStore.nameOf(pid) + " ▾";
+}
+
+function updateTitle() {
+  const id = Store.runningActId();
+  if (!id) { document.title = "Bitácora"; return; }
+  const a = Store.activityById(id);
+  const t = exact(Math.floor(Store.runningElapsedMs() / 1000));
+  document.title = (Store.runningPaused() ? "⏸ " : "▶ ") + t + " · " + (a ? a.name : "");
+}
+
+const todayEls = {};
+
+function renderTimer() {
+  const view = document.getElementById("timerView");
+  view.innerHTML = "";
+  for (const k in todayEls) delete todayEls[k];
+
+  view.append(buildBanner());
+
+  const runId = Store.runningActId();
+  const withArch = Store.activities(true);
+  const hasArchived = withArch.some(a => a.archived);
+  const acts = withArch.filter(a => !a.archived)
+    .sort((x, y) => Store.secsFor(y.id, startOfToday()) - Store.secsFor(x.id, startOfToday()));
+
+  const list = h("div", { class: "rowc", style: "margin-top:16px" });
+
+  if (hasArchived) {
+    const c = h("div", { class: "chip", style: "margin-bottom:10px",
+      onclick: () => { showArchived = !showArchived; renderTimer(); } },
+      (showArchived ? "▾ Ocultar archivadas" : "▸ Ver archivadas"));
+    list.append(c);
+  }
+
+  for (const a of acts) list.append(buildRow(a, runId));
+  if (acts.length === 0 && !hasArchived) {
+    list.append(h("div", { style: "color:var(--muted);text-align:center;padding:10px 0 14px" },
+      "Todavía no tenés actividades. Creá la primera acá abajo."));
+  }
+  list.append(h("div", { class: "addcard", onclick: () => openActivitySheet(null) }, "+  Nueva actividad"));
+
+  if (showArchived) {
+    const arch = withArch.filter(a => a.archived)
+      .sort((x, y) => Store.secsFor(y.id, startOfToday()) - Store.secsFor(x.id, startOfToday()));
+    if (arch.length) {
+      list.append(h("div", { class: "slabel-h" }, "ARCHIVADAS"));
+      for (const a of arch) list.append(buildRow(a, runId));
+    }
+  }
+  view.append(list);
+}
+
+function buildBanner() {
+  const runId = Store.runningActId();
+  const b = h("div", { class: "banner" });
+  const mid = h("div", { class: "grow" });
+  if (runId) {
+    const a = Store.activityById(runId);
+    const paused = Store.runningPaused();
+    mid.append(h("div", { class: "lbl" }, paused ? "PAUSADO" : "GRABANDO"));
+    mid.append(h("div", { class: "nm" }, a ? a.name : "—"));
+    const chrono = h("div", { class: "chrono mono", id: "bannerChrono" }, exact(Math.floor(Store.runningElapsedMs() / 1000)));
+    mid.append(chrono);
+    b.append(mid);
+    b.append(h("div", { class: "pill", onclick: () => { Store.runningPaused() ? Store.resume() : Store.pause(); afterMutation(); } },
+      paused ? "Resumir" : "Pausar"));
+    b.append(h("div", { class: "pill stop", onclick: () => { Store.stop(); afterMutation(); } }, "Parar"));
+  } else {
+    mid.append(h("div", { class: "lbl" }, "EN REPOSO"));
+    mid.append(h("div", { class: "nm" }, "Nada corriendo"));
+    mid.append(h("div", { class: "chrono mono" }, "0:00"));
+    b.append(mid);
+  }
+  return b;
+}
+
+function buildRow(act, runId) {
+  const running = act.id === runId;
+  const paused = running && Store.runningPaused();
+  const expanded = expandedIds.has(act.id);
+  const archived = !!act.archived;
+
+  const cont = h("div", { class: "rowc" });
+  const row = h("div", { class: "row" + (paused ? " paused" : running ? " running" : "") + (archived ? " arch" : "") });
+
+  // flecha desplegar sesiones
+  row.append(h("div", { class: "arrow", onclick: (e) => {
+    e.stopPropagation();
+    expanded ? expandedIds.delete(act.id) : expandedIds.add(act.id);
+    renderTimer();
+  } }, expanded ? "▾" : "▸"));
+
+  row.append(h("div", { class: "adot", style: "background:" + (act.color || "#2F4B8F") }));
+
+  const typeText = (act.type || "").toUpperCase();
+  const mid = h("div", { class: "mid" },
+    h("div", { class: "type" }, archived ? (typeText ? typeText + " · ARCHIVADA" : "ARCHIVADA") : typeText),
+    h("div", { class: "name" }, act.name));
+  row.append(mid);
+
+  const todayColor = paused ? "var(--paused)" : running ? "var(--live)" : "var(--ink)";
+  const todayEl = h("div", { class: "today mono", style: "color:" + todayColor },
+    exact(Store.secsFor(act.id, startOfToday())));
+  todayEls[act.id] = todayEl;
+  row.append(todayEl);
+
+  const glyphColor = paused ? "var(--paused)" : running ? "var(--live)" : "var(--indigo)";
+  row.append(iconGlyph(running ? "stop" : "play", glyphColor));
+
+  row.append(h("div", { class: "edit", title: "Editar",
+    onclick: (e) => { e.stopPropagation(); openActivitySheet(act); } }, "✎"));
+
+  // click en la fila = arrancar/parar (o editar si está archivada)
+  row.addEventListener("click", () => {
+    if (archived) { openActivitySheet(act); return; }
+    Store.toggle(act.id); afterMutation();
+  });
+  // mantener presionado / click derecho = editar
+  attachLongPress(row, () => openActivitySheet(act));
+  row.addEventListener("contextmenu", (e) => { e.preventDefault(); openActivitySheet(act); });
+
+  cont.append(row);
+  if (expanded) cont.append(buildSessionsPanel(act));
+  return cont;
+}
+
+function attachLongPress(el, cb) {
+  let timer = null;
+  const start = () => { timer = setTimeout(() => { timer = null; cb(); }, 500); };
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  el.addEventListener("touchstart", start, { passive: true });
+  el.addEventListener("touchend", cancel);
+  el.addEventListener("touchmove", cancel);
+}
+
+function buildSessionsPanel(act) {
+  const panel = h("div", { class: "panel" }, h("div", { class: "ptitle" }, "ENTRADAS DE HOY"));
+  const sessions = Store.sessionsForActivityToday(act.id);
+  if (sessions.length === 0) {
+    panel.append(h("div", { class: "pempty" }, "Sin entradas cerradas todavía."));
+    return panel;
+  }
+  for (const s of sessions) {
+    const secs = Math.floor((s.end - s.start) / 1000);
+    panel.append(h("div", { class: "srow" },
+      h("div", { class: "slabel" }, `${hhmm(s.start)} - ${hhmm(s.end)}   ${exact(secs)}`),
+      h("div", { class: "sdel", title: "Borrar",
+        onclick: () => confirmDialog("Borrar entrada",
+          `Se borra el registro de ${hhmm(s.start)} a ${hhmm(s.end)}. ¿Seguro?`,
+          "Borrar", true, () => { Store.deleteSession(s.id); afterMutation(); }) }, "✕")));
+  }
+  return panel;
+}
+
+/* ---------------- RESUMEN ---------------- */
+function renderResumen() {
+  const view = document.getElementById("resumenView");
+  view.innerHTML = "";
+  view.append(buildPeriodSelector());
+
+  const [from, to] = periodRange(statsPeriod, statsOffset);
+  view.append(buildOffsetNav(periodLabel(statsPeriod, statsOffset, from, to)));
+
+  const allActs = Store.activities(true);
+  const allCats = [...new Set(allActs.map(a => (a.type || "General") || "General"))].sort();
+  if (allCats.length > 1) view.append(buildCategorySelector(allCats));
+  if (statsCategory !== "all" && !allCats.includes(statsCategory)) statsCategory = "all";
+
+  const acts = statsCategory === "all" ? allActs
+    : allActs.filter(a => ((a.type || "General") || "General") === statsCategory);
+
+  const perAct = acts.map(a => [a, Store.secsFor(a.id, from, to)])
+    .filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
+  const total = perAct.reduce((s, x) => s + x[1], 0);
+
+  view.append(h("div", { class: "slabel-h" }, statsCategory === "all" ? "TOTAL" : "TOTAL · " + statsCategory.toUpperCase()));
+  view.append(h("div", { class: "total mono" }, exact(total)));
+
+  if (perAct.length === 0) {
+    view.append(h("div", { class: "empty" }, "Sin registros en este período."));
+    return;
+  }
+
+  const actIds = new Set(acts.map(a => a.id));
+  if (statsPeriod === "day") {
+    view.append(h("div", { class: "slabel-h" }, "POR ACTIVIDAD"));
+    const bars = perAct.slice(0, 8).map(x => ({ label: x[0].name, secs: x[1], color: x[0].color || "#2F4B8F" }));
+    view.append(buildBarChart(bars, true, 1));
+  } else {
+    view.append(h("div", { class: "slabel-h" }, "POR DÍA"));
+    const bars = statsPeriod === "week"
+      ? weekBars(actIds, from)
+      : monthBars(actIds, from, statsOffset === 0 ? new Date().getDate() : daysInMonth(from));
+    view.append(buildBarChart(bars, statsPeriod === "week", statsPeriod === "week" ? 1 : 5));
+  }
+
+  for (const [a, sec] of perAct)
+    view.append(statRow(a.name, a.color || "#2F4B8F", sec, total, null));
+
+  if (statsCategory === "all") {
+    const cats = {};
+    for (const a of allActs) {
+      const t = Store.secsFor(a.id, from, to);
+      if (t > 0) { const c = (a.type || "General") || "General"; cats[c] = (cats[c] || 0) + t; }
+    }
+    const entries = Object.entries(cats).sort((x, y) => y[1] - x[1]);
+    if (entries.length) {
+      const expanded = catExpanded == null ? entries.length <= 3 : catExpanded;
+      view.append(h("div", { class: "slabel-h click", onclick: () => { catExpanded = !expanded; renderResumen(); } },
+        "POR CATEGORÍA  " + (expanded ? "▾" : "▸")));
+      if (expanded) for (const [c, sec] of entries)
+        view.append(statRow(c, "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+    }
+  }
+
+  view.append(h("button", { class: "csvbtn", onclick: onExportClick }, "Exportar CSV"));
+}
+
+function buildPeriodSelector() {
+  const seg = h("div", { class: "seg" });
+  for (const [p, lbl] of [["day", "Día"], ["week", "Semana"], ["month", "Mes"]])
+    seg.append(h("div", { class: "s" + (p === statsPeriod ? " active" : ""),
+      onclick: () => { statsPeriod = p; statsOffset = 0; renderResumen(); } }, lbl));
+  return seg;
+}
+function buildOffsetNav(label) {
+  const nav = h("div", { class: "nav" });
+  nav.append(h("div", { class: "ar", onclick: () => { statsOffset -= 1; renderResumen(); } }, "◀"));
+  nav.append(h("div", { class: "navlbl" }, label));
+  const canFwd = statsOffset < 0;
+  nav.append(h("div", { class: "ar" + (canFwd ? "" : " off"),
+    onclick: canFwd ? () => { statsOffset += 1; renderResumen(); } : null }, "▶"));
+  return nav;
+}
+function buildCategorySelector(cats) {
+  const catColor = {};
+  for (const a of Store.activities(true)) {
+    const c = (a.type || "General") || "General";
+    if (!(c in catColor)) catColor[c] = a.color || "#2F4B8F";
+  }
+  const rowEl = h("div", { class: "catrow" });
+  const chip = (label, value, color) => {
+    const c = h("div", { class: "chip" + (value === statsCategory ? " active" : ""),
+      onclick: () => { statsCategory = value; renderResumen(); } });
+    if (color) c.append(h("div", { class: "cdot", style: "background:" + color }));
+    c.append(document.createTextNode(label));
+    return c;
+  };
+  rowEl.append(chip("Todo", "all", null));
+  for (const c of cats) rowEl.append(chip(c, c, catColor[c]));
+  return rowEl;
+}
+function weekBars(actIds, weekStart) {
+  const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  return labels.map((lb, i) => {
+    const ds = weekStart + i * DAY_MS;
+    return { label: lb, secs: Store.totalBetween(ds, ds + DAY_MS, actIds), color: "var(--indigo)" };
+  });
+}
+function monthBars(actIds, monthStart, dayCount) {
+  const out = [];
+  for (let i = 0; i < dayCount; i++) {
+    const ds = monthStart + i * DAY_MS;
+    out.push({ label: String(i + 1), secs: Store.totalBetween(ds, ds + DAY_MS, actIds), color: "var(--indigo)" });
+  }
+  return out;
+}
+function buildBarChart(bars, showValues, labelStep) {
+  const max = Math.max(1, ...bars.map(b => b.secs));
+  const chart = h("div", { class: "chart" });
+  bars.forEach((b, idx) => {
+    const col = h("div", { class: "cbar" });
+    if (showValues) col.append(h("div", { class: "cval" }, b.secs > 0 ? exact(b.secs) : ""));
+    const hpct = Math.max(2, (b.secs / max) * 100);
+    col.append(h("div", { class: "cfill", style: `height:${hpct}%;background:${b.color};min-height:3px` }));
+    col.append(h("div", { class: "clab" }, idx % labelStep === 0 ? b.label : ""));
+    chart.append(col);
+  });
+  const outer = h("div");
+  outer.append(chart);
+  outer.append(h("div", { class: "baseline" }));
+  return outer;
+}
+function statRow(name, color, sec, total, onClick) {
+  const pct = total > 0 ? Math.round(sec * 100 / total) : 0;
+  const box = h("div", { class: "stat" + (onClick ? " click" : "") });
+  if (onClick) box.addEventListener("click", onClick);
+  box.append(h("div", { class: "top" },
+    h("div", { class: "sdot", style: "background:" + color }),
+    h("div", { class: "snm" }, name),
+    h("div", { class: "sval mono" }, `${exact(sec)}  ·  ${pct}%`)));
+  const track = h("div", { class: "track" });
+  track.append(h("div", { class: "fill", style: `width:${total > 0 ? (sec / total * 100) : 0}%;background:${color}` }));
+  box.append(track);
+  return box;
+}
+
+/* ====================== DIÁLOGOS ====================== */
+function closeModal() { document.getElementById("modalRoot").innerHTML = ""; }
+function showModal(node, mandatory) {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = "";
+  const overlay = h("div", { class: "overlay", onclick: (e) => { if (!mandatory && e.target === overlay) closeModal(); } }, node);
+  root.append(overlay);
+}
+function confirmDialog(title, msg, okLabel, danger, onOk) {
+  const d = h("div", { class: "dialog" },
+    h("h3", null, title),
+    h("p", null, msg),
+    h("div", { class: "dbtns" },
+      h("button", { class: "dbtn ghost", onclick: closeModal }, "Cancelar"),
+      h("button", { class: "dbtn" + (danger ? " danger" : ""), onclick: () => { closeModal(); onOk(); } }, okLabel)));
+  showModal(d);
+}
+
+function openActivitySheet(existing) {
+  const nameIn = h("input", { class: "field", placeholder: "Nombre (ej. Análisis de circuitos)", value: existing ? existing.name : "" });
+  const typeIn = h("input", { class: "field", placeholder: "Categoría (Materia, Libro, Proyecto…)", value: existing ? (existing.type || "") : "" });
+
+  let picked = existing ? existing.color : COLORS[Store.activities().length % COLORS.length];
+  const swWrap = h("div", { class: "swatches" });
+  const swatchEls = [];
+  COLORS.forEach(c => {
+    const sw = h("div", { class: "sw" + (c === picked ? " sel" : ""), style: "background:" + c,
+      onclick: () => { picked = c; swatchEls.forEach((e, i) => e.className = "sw" + (COLORS[i] === picked ? " sel" : "")); } });
+    swatchEls.push(sw); swWrap.append(sw);
+  });
+
+  const d = h("div", { class: "dialog" },
+    h("h3", null, existing ? "Editar actividad" : "Nueva actividad"),
+    nameIn, typeIn,
+    h("div", { class: "flabel" }, "Color"), swWrap);
+
+  if (existing) {
+    const archived = !!existing.archived;
+    d.append(h("button", { class: "linkbtn", onclick: () => {
+      archived ? Store.unarchiveActivity(existing.id) : Store.archiveActivity(existing.id);
+      closeModal(); afterMutation();
+    } }, archived ? "Desarchivar actividad" : "Archivar actividad"));
+  }
+
+  const btns = h("div", { class: "dbtns" });
+  if (existing) {
+    btns.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => {
+      confirmDialog(`Borrar "${existing.name}"`, "También se borran sus sesiones. ¿Seguro?",
+        "Borrar", true, () => { Store.deleteActivity(existing.id); afterMutation(); });
+    } }, "Borrar"));
+  }
+  btns.append(h("button", { class: "dbtn ghost", onclick: closeModal }, "Cancelar"));
+  btns.append(h("button", { class: "dbtn", onclick: () => {
+    const name = nameIn.value.trim();
+    if (!name) return;
+    const type = typeIn.value.trim() || "General";
+    if (existing) Store.updateActivity(existing.id, name, type, picked);
+    else Store.addActivity(name, type, picked);
+    closeModal(); afterMutation();
+  } }, "Guardar"));
+  d.append(btns);
+
+  showModal(d);
+  setTimeout(() => nameIn.focus(), 30);
+}
+
+function onExportClick() {
+  const [from, to] = periodRange(statsPeriod, statsOffset);
+  const periodTxt = periodLabel(statsPeriod, statsOffset, from, to);
+  const filterLbl = statsCategory === "all" ? periodTxt : `${periodTxt} · ${statsCategory}`;
+  const d = h("div", { class: "dialog" },
+    h("h3", null, "Exportar CSV"),
+    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(false); } }, "Todo el historial"),
+    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(true); } }, `Solo lo filtrado (${filterLbl})`),
+    h("div", { class: "dbtns" }, h("button", { class: "dbtn ghost", onclick: closeModal }, "Cancelar")));
+  showModal(d);
+}
+function doExport(filtered) {
+  let csv;
+  if (filtered) {
+    const [from, to] = periodRange(statsPeriod, statsOffset);
+    const ids = statsCategory === "all" ? null
+      : new Set(Store.activities(true).filter(a => ((a.type || "General") || "General") === statsCategory).map(a => a.id));
+    csv = Store.exportCsv(from, to, ids);
+  } else csv = Store.exportCsv();
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "bitacora.csv"; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ====================== PERFILES ====================== */
+function profileRowNode(p, current) {
+  const isCur = p.id === current;
+  const row = h("div", { class: "stat",
+    style: "cursor:pointer;margin-top:8px" + (isCur ? ";border-color:var(--indigo);border-width:2px" : "") });
+  const top = h("div", { class: "top" });
+  top.append(h("div", { class: "sdot", style: "background:" + (THEME_ACCENT[p.theme] || THEME_ACCENT.azul) }));
+  top.append(h("div", { class: "snm", style: "font-weight:700" }, p.name));
+  if (isCur) top.append(h("div", { class: "sval", style: "color:var(--indigo);font-weight:800" }, "✓"));
+  top.append(h("div", { style: "color:var(--muted);padding:0 4px 0 8px;cursor:pointer;font-size:15px",
+    onclick: (e) => { e.stopPropagation(); openProfileEdit(p); } }, "✎"));
+  row.append(top);
+  row.addEventListener("click", () => selectProfile(p.id));
+  return row;
+}
+
+function openProfileSheet() {
+  const d = h("div", { class: "dialog" }, h("h3", null, "Perfiles"));
+  const cur = Store.currentProfileId();
+  for (const p of ProfileStore.profiles()) d.append(profileRowNode(p, cur));
+  d.append(h("button", { class: "addcard", style: "margin-top:8px", onclick: openNewProfile }, "+  Nuevo perfil"));
+  d.append(h("div", { class: "dbtns" }, h("button", { class: "dbtn ghost", onclick: closeModal }, "Cerrar")));
+  showModal(d);
+}
+
+function showMandatoryPicker() {
+  const d = h("div", { class: "dialog" }, h("h3", null, "¿Quién sos?"));
+  for (const p of ProfileStore.profiles()) d.append(profileRowNode(p, ""));
+  d.append(h("button", { class: "addcard", style: "margin-top:8px", onclick: openNewProfile }, "+  Nuevo perfil"));
+  showModal(d, true);
+}
+
+function selectProfile(id) {
+  if (id === Store.currentProfileId() && Store.hasChosenProfile()) { closeModal(); return; }
+  Store.setCurrentProfile(id);
+  statsOffset = 0; statsCategory = "all"; catExpanded = null; expandedIds.clear(); showArchived = false;
+  closeModal();
+  applyProfileChrome();
+  render();
+  sync();
+}
+
+function openNewProfile() {
+  const nameIn = h("input", { class: "field", placeholder: "Nombre del perfil (ej. María)" });
+  const d = h("div", { class: "dialog" },
+    h("h3", null, "Nuevo perfil"), nameIn,
+    h("div", { class: "dbtns" },
+      h("button", { class: "dbtn ghost", onclick: openProfileSheet }, "Cancelar"),
+      h("button", { class: "dbtn", onclick: () => {
+        const name = nameIn.value.trim(); if (!name) return;
+        const id = ProfileStore.add(name, ProfileStore.DEFAULT_THEME);
+        selectProfile(id);
+      } }, "Crear")));
+  showModal(d);
+  setTimeout(() => nameIn.focus(), 30);
+}
+
+function openProfileEdit(p) {
+  const nameIn = h("input", { class: "field", value: p.name });
+  let pickedTheme = THEME_ORDER.includes(p.theme) ? p.theme : "azul";
+  const swWrap = h("div", { class: "swatches" });
+  const els = [];
+  THEME_ORDER.forEach(t => {
+    const sw = h("div", { class: "sw" + (t === pickedTheme ? " sel" : ""),
+      style: "background:" + THEME_ACCENT[t] + ";border-radius:50%",
+      onclick: () => { pickedTheme = t; els.forEach((e, i) => {
+        e.className = "sw" + (THEME_ORDER[i] === pickedTheme ? " sel" : "");
+        e.style.borderRadius = "50%";
+      }); } });
+    els.push(sw); swWrap.append(sw);
+  });
+  const d = h("div", { class: "dialog" },
+    h("h3", null, "Editar perfil"), nameIn,
+    h("div", { class: "flabel" }, "Tema"), swWrap);
+  const btns = h("div", { class: "dbtns" });
+  if (p.id !== "default")
+    btns.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => confirmDeleteProfile(p) }, "Borrar"));
+  btns.append(h("button", { class: "dbtn ghost", onclick: openProfileSheet }, "Cancelar"));
+  btns.append(h("button", { class: "dbtn", onclick: () => {
+    const name = nameIn.value.trim(); if (name) ProfileStore.rename(p.id, name);
+    ProfileStore.setTheme(p.id, pickedTheme);
+    closeModal();
+    applyProfileChrome(); render(); sync();
+  } }, "Guardar"));
+  d.append(btns);
+  showModal(d);
+}
+
+function confirmDeleteProfile(p) {
+  const input = h("input", { class: "field", placeholder: "escribí borrar" });
+  const d = h("div", { class: "dialog" },
+    h("h3", null, "Borrar perfil"),
+    h("p", null, `Se borra el perfil "${p.name}" y TODAS sus actividades e historial. Esto no se puede deshacer. Para confirmar, escribí la palabra borrar:`),
+    input,
+    h("div", { class: "dbtns" },
+      h("button", { class: "dbtn ghost", onclick: openProfileSheet }, "Cancelar"),
+      h("button", { class: "dbtn danger", onclick: () => {
+        if (input.value.trim().toLowerCase() !== "borrar") { input.style.borderColor = "var(--live)"; input.focus(); return; }
+        const wasCurrent = Store.currentProfileId() === p.id;
+        ProfileStore.del(p.id);
+        sync();
+        if (wasCurrent) selectProfile("default");
+        else { closeModal(); openProfileSheet(); }
+      } }, "Borrar")));
+  showModal(d);
+  setTimeout(() => input.focus(), 30);
+}
+
+document.getElementById("profileBtn").onclick = openProfileSheet;
+
+/* ====================== MUTACIONES / LOOP ====================== */
+let pushTimer = null;
+function afterMutation() {
+  render();
+  // sube el cambio local enseguida; el pull+merge periódico trae lo de otros dispositivos.
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(sync, 250);
+}
+
+/* Tab switching */
+function switchTab(t) {
+  tab = t;
+  document.body.dataset.tab = t;  // el CSS decide qué panel mostrar en angosto
+  document.getElementById("tabTimer").classList.toggle("active", t === "timer");
+  document.getElementById("tabResumen").classList.toggle("active", t === "resumen");
+  render();
+}
+document.getElementById("tabTimer").onclick = () => switchTab("timer");
+document.getElementById("tabResumen").onclick = () => switchTab("resumen");
+
+/* Theme toggle */
+function initTheme() {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+}
+document.getElementById("themeBtn").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const isDark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const next = isDark ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+};
+
+/* Ticker: refresca el tiempo en vivo sin re-renderizar toda la lista.
+   No depende de la pestaña: en desktop el panel del cronómetro siempre está visible. */
+setInterval(() => {
+  const runId = Store.runningActId();
+  if (runId && !Store.runningPaused()) {
+    const t = exact(Store.secsFor(runId, startOfToday()));
+    if (todayEls[runId]) todayEls[runId].textContent = t;
+    const bc = document.getElementById("bannerChrono");
+    if (bc) bc.textContent = exact(Math.floor(Store.runningElapsedMs() / 1000));
+  }
+  updateTitle();
+}, 1000);
+
+/* Sync loop + eventos */
+setInterval(sync, 8000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+window.addEventListener("focus", sync);
+
+/* ====================== ARRANQUE ====================== */
+initTheme();
+document.body.dataset.tab = tab;
+applyProfileChrome();
+render();
+if (!Store.hasChosenProfile()) {
+  // Primera vez: elegir perfil. Traemos el índice remoto por si hay perfiles de otro dispositivo.
+  showMandatoryPicker();
+  pullIndex().then(() => { if (!Store.hasChosenProfile()) showMandatoryPicker(); });
+}
+sync();
+</script>
+</body>
+</html>

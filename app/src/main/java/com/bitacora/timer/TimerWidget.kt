@@ -70,13 +70,16 @@ class TimerWidget : AppWidgetProvider() {
                 }
             }
             ACTION_REFRESH -> {
-                // Feedback inmediato: RemoteViews no permite animaciones, así que mostramos
-                // un texto de estado breve antes de que termine el merge asíncrono.
-                showRefreshing(context)
+                // Solo re-renderiza si el sync trajo cambios reales. Así, tocar para
+                // actualizar cuando no cambió nada no re-infla el cronómetro en vivo
+                // (evita el "flash" de números locos al re-dibujar el Chronometer).
                 runInBackground(context) {
+                    val before = Store.payload(context).toString()
                     Sync.pullMerge(context)
-                    refresh(context)
-                    Notifs.update(context); ResumenWidget.refresh(context)
+                    if (Store.payload(context).toString() != before) {
+                        refresh(context)
+                        Notifs.update(context); ResumenWidget.refresh(context)
+                    }
                 }
             }
         }
@@ -219,17 +222,6 @@ class TimerWidget : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(context)
             val ids = mgr.getAppWidgetIds(ComponentName(context, TimerWidget::class.java))
             for (id in ids) renderOne(context, mgr, id)
-        }
-
-        // Actualización parcial: solo cambia el texto de estado para dar feedback al toque.
-        private fun showRefreshing(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, TimerWidget::class.java))
-            for (id in ids) {
-                val v = RemoteViews(context.packageName, R.layout.widget)
-                v.setTextViewText(R.id.w_status, "Actualizando…")
-                mgr.partiallyUpdateAppWidget(id, v)
-            }
         }
     }
 }

@@ -38,6 +38,23 @@
                     android:textSize="10sp"
                     android:letterSpacing="0.14" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/profileChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Principal ▾"
+                android:textColor="@color/ink"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:background="@drawable/chip"
+                android:paddingLeft="14dp"
+                android:paddingRight="14dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:maxWidth="160dp"
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
 
         <LinearLayout

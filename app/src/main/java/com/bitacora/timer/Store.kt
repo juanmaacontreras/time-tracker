@@ -9,7 +9,8 @@ import java.util.UUID
 
 object Store {
     private const val PREFS = "bitacora"
-    private const val KEY = "data"
+    private const val APP_PREFS = "bitacora_app"
+    private const val CURRENT_KEY = "currentProfile"
 
     // Paleta apagada tipo "papel/tinta", 14 tonos distinguibles entre sí.
     val COLORS = arrayOf(
@@ -22,17 +23,40 @@ object Store {
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun appPrefs(ctx: Context) =
+        ctx.applicationContext.getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE)
 
-    // Cache en memoria del JSON completo. Sin esto, cada llamada a root() volvía a leer
-    // SharedPreferences y a parsear TODO el historial desde cero — y casi todas las
-    // funciones de Store llaman a root(), así que un solo toque disparaba decenas de
-    // parseos sincrónicos en el hilo principal (la causa de la lentitud).
+    // ---------- perfil activo (local, por dispositivo) ----------
+    fun hasChosenProfile(ctx: Context): Boolean = appPrefs(ctx).getString(CURRENT_KEY, null) != null
+    fun currentProfileId(ctx: Context): String =
+        appPrefs(ctx).getString(CURRENT_KEY, null) ?: Config.DEFAULT_PROFILE
+
+    @Synchronized
+    fun setCurrentProfile(ctx: Context, id: String) {
+        appPrefs(ctx).edit().putString(CURRENT_KEY, id).apply()
+        cachedRoot = null; cachedProfile = null  // invalida cache: cambia el dataset
+    }
+
+    // Clave de SharedPreferences donde vive el dataset de un perfil.
+    // El perfil "default" usa la clave histórica "data" (adopta lo que ya había).
+    private fun dataKey(profileId: String): String =
+        if (profileId == Config.DEFAULT_PROFILE || profileId.isEmpty()) "data" else "data_$profileId"
+
+    fun clearProfileData(ctx: Context, profileId: String) {
+        prefs(ctx).edit().remove(dataKey(profileId)).apply()
+        if (cachedProfile == profileId) { cachedRoot = null; cachedProfile = null }
+    }
+
+    // Cache en memoria del JSON completo del perfil activo. Sin esto, cada llamada a root()
+    // volvía a leer SharedPreferences y a parsear TODO el historial desde cero.
     @Volatile private var cachedRoot: JSONObject? = null
+    @Volatile private var cachedProfile: String? = null
 
     @Synchronized
     fun root(ctx: Context): JSONObject {
-        cachedRoot?.let { return it }
-        val raw = prefs(ctx).getString(KEY, null)
+        val pid = currentProfileId(ctx)
+        if (cachedRoot != null && cachedProfile == pid) return cachedRoot!!
+        val raw = prefs(ctx).getString(dataKey(pid), null)
         val obj = if (raw != null) JSONObject(raw) else JSONObject()
         if (!obj.has("activities")) obj.put("activities", JSONArray())
         if (!obj.has("sessions")) obj.put("sessions", JSONArray())
@@ -42,7 +66,7 @@ object Store {
         if (!obj.has("runPaused")) obj.put("runPaused", false)
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
-        cachedRoot = obj
+        cachedRoot = obj; cachedProfile = pid
         return obj
     }
 
@@ -58,8 +82,9 @@ object Store {
 
     @Synchronized
     fun write(ctx: Context, obj: JSONObject) {
-        cachedRoot = obj
-        prefs(ctx).edit().putString(KEY, obj.toString()).apply()
+        val pid = currentProfileId(ctx)
+        cachedRoot = obj; cachedProfile = pid
+        prefs(ctx).edit().putString(dataKey(pid), obj.toString()).apply()
     }
 
     // ---------- activities ----------

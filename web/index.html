@@ -257,7 +257,7 @@ body[data-tab="resumen"] #timerView { display:none; }
     </div>
     <div class="spacer"></div>
     <div class="dot-sync" id="syncDot" title="Sincronización"></div>
-    <button class="iconbtn" id="profileBtn" title="Perfil">Principal ▾</button>
+    <button class="iconbtn" id="profileBtn" title="Perfil"></button>
     <button class="iconbtn" id="themeBtn" title="Tema claro/oscuro">◐</button>
   </div>
 
@@ -1269,9 +1269,12 @@ window.addEventListener("focus", sync);
 /* ====================== ARRANQUE ====================== */
 initTheme();
 document.body.dataset.tab = tab;
-applyProfileChrome();
-render();
-if (!Store.hasChosenProfile()) {
+if (Store.hasChosenProfile()) {
+  // Recién acá se aplica nombre/tema: si no, se filtraría el perfil de fallback
+  // (el que quedó guardado como "default") antes de que el usuario confirme nada.
+  applyProfileChrome();
+  render();
+} else {
   // Primera vez: elegir perfil. Traemos el índice remoto por si hay perfiles de otro dispositivo.
   showMandatoryPicker();
   pullIndex().then(() => { if (!Store.hasChosenProfile()) showMandatoryPicker(); });

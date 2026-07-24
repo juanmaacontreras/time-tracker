@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabResumen: TextView
     private lateinit var profileChip: TextView
     private var pickerDialog: AlertDialog? = null
+    private var updateChecked = false
 
     private var tab = "timer"
     private var statsPeriod = "day"
@@ -138,6 +139,19 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(ticker); handler.post(ticker)
         doSync()
         handler.removeCallbacks(syncLoop); handler.postDelayed(syncLoop, 10000)
+        if (!updateChecked) { updateChecked = true; checkForUpdates() }
+    }
+
+    // Al abrir la app: si hay una versión nueva en GitHub, ofrece actualizar.
+    private fun checkForUpdates() {
+        Updater.check(this, { r -> runOnUiThread(r) }) { version, apkUrl ->
+            AlertDialog.Builder(this, R.style.AppDialog)
+                .setTitle("Actualización disponible")
+                .setMessage("Hay una versión nueva de Bitácora. ¿Actualizar ahora?")
+                .setPositiveButton("Actualizar") { _, _ -> Updater.downloadAndInstall(this, apkUrl) }
+                .setNegativeButton("Ahora no", null)
+                .show()
+        }
     }
 
     private fun updateProfileChip() {

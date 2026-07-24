@@ -555,8 +555,9 @@ const ProfileStore = {
     let obj = {};
     try { const raw = localStorage.getItem(this.KEY); if (raw) obj = JSON.parse(raw); } catch (e) {}
     if (!Array.isArray(obj.profiles)) obj.profiles = [];
+    // updatedAt:0 → el sembrado por defecto nunca le gana en el merge a un cambio real.
     if (!obj.profiles.some(p => p.id === "default"))
-      obj.profiles.push({ id:"default", name:"Principal", theme:this.DEFAULT_THEME, updatedAt: now(), deleted:false });
+      obj.profiles.push({ id:"default", name:"Principal", theme:this.DEFAULT_THEME, updatedAt: 0, deleted:false });
     this._index = obj; return obj;
   },
   write(obj) { this._index = obj; try { localStorage.setItem(this.KEY, JSON.stringify(obj)); } catch (e) {} },

@@ -36,11 +36,14 @@ object ProfileStore {
         var has = false
         for (i in 0 until arr.length()) if (arr.getJSONObject(i).optString("id") == Config.DEFAULT_PROFILE) has = true
         if (!has) {
+            // updatedAt = 0: el sembrado por defecto NUNCA debe ganarle en el merge a un
+            // cambio real del usuario (renombre/tema), que trae su propia fecha real.
+            // Sin esto, al reinstalar el "Principal" fresco pisaba lo editado.
             arr.put(JSONObject()
                 .put("id", Config.DEFAULT_PROFILE)
                 .put("name", "Principal")
                 .put("theme", DEFAULT_THEME)
-                .put("updatedAt", Store.now())
+                .put("updatedAt", 0L)
                 .put("deleted", false))
         }
     }

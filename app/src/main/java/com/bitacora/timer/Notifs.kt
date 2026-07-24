@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
@@ -46,9 +48,20 @@ object Notifs {
         val pausePi = PendingIntent.getBroadcast(ctx, 2, pauseIntent, flags)
 
         val paused = Store.runningPaused(ctx)
-        // El "when" del chrono se calcula desde el tiempo real corrido (sin pausas).
-        val chronoBase = Store.now() - Store.runningElapsedMs(ctx)
+        val elapsed = Store.runningElapsedMs(ctx)
+        val base = SystemClock.elapsedRealtime() - elapsed
+        val statusBig = if (paused) "PAUSADO · $name" else name
         val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
+
+        // Vistas custom con el cronómetro grande (estilo widget). Al pausar el cronómetro
+        // se congela (started = false) con el tiempo real corrido.
+        val big = RemoteViews(ctx.packageName, R.layout.notif)
+        big.setTextViewText(R.id.n_status, statusBig)
+        big.setChronometer(R.id.n_chrono, base, null, !paused)
+        val small = RemoteViews(ctx.packageName, R.layout.notif_small)
+        small.setTextViewText(R.id.n_status, name)
+        small.setChronometer(R.id.n_chrono, base, null, !paused)
+
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(name)
@@ -58,14 +71,12 @@ object Notifs {
             .setContentIntent(openPi)
             .addAction(pauseIcon, if (paused) "Resumir" else "Pausar", pausePi)
             .addAction(R.drawable.ic_stop, "Parar", stopPi)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(small)
+            .setCustomBigContentView(big)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         if (type.isNotEmpty()) builder.setSubText(type)
-        if (paused) {
-            // Android no puede "congelar" el chronometer con animación; mostramos texto estático.
-            builder.setUsesChronometer(false)
-        } else {
-            builder.setUsesChronometer(true).setWhen(chronoBase)
-        }
+
         val n = builder.build()
         try {
             nm.notify(NOTIF_ID, n)

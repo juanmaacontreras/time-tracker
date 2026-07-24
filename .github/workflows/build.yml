@@ -2,13 +2,25 @@ name: Build APK
 
 on:
   push:
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - '.github/workflows/**'
   workflow_dispatch:
+
+permissions:
+  contents: write   # necesario para crear tags y releases
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historial completo para contar commits (versionCode)
 
       - uses: actions/setup-java@v4
         with:
@@ -21,11 +33,25 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+      - name: Calcular versión (número de commits)
+        id: ver
+        run: echo "vcode=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon -Pvcode=${{ steps.ver.outputs.vcode }} -Pvname=${{ steps.ver.outputs.vcode }}
+
+      - name: Preparar APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk bitacora.apk
+
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.vcode }}
+          name: v${{ steps.ver.outputs.vcode }}
+          files: bitacora.apk
+
+      - name: Subir artifact
         uses: actions/upload-artifact@v4
         with:
           name: bitacora-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: bitacora.apk

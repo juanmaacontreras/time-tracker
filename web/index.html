@@ -160,6 +160,11 @@ body[data-tab="resumen"] #timerView { display:none; }
   justify-content:flex-end; padding:0 2px; height:100%; }
 .chart .cval { font-size:9px; color:var(--inkSoft); text-align:center; white-space:nowrap; }
 .chart .cfill { width:100%; border-radius:4px 4px 0 0; margin-top:3px; }
+/* Barra apilada por categoría (vista Semana): un contenedor de altura=% del total del
+   día, con segmentos flex proporcionales a cada categoría dentro. */
+.chart .cstack { width:100%; margin-top:3px; border-radius:4px 4px 0 0; overflow:hidden;
+  display:flex; flex-direction:column; }
+.chart .cseg { width:100%; }
 .chart .clab { font-size:9px; color:var(--muted); margin-top:4px; overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
 .baseline { height:1px; background:var(--line); margin-bottom:14px; }
@@ -900,16 +905,25 @@ function renderResumen() {
   }
 
   const actIds = new Set(acts.map(a => a.id));
-  if (statsPeriod === "day") {
+  const catColorsAll = categoryColors(allActs);
+  // Día → por actividad. Mes → por día. Semana → por día TAMBIÉN, pero cada barra
+  // apilada por categoría (así se ve en qué día se le dedicó tiempo a qué). Si ya hay
+  // un filtro de categoría activo, apilar una sola categoría no aporta nada: cae a
+  // "por actividad" como día.
+  if (statsPeriod === "week" && statsCategory === "all") {
+    view.append(h("div", { class: "slabel-h" }, "POR DÍA · CATEGORÍA"));
+    // Orden fijo de categorías (por total de la semana) para que el mismo color quede
+    // siempre en la misma posición dentro de cada barra apilada.
+    const catOrder = categoryBars(allActs, from, to).map(b => b.label);
+    view.append(buildStackedBarChart(weekCategoryStacks(allActs, from, catOrder), catColorsAll));
+  } else if (statsPeriod === "day" || statsPeriod === "week") {
     view.append(h("div", { class: "slabel-h" }, "POR ACTIVIDAD"));
     const bars = perAct.slice(0, 8).map(x => ({ label: x[0].name, secs: x[1], color: x[0].color || "#2F4B8F" }));
     view.append(buildBarChart(bars, true, 1));
   } else {
     view.append(h("div", { class: "slabel-h" }, "POR DÍA"));
-    const bars = statsPeriod === "week"
-      ? weekBars(actIds, from)
-      : monthBars(actIds, from, statsOffset === 0 ? new Date().getDate() : daysInMonth(from));
-    view.append(buildBarChart(bars, statsPeriod === "week", statsPeriod === "week" ? 1 : 5));
+    const bars = monthBars(actIds, from, statsOffset === 0 ? new Date().getDate() : daysInMonth(from));
+    view.append(buildBarChart(bars, false, 5));
   }
 
   for (const [a, sec] of perAct)
@@ -926,8 +940,9 @@ function renderResumen() {
       const expanded = catExpanded == null ? entries.length <= 3 : catExpanded;
       view.append(h("div", { class: "slabel-h click", onclick: () => { catExpanded = !expanded; renderResumen(); } },
         "POR CATEGORÍA  " + (expanded ? "▾" : "▸")));
+      // Mismo color que en el gráfico apilado: sirve de leyenda.
       if (expanded) for (const [c, sec] of entries)
-        view.append(statRow(c, "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+        view.append(statRow(c, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
     }
   }
 
@@ -950,12 +965,18 @@ function buildOffsetNav(label) {
     onclick: canFwd ? () => { statsOffset += 1; renderResumen(); } : null }, "▶"));
   return nav;
 }
-function buildCategorySelector(cats) {
-  const catColor = {};
-  for (const a of Store.activities(true)) {
+// Color representativo de cada categoría (el de su primera actividad). Es la "leyenda"
+// consistente entre el selector, el gráfico apilado por categoría y la lista colapsable.
+function categoryColors(acts) {
+  const map = {};
+  for (const a of acts) {
     const c = (a.type || "General") || "General";
-    if (!(c in catColor)) catColor[c] = a.color || "#2F4B8F";
+    if (!(c in map)) map[c] = a.color || "#2F4B8F";
   }
+  return map;
+}
+function buildCategorySelector(cats) {
+  const catColor = categoryColors(Store.activities(true));
   const rowEl = h("div", { class: "catrow" });
   const chip = (label, value, color) => {
     const c = h("div", { class: "chip" + (value === statsCategory ? " active" : ""),
@@ -968,12 +989,14 @@ function buildCategorySelector(cats) {
   for (const c of cats) rowEl.append(chip(c, c, catColor[c]));
   return rowEl;
 }
-function weekBars(actIds, weekStart) {
-  const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-  return labels.map((lb, i) => {
-    const ds = weekStart + i * DAY_MS;
-    return { label: lb, secs: Store.totalBetween(ds, ds + DAY_MS, actIds), color: "var(--indigo)" };
-  });
+function categoryBars(acts, from, to) {
+  const sums = {};
+  for (const a of acts) {
+    const t = Store.secsFor(a.id, from, to);
+    if (t > 0) { const c = (a.type || "General") || "General"; sums[c] = (sums[c] || 0) + t; }
+  }
+  return Object.entries(sums).sort((x, y) => y[1] - x[1])
+    .map(([label, secs]) => ({ label, secs, color: "var(--indigo)" }));
 }
 function monthBars(actIds, monthStart, dayCount) {
   const out = [];
@@ -982,6 +1005,42 @@ function monthBars(actIds, monthStart, dayCount) {
     out.push({ label: String(i + 1), secs: Store.totalBetween(ds, ds + DAY_MS, actIds), color: "var(--indigo)" });
   }
   return out;
+}
+// Para cada día de la semana, el desglose por categoría (en el orden fijo catOrder, así
+// el mismo color queda siempre en la misma posición dentro de cada barra apilada).
+function weekCategoryStacks(acts, weekStart, catOrder) {
+  const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  return labels.map((lb, i) => {
+    const ds = weekStart + i * DAY_MS;
+    const perCat = {};
+    for (const a of acts) {
+      const t = Store.secsFor(a.id, ds, ds + DAY_MS);
+      if (t > 0) { const c = (a.type || "General") || "General"; perCat[c] = (perCat[c] || 0) + t; }
+    }
+    const segs = catOrder.filter(c => perCat[c] > 0).map(c => ({ cat: c, secs: perCat[c] }));
+    return { label: lb, total: segs.reduce((s, x) => s + x.secs, 0), segs };
+  });
+}
+// Barras apiladas: una columna por día, cada una dividida en segmentos de color según
+// la categoría (mismo color que el selector y la lista colapsable de categorías).
+function buildStackedBarChart(days, catColors) {
+  const max = Math.max(1, ...days.map(d => d.total));
+  const chart = h("div", { class: "chart" });
+  days.forEach(d => {
+    const col = h("div", { class: "cbar" });
+    col.append(h("div", { class: "cval" }, d.total > 0 ? exact(d.total) : ""));
+    const hpct = Math.max(2, (d.total / max) * 100);
+    const stack = h("div", { class: "cstack", style: `height:${hpct}%` });
+    for (const seg of d.segs)
+      stack.append(h("div", { class: "cseg", style: `flex-grow:${seg.secs};background:${catColors[seg.cat] || "var(--indigo)"}` }));
+    col.append(stack);
+    col.append(h("div", { class: "clab" }, d.label));
+    chart.append(col);
+  });
+  const outer = h("div");
+  outer.append(chart);
+  outer.append(h("div", { class: "baseline" }));
+  return outer;
 }
 function buildBarChart(bars, showValues, labelStep) {
   const max = Math.max(1, ...bars.map(b => b.secs));

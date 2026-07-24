@@ -827,7 +827,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         val actIds = acts.map { it.getString("id") }.toSet()
-        if (statsPeriod == "day") {
+        val catColorsAll = categoryColors(allActs)
+        // Día → por actividad. Mes → por día. Semana → por día TAMBIÉN, pero cada barra
+        // apilada por categoría (así se ve en qué día se le dedicó tiempo a qué). Si ya hay
+        // un filtro de categoría activo, apilar una sola categoría no aporta nada: cae a
+        // "por actividad" como día.
+        if (statsPeriod == "week" && statsCategory == "all") {
+            resumenView.addView(sectionLabel("POR DÍA · CATEGORÍA"))
+            // Orden fijo de categorías (por total de la semana) para que el mismo color
+            // quede siempre en la misma posición dentro de cada barra apilada.
+            val catOrder = categoryBars(allActs, from, to).map { it.first }
+            val stacks = weekCategoryStacks(allActs, from, catOrder)
+            resumenView.addView(buildStackedBarChart(stacks, catColorsAll))
+        } else if (statsPeriod == "day" || statsPeriod == "week") {
             resumenView.addView(sectionLabel("POR ACTIVIDAD"))
             val bars = perAct.take(8).map {
                 Triple(it.first.getString("name"), it.second, Color.parseColor(it.first.optString("color", "#2F4B8F")))
@@ -835,9 +847,8 @@ class MainActivity : AppCompatActivity() {
             resumenView.addView(buildBarChart(bars, true, 1))
         } else {
             resumenView.addView(sectionLabel("POR DÍA"))
-            val bars = if (statsPeriod == "week") weekBars(actIds, from)
-                else monthBars(actIds, from, if (statsOffset == 0) java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) else Store.daysInMonth(from))
-            resumenView.addView(buildBarChart(bars, statsPeriod == "week", if (statsPeriod == "week") 1 else 5))
+            val bars = monthBars(actIds, from, if (statsOffset == 0) java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) else Store.daysInMonth(from))
+            resumenView.addView(buildBarChart(bars, false, 5))
         }
         for ((a, sec) in perAct) {
             resumenView.addView(statRow(a.getString("name"), Color.parseColor(a.optString("color", "#2F4B8F")), sec, total))
@@ -861,7 +872,8 @@ class MainActivity : AppCompatActivity() {
                 resumenView.addView(header)
                 if (expanded) {
                     for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
-                        val row = statRow(c, col(R.color.indigo), sec, total)
+                        // Mismo color que en el gráfico apilado: sirve de leyenda.
+                        val row = statRow(c, catColorsAll[c] ?: col(R.color.indigo), sec, total)
                         row.setOnClickListener { statsCategory = c; renderResumen() }
                         resumenView.addView(row)
                     }
@@ -872,17 +884,24 @@ class MainActivity : AppCompatActivity() {
         resumenView.addView(buildCsvButton())
     }
 
+    // Color representativo de cada categoría (el de su primera actividad). Se usa como
+    // "leyenda" consistente entre el selector de categorías, el gráfico apilado por
+    // categoría y la lista colapsable — el mismo color en todos lados identifica cada una.
+    private fun categoryColors(acts: List<JSONObject>): LinkedHashMap<String, Int> {
+        val map = LinkedHashMap<String, Int>()
+        for (a in acts) {
+            val c = a.optString("type", "General").ifEmpty { "General" }
+            if (c !in map) map[c] = Color.parseColor(a.optString("color", "#2F4B8F"))
+        }
+        return map
+    }
+
     private fun buildCategorySelector(cats: List<String>): View {
         val wrap = LinearLayout(this)
         wrap.orientation = LinearLayout.HORIZONTAL
         wrap.setPadding(0, dp(10), 0, 0)
 
-        // Color representativo de cada categoría (el de su primera actividad).
-        val catColor = HashMap<String, Int>()
-        for (a in Store.activities(this, includeArchived = true)) {
-            val c = a.optString("type", "General").ifEmpty { "General" }
-            if (c !in catColor) catColor[c] = Color.parseColor(a.optString("color", "#2F4B8F"))
-        }
+        val catColor = categoryColors(Store.activities(this, includeArchived = true))
 
         val scroll = android.widget.HorizontalScrollView(this)
         scroll.isHorizontalScrollBarEnabled = false
@@ -1043,13 +1062,17 @@ class MainActivity : AppCompatActivity() {
 
     private val DAY_MS = 86400000L
 
-    private fun weekBars(actIds: Set<String>, weekStart: Long): List<Triple<String, Long, Int>> {
-        val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
-        val c = col(R.color.indigo)
-        return (0..6).map { i ->
-            val ds = weekStart + i * DAY_MS
-            Triple(labels[i], Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
+    private fun categoryBars(acts: List<JSONObject>, from: Long, to: Long): List<Triple<String, Long, Int>> {
+        val sums = LinkedHashMap<String, Long>()
+        for (a in acts) {
+            val t = Store.secsFor(this, a.getString("id"), from, to)
+            if (t > 0) {
+                val c = a.optString("type", "General").ifEmpty { "General" }
+                sums[c] = (sums[c] ?: 0L) + t
+            }
         }
+        val color = col(R.color.indigo)
+        return sums.entries.sortedByDescending { it.value }.map { Triple(it.key, it.value, color) }
     }
 
     // dayCount: días a recorrer (parcial hasta hoy si es el mes actual, completo si es un mes pasado).
@@ -1059,6 +1082,103 @@ class MainActivity : AppCompatActivity() {
             val ds = monthStart + i * DAY_MS
             Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
         }
+    }
+
+    // Para cada día de la semana, el desglose por categoría (en el orden fijo catOrder,
+    // así el mismo color queda siempre en la misma posición dentro de cada barra apilada).
+    private fun weekCategoryStacks(
+        acts: List<JSONObject>, weekStart: Long, catOrder: List<String>
+    ): List<Pair<String, List<Pair<String, Long>>>> {
+        val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+        return (0..6).map { i ->
+            val ds = weekStart + i * DAY_MS
+            val perCat = LinkedHashMap<String, Long>()
+            for (a in acts) {
+                val t = Store.secsFor(this, a.getString("id"), ds, ds + DAY_MS)
+                if (t > 0) {
+                    val c = a.optString("type", "General").ifEmpty { "General" }
+                    perCat[c] = (perCat[c] ?: 0L) + t
+                }
+            }
+            val ordered = catOrder.mapNotNull { c -> perCat[c]?.let { c to it } }
+            labels[i] to ordered
+        }
+    }
+
+    // Gráfico de barras apiladas: una columna por día, cada una dividida en segmentos de
+    // color según la categoría (mismo color que el selector y la lista de categorías).
+    private fun buildStackedBarChart(
+        days: List<Pair<String, List<Pair<String, Long>>>>, catColors: Map<String, Int>
+    ): View {
+        val chartH = dp(150)
+        val wrap = LinearLayout(this)
+        wrap.orientation = LinearLayout.HORIZONTAL
+        wrap.gravity = Gravity.BOTTOM
+        val wlp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        wlp.topMargin = dp(6); wlp.bottomMargin = dp(4)
+        wrap.layoutParams = wlp
+
+        val totals = days.map { d -> d.second.sumOf { it.second } }
+        val max = (totals.maxOrNull() ?: 1L).coerceAtLeast(1L)
+
+        for ((idx, day) in days.withIndex()) {
+            val (label, segs) = day
+            val total = totals[idx]
+
+            val dayCol = LinearLayout(this)
+            dayCol.orientation = LinearLayout.VERTICAL
+            dayCol.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            dayCol.setPadding(dp(2), 0, dp(2), 0)
+            dayCol.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+
+            val v = TextView(this)
+            v.text = if (total > 0) Store.exact(total) else ""
+            v.textSize = 9f
+            v.setTextColor(col(R.color.inkSoft))
+            v.gravity = Gravity.CENTER
+            v.maxLines = 1
+            dayCol.addView(v)
+
+            val barH = Math.max(dp(3), (total.toDouble() / max * chartH).toInt())
+            val stack = LinearLayout(this)
+            stack.orientation = LinearLayout.VERTICAL
+            val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, barH)
+            slp.topMargin = dp(3); slp.leftMargin = dp(1); slp.rightMargin = dp(1)
+            stack.layoutParams = slp
+            for ((c, secs) in segs) {
+                val segH = Math.max(dp(1), (secs.toDouble() / total * barH).toInt())
+                val seg = View(this)
+                seg.setBackgroundColor(catColors[c] ?: col(R.color.indigo))
+                seg.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, segH)
+                stack.addView(seg)
+            }
+            dayCol.addView(stack)
+
+            val n = TextView(this)
+            n.text = label
+            n.textSize = 9f
+            n.setTextColor(col(R.color.muted))
+            n.gravity = Gravity.CENTER
+            n.maxLines = 1
+            n.setPadding(0, dp(4), 0, 0)
+            dayCol.addView(n)
+
+            wrap.addView(dayCol)
+        }
+
+        val outer = LinearLayout(this)
+        outer.orientation = LinearLayout.VERTICAL
+        val olp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        olp.bottomMargin = dp(14)
+        outer.layoutParams = olp
+        outer.addView(wrap)
+        val baseline = View(this)
+        baseline.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+        baseline.setBackgroundColor(col(R.color.line))
+        outer.addView(baseline)
+        return outer
     }
 
     private fun buildBarChart(bars: List<Triple<String, Long, Int>>, showValues: Boolean, labelStep: Int): View {

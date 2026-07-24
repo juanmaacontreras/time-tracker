@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:text="En reposo"
         android:textColor="@color/muted"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:letterSpacing="0.08"
         android:textAllCaps="true" />
 
@@ -31,7 +31,7 @@
             android:layout_weight="1"
             android:text="00:00"
             android:textColor="@color/ink"
-            android:textSize="26sp"
+            android:textSize="34sp"
             android:fontFamily="monospace" />
 
         <TextView
@@ -40,13 +40,13 @@
             android:layout_height="wrap_content"
             android:text="Pausar"
             android:textColor="@color/ink"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:background="@drawable/chip"
-            android:paddingLeft="12dp"
-            android:paddingRight="12dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
             android:layout_marginEnd="6dp"
             android:visibility="gone" />
 
@@ -56,13 +56,13 @@
             android:layout_height="wrap_content"
             android:text="Parar"
             android:textColor="@color/live"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:background="@drawable/chip"
-            android:paddingLeft="12dp"
-            android:paddingRight="12dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
             android:visibility="gone" />
     </LinearLayout>
 

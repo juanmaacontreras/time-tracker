@@ -43,7 +43,7 @@
                 android:id="@+id/profileChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Principal ▾"
+                android:text=""
                 android:textColor="@color/ink"
                 android:textStyle="bold"
                 android:textSize="13sp"

@@ -67,6 +67,7 @@ object Store {
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
         if (!obj.has("categories")) migrateCategoriesFromTypes(ctx, obj)
+        collapseDuplicateIds(ctx, obj)
         repairCorruptCategoryNames(ctx, obj)
         dedupeCategoriesByName(ctx, obj)
         cachedRoot = obj; cachedProfile = pid
@@ -148,6 +149,42 @@ object Store {
             }
         }
         if (changed) write(ctx, obj)
+    }
+
+    // Resguardo adicional: si el array de categorías tiene DOS entradas con el mismo
+    // id (posible tras una secuencia de merges de distintos dispositivos, cada uno con
+    // su propia vista parcial del historial), se colapsan en una sola — se prefiere la
+    // viva sobre la borrada, y a igual estado la de updatedAt más reciente. Sin esto,
+    // dedupeCategoriesByName (que asume un id = una sola entrada) puede comportarse
+    // de forma inconsistente.
+    private fun collapseDuplicateIds(ctx: Context, obj: JSONObject) {
+        val arr = obj.getJSONArray("categories")
+        val byId = LinkedHashMap<String, JSONObject>()
+        var changed = false
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            val id = c.optString("id", "")
+            val existing = byId[id]
+            if (existing == null) {
+                byId[id] = c
+            } else {
+                val existingAlive = !existing.optBoolean("deleted", false)
+                val cAlive = !c.optBoolean("deleted", false)
+                val winner = when {
+                    cAlive != existingAlive -> if (cAlive) c else existing
+                    c.optLong("updatedAt", 0L) > existing.optLong("updatedAt", 0L) -> c
+                    else -> existing
+                }
+                byId[id] = winner
+                changed = true
+            }
+        }
+        if (changed) {
+            val newArr = JSONArray()
+            for (c in byId.values) newArr.put(c)
+            obj.put("categories", newArr)
+            write(ctx, obj)
+        }
     }
 
     // Limpieza de las categorías duplicadas que ya se crearon ANTES de este fix (ids
@@ -722,6 +759,7 @@ object Store {
         // root() solo corre la limpieza de categorías la primera vez que arma el objeto
         // en memoria (cachedRoot); un merge posterior puede traer duplicados nuevos de
         // otro dispositivo sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
+        collapseDuplicateIds(ctx, obj)
         repairCorruptCategoryNames(ctx, obj)
         dedupeCategoriesByName(ctx, obj)
         // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.

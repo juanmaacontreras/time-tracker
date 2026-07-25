@@ -1388,11 +1388,11 @@ class MainActivity : AppCompatActivity() {
         catLabel.setPadding(0, dp(14), 0, dp(6))
         box.addView(catLabel)
 
-        // Perfil recién creado, todavía sin ninguna categoría: sembramos una por defecto
-        // para que el selector nunca quede vacío.
-        if (Store.categories(this).isEmpty()) Store.addCategory(this, "General", "", Store.COLORS[0])
+        // Si todavía no hay ninguna categoría (perfil nuevo, o se borró la única que
+        // había), el selector queda vacío con "+ Nueva" — nada de sembrar una "General"
+        // automática: eso hacía que borrar la única categoría pareciera "recrearse sola".
         var selectedCatId = existing?.let { Store.categoryForActivity(this, it).getString("id") }
-            ?: Store.categories(this).first().getString("id")
+            ?: (Store.categories(this).firstOrNull()?.getString("id") ?: "")
 
         val catScroll = android.widget.HorizontalScrollView(this)
         catScroll.isHorizontalScrollBarEnabled = false
@@ -1680,8 +1680,9 @@ class MainActivity : AppCompatActivity() {
                     .setMessage("Las actividades que la usan quedan sin categoría (General).")
                     .setPositiveButton("Borrar") { _, _ ->
                         Store.deleteCategory(this, existing.getString("id"))
-                        val fallback = Store.categories(this).firstOrNull()?.getString("id")
-                            ?: Store.addCategory(this, "General", "", Store.COLORS[0])
+                        // "" = sin categoría (cae al "General" virtual de categoryForActivity)
+                        // en vez de forzar la creación de una categoría real de reemplazo.
+                        val fallback = Store.categories(this).firstOrNull()?.getString("id") ?: ""
                         onDone(fallback)
                         render()
                         doSync()

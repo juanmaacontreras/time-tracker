@@ -424,6 +424,7 @@ const Store = {
     if (obj.runPausedAt == null) obj.runPausedAt = 0;
     if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
     if (!Array.isArray(obj.categories)) this._migrateCategoriesFromTypes(obj);
+    this._collapseDuplicateIds(obj);
     this._repairCorruptCategoryNames(obj);
     this._dedupeCategoriesByName(obj);
     this._root = obj; this._rootProfile = pid;
@@ -490,6 +491,25 @@ const Store = {
       if (this._looksLikeId(c.name || "")) { c.name = "General"; c.updatedAt = now(); changed = true; }
     }
     if (changed) this.write(obj);
+  },
+
+  // Resguardo adicional: si el array de categorías tiene DOS entradas con el mismo id
+  // (posible tras una secuencia de merges de distintos dispositivos), se colapsan en
+  // una sola — se prefiere la viva sobre la borrada, y a igual estado la de updatedAt
+  // más reciente. Espejo exacto de Store.collapseDuplicateIds en Kotlin.
+  _collapseDuplicateIds(obj) {
+    const byId = new Map();
+    let changed = false;
+    for (const c of obj.categories) {
+      const existing = byId.get(c.id);
+      if (!existing) { byId.set(c.id, c); continue; }
+      const existingAlive = !existing.deleted, cAlive = !c.deleted;
+      const winner = cAlive !== existingAlive ? (cAlive ? c : existing)
+        : ((c.updatedAt || 0) > (existing.updatedAt || 0) ? c : existing);
+      byId.set(c.id, winner);
+      changed = true;
+    }
+    if (changed) { obj.categories = [...byId.values()]; this.write(obj); }
   },
 
   // Limpieza de las categorías duplicadas creadas ANTES de este fix (ids random
@@ -740,6 +760,7 @@ const Store = {
     // root() solo corre la limpieza de categorías la primera vez que arma el objeto en
     // memoria; un merge posterior puede traer duplicados nuevos de otro dispositivo
     // sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
+    this._collapseDuplicateIds(o);
     this._repairCorruptCategoryNames(o);
     this._dedupeCategoriesByName(o);
     const rr = remote.run;
@@ -1318,10 +1339,10 @@ function confirmDialog(title, msg, okLabel, danger, onOk) {
 function openActivitySheet(existing) {
   const nameIn = h("input", { class: "field", placeholder: "Nombre (ej. Análisis de circuitos)", value: existing ? existing.name : "" });
 
-  // Perfil recién creado, todavía sin ninguna categoría: sembramos una por defecto
-  // para que el selector nunca quede vacío (espejo de MainActivity.openActivitySheet).
-  if (Store.categories().length === 0) Store.addCategory("General", "", COLORS[0]);
-  let selectedCatId = existing ? Store.categoryForActivity(existing).id : Store.categories()[0].id;
+  // Si todavía no hay ninguna categoría (perfil nuevo, o se borró la única que había),
+  // el selector queda vacío con "+ Nueva" — nada de sembrar una "General" automática:
+  // eso hacía que borrar la única categoría pareciera "recrearse sola".
+  let selectedCatId = existing ? Store.categoryForActivity(existing).id : (Store.categories()[0]?.id || "");
 
   const catLabel = h("div", { class: "flabel" }, "Categoría");
   const catRow = h("div", { class: "catpick" });
@@ -1444,7 +1465,9 @@ function openCategorySheet(existing, onDone) {
     btns2.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => {
       if (!confirm(`Borrar categoría "${existing.name}"? Las actividades que la usan quedan sin categoría (General).`)) return;
       Store.deleteCategory(existing.id);
-      const fallback = Store.categories()[0]?.id || Store.addCategory("General", "", COLORS[0]);
+      // "" = sin categoría (cae al "General" virtual de categoryForActivity) en vez de
+      // forzar la creación de una categoría real de reemplazo.
+      const fallback = Store.categories()[0]?.id || "";
       closeLayer();
       onDone(fallback);
     } }, "Borrar"));

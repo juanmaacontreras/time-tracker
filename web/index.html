@@ -207,6 +207,25 @@ body[data-tab="resumen"] #timerView { display:none; }
 .sw.sel { border-color:var(--ink); }
 .linkbtn { display:block; background:none; border:none; padding:14px 0 4px; font-size:14px;
   font-weight:700; color:var(--indigo); cursor:pointer; text-align:left; }
+/* Selector de categorías (dropdown) dentro del diálogo de actividad, y grilla de
+   íconos dentro del diálogo de categoría. Reusan el lenguaje visual de .chip/.sw. */
+.catpick { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.catpick::-webkit-scrollbar { display:none; }
+.catchip { display:inline-flex; align-items:center; gap:6px; border-radius:16px; flex:none;
+  padding:7px 12px; font-size:12px; border:1px solid var(--line); background:transparent;
+  color:var(--inkSoft); cursor:pointer; white-space:nowrap; }
+.catchip.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.catchip .cdot { width:8px; height:8px; border-radius:50%; flex:none; }
+.catchip .cicon { width:14px; height:14px; flex:none; }
+.catchip.addnew { border:1px solid var(--indigo); color:var(--indigo); font-weight:700; }
+.cathint { font-size:10.5px; color:var(--muted); margin-top:6px; }
+.iconpick { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.iconpick::-webkit-scrollbar { display:none; }
+.icb { width:38px; height:38px; border-radius:8px; flex:none; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; border:1px solid var(--line); background:var(--card);
+  color:var(--ink); font-size:13px; }
+.icb.sel { border:2px solid var(--indigo); }
+.icb svg { width:19px; height:19px; }
 .dbtns { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
 .dbtn { padding:9px 16px; border-radius:10px; border:none; background:none; cursor:pointer;
   font-size:14px; font-weight:700; color:var(--indigo); }
@@ -311,6 +330,63 @@ const THEME_ACCENT = { azul:"#2F4B8F", verde:"#2E7D5B", violeta:"#6A4C93", arcil
 const COLORS = ["#2F4B8F","#B5432E","#2E7D5B","#8A5A2B","#6A4C93","#1F6F8B","#9C4368",
   "#3E6B2F","#B08A1E","#4A5A78","#7A3E9C","#2B7A78","#A6552E","#5B6BB5"];
 
+// Mismo set curado que CategoryIcons.kt del lado Android — mismas claves (contrato
+// compartido: el campo "icon" de una categoría tiene que significar lo mismo en los
+// dos lados) y mismo pathData de los vectores (la sintaxis de Android es compatible
+// 1:1 con el atributo "d" de un <path> SVG).
+const CATEGORY_ICON_PATHS = {
+  book: [{ d: "M3,5h8v14h-8z M13,5h8v14h-8z" }],
+  school: [
+    { d: "M12,4L22,9L12,14L2,9Z" },
+    { d: "M12,12.5L12,18", stroke: true },
+    { d: "M10.4,19.2a1.6,1.6 0,1 0,3.2 0a1.6,1.6 0,1 0,-3.2 0z" }
+  ],
+  work: [
+    { d: "M9,8v-2a1,1 0,0 1,1,-1h4a1,1 0,0 1,1,1v2", stroke: true },
+    { d: "M4,8h16v11h-16z" }
+  ],
+  flask: [{ d: "M10,3h4v6l6,11h-16l6,-11z" }],
+  code: [
+    { d: "M9,7l-5,5l5,5", stroke: true, round: true },
+    { d: "M15,7l5,5l-5,5", stroke: true, round: true }
+  ],
+  pencil: [{ d: "M3,21l1,-4l13,-13l3,3l-13,13z" }, { d: "M4,17l3,3l-4,1z" }],
+  fitness: [{ d: "M2,10h2v4h-2z M20,10h2v4h-2z M5,8.5h2v7h-2z M17,8.5h2v7h-2z M7,11h10v2h-10z" }],
+  music: [
+    { d: "M8,17a3,3 0,1 0,0.1 0z" },
+    { d: "M10.8,5h1.6v12h-1.6z" },
+    { d: "M12.4,5l4,1.6v3.2l-4,-1.6z" }
+  ],
+  globe: [
+    { d: "M12,3a9,9 0,1 0,0.1 0z", stroke: true },
+    { d: "M12,3c-3.4,3 -3.4,15 0,18", stroke: true },
+    { d: "M3,12h18", stroke: true }
+  ],
+  folder: [{ d: "M3,6h6l2,2h10v11h-18z" }]
+};
+const CATEGORY_ICON_ORDER = Object.keys(CATEGORY_ICON_PATHS);
+function categoryIconEl(key, color) {
+  const parts = CATEGORY_ICON_PATHS[key];
+  if (!parts) return null;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  for (const p of parts) {
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", p.d);
+    if (p.stroke) {
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width", "1.7");
+      if (p.round) { path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-linejoin", "round"); }
+    } else {
+      path.setAttribute("fill", color);
+    }
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
 const DAY_MS = 86400000;
 const now = () => Date.now();
 const uid = () => (crypto.randomUUID ? crypto.randomUUID()
@@ -347,6 +423,7 @@ const Store = {
     if (obj.runPaused == null) obj.runPaused = false;
     if (obj.runPausedAt == null) obj.runPausedAt = 0;
     if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
+    if (!Array.isArray(obj.categories)) this._migrateCategoriesFromTypes(obj);
     this._root = obj; this._rootProfile = pid;
     return obj;
   },
@@ -354,6 +431,58 @@ const Store = {
     const pid = this.currentProfileId();
     this._root = obj; this._rootProfile = pid;
     try { localStorage.setItem(this.dataKey(pid), JSON.stringify(obj)); } catch (e) {}
+  },
+
+  // Antes "type" en cada actividad era un string libre. Espejo exacto de
+  // Store.migrateCategoriesFromTypes en Kotlin: una sola vez, convierte cada valor
+  // distinto de "type" en una categoría real y reescribe el campo de la actividad
+  // de nombre a id. updatedAt=0 para que cualquier edición real le gane en el merge.
+  _migrateCategoriesFromTypes(obj) {
+    const byName = new Map();
+    let i = 0;
+    for (const a of obj.activities) {
+      const name = (a.type || "").trim() || "General";
+      let cat = byName.get(name);
+      if (!cat) {
+        cat = { id: uid(), name, icon: "", color: a.color || COLORS[i % COLORS.length], updatedAt: 0, deleted: false };
+        byName.set(name, cat);
+        i++;
+      }
+      a.type = cat.id;
+    }
+    obj.categories = [...byName.values()];
+  },
+
+  // ---- categories ----
+  categories() { return this.root().categories.filter(c => !c.deleted); },
+  categoryById(id) {
+    if (!id) return null;
+    return this.root().categories.find(c => c.id === id && !c.deleted) || null;
+  },
+  // Nunca devuelve null: cae a "General" si el id no resuelve (dato viejo/corrupto,
+  // o categoría borrada).
+  categoryForActivity(act) {
+    return this.categoryById(act && act.type) ||
+      { id: "", name: "General", icon: "", color: "#2F4B8F" };
+  },
+  addCategory(name, icon, color) {
+    const o = this.root();
+    const id = uid();
+    o.categories.push({ id, name: name.trim(), icon, color, updatedAt: now(), deleted: false });
+    this.write(o);
+    return id;
+  },
+  updateCategory(id, name, icon, color) {
+    const o = this.root();
+    const c = o.categories.find(x => x.id === id);
+    if (c) { c.name = name.trim(); c.icon = icon; c.color = color; c.updatedAt = now(); }
+    this.write(o);
+  },
+  deleteCategory(id) {
+    const o = this.root();
+    o.categories.forEach(c => { if (c.id === id) { c.deleted = true; c.updatedAt = now(); } });
+    o.activities.forEach(a => { if (a.type === id) { a.type = ""; a.updatedAt = now(); } });
+    this.write(o);
   },
 
   // ---- activities ----
@@ -500,7 +629,7 @@ const Store = {
     for (const s of list) {
       const a = this.activityById(s.actId);
       const name = a ? a.name : "?";
-      const type = a ? (a.type || "") : "";
+      const type = a ? this.categoryForActivity(a).name : "";
       const min = ((s.end - s.start) / 60000).toFixed(1);
       sb += `"${name}","${type}","${fmt(s.start)}","${fmt(s.end)}",${min}\n`;
     }
@@ -513,6 +642,7 @@ const Store = {
     return {
       activities: JSON.parse(JSON.stringify(r.activities)),
       sessions: JSON.parse(JSON.stringify(r.sessions)),
+      categories: JSON.parse(JSON.stringify(r.categories)),
       run: {
         actId: r.runActId || "", start: r.runStart || 0,
         paused: !!r.runPaused, pausedAt: r.runPausedAt || 0, pausedAccum: r.runPausedAccum || 0,
@@ -524,6 +654,7 @@ const Store = {
     const o = this.root();
     o.activities = mergeList(o.activities, remote.activities);
     o.sessions = mergeList(o.sessions, remote.sessions);
+    o.categories = mergeList(o.categories, remote.categories);
     const rr = remote.run;
     if (rr) {
       const remoteChanged = rr.changedAt || 0;
@@ -815,7 +946,7 @@ function buildRow(act, runId) {
 
   row.append(h("div", { class: "adot", style: "background:" + (act.color || "#2F4B8F") }));
 
-  const typeText = (act.type || "").toUpperCase();
+  const typeText = Store.categoryForActivity(act).name.toUpperCase();
   const mid = h("div", { class: "mid" },
     h("div", { class: "type" }, archived ? (typeText ? typeText + " · ARCHIVADA" : "ARCHIVADA") : typeText),
     h("div", { class: "name" }, act.name));
@@ -885,18 +1016,21 @@ function renderResumen() {
   view.append(buildOffsetNav(periodLabel(statsPeriod, statsOffset, from, to)));
 
   const allActs = Store.activities(true);
-  const allCats = [...new Set(allActs.map(a => (a.type || "General") || "General"))].sort();
+  const catMap = new Map();
+  for (const a of allActs) { const c = Store.categoryForActivity(a); catMap.set(c.id, c); }
+  const allCats = [...catMap.values()].sort((x, y) => x.name.localeCompare(y.name));
   if (allCats.length > 1) view.append(buildCategorySelector(allCats));
-  if (statsCategory !== "all" && !allCats.includes(statsCategory)) statsCategory = "all";
+  if (statsCategory !== "all" && !allCats.some(c => c.id === statsCategory)) statsCategory = "all";
 
   const acts = statsCategory === "all" ? allActs
-    : allActs.filter(a => ((a.type || "General") || "General") === statsCategory);
+    : allActs.filter(a => Store.categoryForActivity(a).id === statsCategory);
 
   const perAct = acts.map(a => [a, Store.secsFor(a.id, from, to)])
     .filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
   const total = perAct.reduce((s, x) => s + x[1], 0);
 
-  view.append(h("div", { class: "slabel-h" }, statsCategory === "all" ? "TOTAL" : "TOTAL · " + statsCategory.toUpperCase()));
+  const statsCatName = statsCategory === "all" ? "" : (catMap.get(statsCategory)?.name || statsCategory);
+  view.append(h("div", { class: "slabel-h" }, statsCategory === "all" ? "TOTAL" : "TOTAL · " + statsCatName.toUpperCase()));
   view.append(h("div", { class: "total mono" }, exact(total)));
 
   if (perAct.length === 0) {
@@ -933,7 +1067,7 @@ function renderResumen() {
     const cats = {};
     for (const a of allActs) {
       const t = Store.secsFor(a.id, from, to);
-      if (t > 0) { const c = (a.type || "General") || "General"; cats[c] = (cats[c] || 0) + t; }
+      if (t > 0) { const c = Store.categoryForActivity(a).id; cats[c] = (cats[c] || 0) + t; }
     }
     const entries = Object.entries(cats).sort((x, y) => y[1] - x[1]);
     if (entries.length) {
@@ -941,8 +1075,10 @@ function renderResumen() {
       view.append(h("div", { class: "slabel-h click", onclick: () => { catExpanded = !expanded; renderResumen(); } },
         "POR CATEGORÍA  " + (expanded ? "▾" : "▸")));
       // Mismo color que en el gráfico apilado: sirve de leyenda.
-      if (expanded) for (const [c, sec] of entries)
-        view.append(statRow(c, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+      if (expanded) for (const [c, sec] of entries) {
+        const label = (Store.categoryById(c) || {}).name || "General";
+        view.append(statRow(label, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+      }
     }
   }
 
@@ -967,16 +1103,18 @@ function buildOffsetNav(label) {
 }
 // Color representativo de cada categoría (el de su primera actividad). Es la "leyenda"
 // consistente entre el selector, el gráfico apilado por categoría y la lista colapsable.
+// Color de cada categoría: propiedad propia de la categoría (ya no "la de su primera
+// actividad"). Es la "leyenda" consistente entre el selector, el gráfico apilado y la
+// lista colapsable.
 function categoryColors(acts) {
   const map = {};
   for (const a of acts) {
-    const c = (a.type || "General") || "General";
-    if (!(c in map)) map[c] = a.color || "#2F4B8F";
+    const cat = Store.categoryForActivity(a);
+    if (!(cat.id in map)) map[cat.id] = cat.color || "#2F4B8F";
   }
   return map;
 }
 function buildCategorySelector(cats) {
-  const catColor = categoryColors(Store.activities(true));
   const rowEl = h("div", { class: "catrow" });
   const chip = (label, value, color) => {
     const c = h("div", { class: "chip" + (value === statsCategory ? " active" : ""),
@@ -986,14 +1124,14 @@ function buildCategorySelector(cats) {
     return c;
   };
   rowEl.append(chip("Todo", "all", null));
-  for (const c of cats) rowEl.append(chip(c, c, catColor[c]));
+  for (const c of cats) rowEl.append(chip(c.name, c.id, c.color || "#2F4B8F"));
   return rowEl;
 }
 function categoryBars(acts, from, to) {
   const sums = {};
   for (const a of acts) {
     const t = Store.secsFor(a.id, from, to);
-    if (t > 0) { const c = (a.type || "General") || "General"; sums[c] = (sums[c] || 0) + t; }
+    if (t > 0) { const c = Store.categoryForActivity(a).id; sums[c] = (sums[c] || 0) + t; }
   }
   return Object.entries(sums).sort((x, y) => y[1] - x[1])
     .map(([label, secs]) => ({ label, secs, color: "var(--indigo)" }));
@@ -1015,7 +1153,7 @@ function weekCategoryStacks(acts, weekStart, catOrder) {
     const perCat = {};
     for (const a of acts) {
       const t = Store.secsFor(a.id, ds, ds + DAY_MS);
-      if (t > 0) { const c = (a.type || "General") || "General"; perCat[c] = (perCat[c] || 0) + t; }
+      if (t > 0) { const c = Store.categoryForActivity(a).id; perCat[c] = (perCat[c] || 0) + t; }
     }
     const segs = catOrder.filter(c => perCat[c] > 0).map(c => ({ cat: c, secs: perCat[c] }));
     return { label: lb, total: segs.reduce((s, x) => s + x.secs, 0), segs };
@@ -1092,7 +1230,34 @@ function confirmDialog(title, msg, okLabel, danger, onOk) {
 
 function openActivitySheet(existing) {
   const nameIn = h("input", { class: "field", placeholder: "Nombre (ej. Análisis de circuitos)", value: existing ? existing.name : "" });
-  const typeIn = h("input", { class: "field", placeholder: "Categoría (Materia, Libro, Proyecto…)", value: existing ? (existing.type || "") : "" });
+
+  // Perfil recién creado, todavía sin ninguna categoría: sembramos una por defecto
+  // para que el selector nunca quede vacío (espejo de MainActivity.openActivitySheet).
+  if (Store.categories().length === 0) Store.addCategory("General", "", COLORS[0]);
+  let selectedCatId = existing ? Store.categoryForActivity(existing).id : Store.categories()[0].id;
+
+  const catLabel = h("div", { class: "flabel" }, "Categoría");
+  const catRow = h("div", { class: "catpick" });
+  function rebuildCatRow() {
+    catRow.innerHTML = "";
+    for (const cat of Store.categories()) {
+      const active = cat.id === selectedCatId;
+      const chip = h("div", { class: "catchip" + (active ? " active" : ""),
+        onclick: () => { selectedCatId = cat.id; rebuildCatRow(); } });
+      const iconEl = cat.icon ? categoryIconEl(cat.icon, active ? "var(--paper)" : (cat.color || "#2F4B8F")) : null;
+      if (iconEl) { iconEl.setAttribute("class", "cicon"); chip.append(iconEl); }
+      else chip.append(h("div", { class: "cdot", style: "background:" + (cat.color || "#2F4B8F") }));
+      chip.append(document.createTextNode(cat.name));
+      chip.addEventListener("contextmenu", (e) => { e.preventDefault(); openCategorySheet(cat, (id) => { selectedCatId = id; rebuildCatRow(); }); });
+      attachLongPress(chip, () => openCategorySheet(cat, (id) => { selectedCatId = id; rebuildCatRow(); }));
+      catRow.append(chip);
+    }
+    const add = h("div", { class: "catchip addnew",
+      onclick: () => openCategorySheet(null, (id) => { selectedCatId = id; rebuildCatRow(); }) }, "+ Nueva");
+    catRow.append(add);
+  }
+  rebuildCatRow();
+  const catHint = h("div", { class: "cathint" }, "Mantené presionada (o click derecho) una categoría para editarla o borrarla");
 
   let picked = existing ? existing.color : COLORS[Store.activities().length % COLORS.length];
   const swWrap = h("div", { class: "swatches" });
@@ -1105,7 +1270,8 @@ function openActivitySheet(existing) {
 
   const d = h("div", { class: "dialog" },
     h("h3", null, existing ? "Editar actividad" : "Nueva actividad"),
-    nameIn, typeIn,
+    nameIn,
+    catLabel, catRow, catHint,
     h("div", { class: "flabel" }, "Color"), swWrap);
 
   if (existing) {
@@ -1127,9 +1293,8 @@ function openActivitySheet(existing) {
   btns.append(h("button", { class: "dbtn", onclick: () => {
     const name = nameIn.value.trim();
     if (!name) return;
-    const type = typeIn.value.trim() || "General";
-    if (existing) Store.updateActivity(existing.id, name, type, picked);
-    else Store.addActivity(name, type, picked);
+    if (existing) Store.updateActivity(existing.id, name, selectedCatId, picked);
+    else Store.addActivity(name, selectedCatId, picked);
     closeModal(); afterMutation();
   } }, "Guardar"));
   d.append(btns);
@@ -1138,10 +1303,85 @@ function openActivitySheet(existing) {
   setTimeout(() => nameIn.focus(), 30);
 }
 
+// Alta/edición de una categoría (nombre + ícono + color). onDone recibe el id que el
+// selector de openActivitySheet debe dejar seleccionado al volver (espejo de
+// MainActivity.openCategorySheet).
+//
+// Ojo: esto se abre DESDE ADENTRO de openActivitySheet. showModal()/closeModal()
+// comparten un solo #modalRoot (no apilan diálogos como los AlertDialog de Android),
+// así que si usáramos esas mismas funciones acá, abrir "Nueva categoría" borraría del
+// DOM el diálogo de "Nueva actividad" que lo abrió. Por eso este diálogo se monta en su
+// propia capa (appendeada directo a <body>, no a #modalRoot) y no toca el diálogo padre.
+function openCategorySheet(existing, onDone) {
+  const layer = h("div", { class: "overlay" });
+  const closeLayer = () => layer.remove();
+  layer.addEventListener("click", (e) => { if (e.target === layer) closeLayer(); });
+  document.body.append(layer);
+
+  const nameIn = h("input", { class: "field", placeholder: "Nombre (ej. Materia, Libro, Proyecto…)",
+    value: existing ? existing.name : "" });
+
+  let pickedIcon = existing ? (existing.icon || "") : "";
+  const iconRow = h("div", { class: "iconpick" });
+  function rebuildIconRow() {
+    iconRow.innerHTML = "";
+    const noneBtn = h("div", { class: "icb" + (pickedIcon === "" ? " sel" : ""),
+      onclick: () => { pickedIcon = ""; rebuildIconRow(); } }, "Aa");
+    iconRow.append(noneBtn);
+    for (const key of CATEGORY_ICON_ORDER) {
+      const btn = h("div", { class: "icb" + (pickedIcon === key ? " sel" : ""),
+        onclick: () => { pickedIcon = key; rebuildIconRow(); } });
+      btn.append(categoryIconEl(key, "var(--ink)"));
+      iconRow.append(btn);
+    }
+  }
+  rebuildIconRow();
+
+  let pickedColor = existing ? existing.color : COLORS[Store.categories().length % COLORS.length];
+  const swWrap = h("div", { class: "swatches" });
+  const swatchEls = [];
+  COLORS.forEach(c => {
+    const sw = h("div", { class: "sw" + (c === pickedColor ? " sel" : ""), style: "background:" + c,
+      onclick: () => { pickedColor = c; swatchEls.forEach((e, i) => e.className = "sw" + (COLORS[i] === pickedColor ? " sel" : "")); } });
+    swatchEls.push(sw); swWrap.append(sw);
+  });
+
+  const d2 = h("div", { class: "dialog" },
+    h("h3", null, existing ? "Editar categoría" : "Nueva categoría"),
+    nameIn,
+    h("div", { class: "flabel" }, "Ícono"), iconRow,
+    h("div", { class: "flabel" }, "Color"), swWrap);
+
+  const btns2 = h("div", { class: "dbtns" });
+  if (existing) {
+    btns2.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => {
+      if (!confirm(`Borrar categoría "${existing.name}"? Las actividades que la usan quedan sin categoría (General).`)) return;
+      Store.deleteCategory(existing.id);
+      const fallback = Store.categories()[0]?.id || Store.addCategory("General", "", COLORS[0]);
+      closeLayer();
+      onDone(fallback);
+    } }, "Borrar"));
+  }
+  btns2.append(h("button", { class: "dbtn ghost", onclick: closeLayer }, "Cancelar"));
+  btns2.append(h("button", { class: "dbtn", onclick: () => {
+    const name = nameIn.value.trim() || "General";
+    let id;
+    if (existing) { Store.updateCategory(existing.id, name, pickedIcon, pickedColor); id = existing.id; }
+    else { id = Store.addCategory(name, pickedIcon, pickedColor); }
+    closeLayer();
+    onDone(id);
+  } }, "Guardar"));
+  d2.append(btns2);
+
+  layer.append(d2);
+  setTimeout(() => nameIn.focus(), 30);
+}
+
 function onExportClick() {
   const [from, to] = periodRange(statsPeriod, statsOffset);
   const periodTxt = periodLabel(statsPeriod, statsOffset, from, to);
-  const filterLbl = statsCategory === "all" ? periodTxt : `${periodTxt} · ${statsCategory}`;
+  const catName = statsCategory === "all" ? "" : (Store.categoryById(statsCategory)?.name || statsCategory);
+  const filterLbl = statsCategory === "all" ? periodTxt : `${periodTxt} · ${catName}`;
   const d = h("div", { class: "dialog" },
     h("h3", null, "Exportar CSV"),
     h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(false); } }, "Todo el historial"),
@@ -1154,7 +1394,7 @@ function doExport(filtered) {
   if (filtered) {
     const [from, to] = periodRange(statsPeriod, statsOffset);
     const ids = statsCategory === "all" ? null
-      : new Set(Store.activities(true).filter(a => ((a.type || "General") || "General") === statsCategory).map(a => a.id));
+      : new Set(Store.activities(true).filter(a => Store.categoryForActivity(a).id === statsCategory).map(a => a.id));
     csv = Store.exportCsv(from, to, ids);
   } else csv = Store.exportCsv();
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });

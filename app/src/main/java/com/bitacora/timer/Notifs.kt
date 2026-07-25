@@ -5,11 +5,14 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.SystemClock
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import org.json.JSONObject
 
 object Notifs {
     private const val CHANNEL = "bitacora_timer"
@@ -20,6 +23,40 @@ object Notifs {
             val ch = NotificationChannel(CHANNEL, "Cronómetro", NotificationManager.IMPORTANCE_LOW)
             ch.setShowBadge(false)
             ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        }
+    }
+
+    // Blanco o tinta oscura según qué tan claro sea el color de fondo (swatch de la
+    // categoría, que es arbitrario) — mismo criterio que el mockup HTML.
+    private fun contrastOn(bgColor: Int): Int {
+        val r = Color.red(bgColor); val g = Color.green(bgColor); val b = Color.blue(bgColor)
+        val yiq = (r * 299 + g * 587 + b * 114) / 1000.0
+        return if (yiq >= 150) Color.parseColor("#1B1D24") else Color.WHITE
+    }
+
+    // Arma el swatch de identidad (ícono de categoría, o inicial si no tiene) y el
+    // anillo de estado — común a la vista chica y la grande. El anillo reemplaza al
+    // pulso animado del mockup: RemoteViews no puede arrancar una animación en un
+    // proceso remoto, así que "corriendo" se marca con este borde estático.
+    private fun bindSwatch(views: RemoteViews, cat: JSONObject, running: Boolean, liveColor: Int) {
+        val bgColor = Color.parseColor(cat.optString("color", "#2F4B8F"))
+        views.setInt(R.id.n_swatch_bg, "setColorFilter", bgColor)
+        views.setInt(R.id.n_swatch_ring, "setColorFilter", liveColor)
+        views.setViewVisibility(R.id.n_swatch_ring, if (running) android.view.View.VISIBLE else android.view.View.GONE)
+
+        val fg = contrastOn(bgColor)
+        val iconRes = CategoryIcons.resOf(cat.optString("icon", ""))
+        if (iconRes != null) {
+            views.setImageViewResource(R.id.n_swatch_icon, iconRes)
+            views.setInt(R.id.n_swatch_icon, "setColorFilter", fg)
+            views.setViewVisibility(R.id.n_swatch_icon, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.n_swatch_letter, android.view.View.GONE)
+        } else {
+            val name = cat.optString("name", "General")
+            views.setTextViewText(R.id.n_swatch_letter, if (name.isNotEmpty()) name.substring(0, 1).uppercase() else "?")
+            views.setTextColor(R.id.n_swatch_letter, fg)
+            views.setViewVisibility(R.id.n_swatch_letter, android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.n_swatch_icon, android.view.View.GONE)
         }
     }
 
@@ -34,7 +71,7 @@ object Notifs {
         }
         val a = Store.activityById(ctx, runId)
         val name = a?.optString("name") ?: "Cronómetro"
-        val type = a?.optString("type", "") ?: ""
+        val cat = if (a != null) Store.categoryForActivity(ctx, a) else null
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
@@ -48,19 +85,38 @@ object Notifs {
         val pausePi = PendingIntent.getBroadcast(ctx, 2, pauseIntent, flags)
 
         val paused = Store.runningPaused(ctx)
+        val running = !paused
         val elapsed = Store.runningElapsedMs(ctx)
         val base = SystemClock.elapsedRealtime() - elapsed
-        val statusBig = if (paused) "PAUSADO · $name" else name
         val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
+        val pauseLabel = if (paused) "Resumir" else "Pausar"
+        val liveColor = ContextCompat.getColor(ctx, R.color.live)
+        val mutedColor = ContextCompat.getColor(ctx, R.color.muted)
 
-        // Vistas custom con el cronómetro grande (estilo widget). Al pausar el cronómetro
-        // se congela (started = false) con el tiempo real corrido.
+        fun bindCommon(views: RemoteViews) {
+            views.setTextViewText(R.id.n_name, name)
+            views.setTextViewText(R.id.n_cat, cat?.optString("name", "General") ?: "General")
+            views.setChronometer(R.id.n_chrono, base, null, running)
+            if (cat != null) bindSwatch(views, cat, running, liveColor)
+
+            views.setImageViewResource(R.id.n_pause_icon, pauseIcon)
+            views.setInt(R.id.n_stop_icon, "setColorFilter", mutedColor)
+            views.setOnClickPendingIntent(R.id.n_pause, pausePi)
+            views.setOnClickPendingIntent(R.id.n_stop, stopPi)
+        }
+
         val big = RemoteViews(ctx.packageName, R.layout.notif)
-        big.setTextViewText(R.id.n_status, statusBig)
-        big.setChronometer(R.id.n_chrono, base, null, !paused)
+        bindCommon(big)
+        big.setTextViewText(R.id.n_eyebrow, if (paused) "Pausado" else "Cronometrando")
+        big.setTextColor(R.id.n_eyebrow, if (paused) mutedColor else liveColor)
+        big.setTextViewText(R.id.n_pause_label, pauseLabel)
+        big.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.pill_primary_invite else R.drawable.pill_primary)
+        big.setInt(R.id.n_stop, "setBackgroundResource", R.drawable.pill_ghost)
+
         val small = RemoteViews(ctx.packageName, R.layout.notif_small)
-        small.setTextViewText(R.id.n_status, name)
-        small.setChronometer(R.id.n_chrono, base, null, !paused)
+        bindCommon(small)
+        small.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
+        small.setInt(R.id.n_stop, "setBackgroundResource", R.drawable.circle_ghost)
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif)
@@ -69,13 +125,11 @@ object Notifs {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPi)
-            .addAction(pauseIcon, if (paused) "Resumir" else "Pausar", pausePi)
-            .addAction(R.drawable.ic_stop, "Parar", stopPi)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(small)
             .setCustomBigContentView(big)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        if (type.isNotEmpty()) builder.setSubText(type)
+        if (cat != null) builder.setSubText(cat.optString("name", ""))
 
         val n = builder.build()
         try {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Base del swatch de identidad: blanco sólido, se tiñe en runtime con setColorFilter
+     al color de la categoría (mismo truco que dot.xml para el punto del widget). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="13dp" />
+</shape>

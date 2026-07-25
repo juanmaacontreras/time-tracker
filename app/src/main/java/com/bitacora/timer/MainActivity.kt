@@ -592,7 +592,7 @@ class MainActivity : AppCompatActivity() {
         mid.orientation = LinearLayout.VERTICAL
         mid.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         val type = TextView(this)
-        val typeText = act.optString("type", "").uppercase()
+        val typeText = Store.categoryForActivity(this, act).optString("name", "").uppercase()
         type.text = if (archived) (if (typeText.isEmpty()) "ARCHIVADA" else "$typeText · ARCHIVADA") else typeText
         type.setTextColor(col(R.color.muted))
         type.textSize = 10f
@@ -795,20 +795,22 @@ class MainActivity : AppCompatActivity() {
         // Incluye archivadas: su historial sigue contando en las estadísticas.
         val allActs = Store.activities(this, includeArchived = true)
 
-        val allCats = allActs.map { it.optString("type", "General").ifEmpty { "General" } }
-            .distinct().sorted()
+        val allCats = allActs.map { Store.categoryForActivity(this, it) }
+            .distinctBy { it.getString("id") }
+            .sortedBy { it.optString("name", "") }
         if (allCats.size > 1) resumenView.addView(buildCategorySelector(allCats))
-        if (statsCategory != "all" && statsCategory !in allCats) statsCategory = "all"
+        if (statsCategory != "all" && allCats.none { it.getString("id") == statsCategory }) statsCategory = "all"
 
         val acts = if (statsCategory == "all") allActs
-            else allActs.filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
+            else allActs.filter { Store.categoryForActivity(this, it).getString("id") == statsCategory }
 
         val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from, to) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
         val total = perAct.sumOf { it.second }
 
-        val totalLabel = if (statsCategory == "all") "TOTAL" else "TOTAL · ${statsCategory.uppercase()}"
+        val totalLabel = if (statsCategory == "all") "TOTAL"
+            else "TOTAL · ${(allCats.find { it.getString("id") == statsCategory }?.optString("name", "") ?: "").uppercase()}"
         resumenView.addView(sectionLabel(totalLabel))
         val big = TextView(this)
         big.text = Store.exact(total)
@@ -859,7 +861,7 @@ class MainActivity : AppCompatActivity() {
             for (a in allActs) {
                 val t = Store.secsFor(this, a.getString("id"), from, to)
                 if (t > 0) {
-                    val c = a.optString("type", "General").ifEmpty { "General" }
+                    val c = Store.categoryForActivity(this, a).getString("id")
                     cats[c] = (cats[c] ?: 0L) + t
                 }
             }
@@ -872,8 +874,9 @@ class MainActivity : AppCompatActivity() {
                 resumenView.addView(header)
                 if (expanded) {
                     for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
+                        val label = Store.categoryById(this, c)?.optString("name", "") ?: "General"
                         // Mismo color que en el gráfico apilado: sirve de leyenda.
-                        val row = statRow(c, catColorsAll[c] ?: col(R.color.indigo), sec, total)
+                        val row = statRow(label, catColorsAll[c] ?: col(R.color.indigo), sec, total)
                         row.setOnClickListener { statsCategory = c; renderResumen() }
                         resumenView.addView(row)
                     }
@@ -884,24 +887,23 @@ class MainActivity : AppCompatActivity() {
         resumenView.addView(buildCsvButton())
     }
 
-    // Color representativo de cada categoría (el de su primera actividad). Se usa como
-    // "leyenda" consistente entre el selector de categorías, el gráfico apilado por
-    // categoría y la lista colapsable — el mismo color en todos lados identifica cada una.
+    // Color de cada categoría (propiedad propia de la categoría ahora, no de la primera
+    // actividad). Se usa como "leyenda" consistente entre el selector, el gráfico apilado
+    // y la lista colapsable — el mismo color en todos lados identifica cada una.
     private fun categoryColors(acts: List<JSONObject>): LinkedHashMap<String, Int> {
         val map = LinkedHashMap<String, Int>()
         for (a in acts) {
-            val c = a.optString("type", "General").ifEmpty { "General" }
-            if (c !in map) map[c] = Color.parseColor(a.optString("color", "#2F4B8F"))
+            val cat = Store.categoryForActivity(this, a)
+            val id = cat.getString("id")
+            if (id !in map) map[id] = Color.parseColor(cat.optString("color", "#2F4B8F"))
         }
         return map
     }
 
-    private fun buildCategorySelector(cats: List<String>): View {
+    private fun buildCategorySelector(cats: List<JSONObject>): View {
         val wrap = LinearLayout(this)
         wrap.orientation = LinearLayout.HORIZONTAL
         wrap.setPadding(0, dp(10), 0, 0)
-
-        val catColor = categoryColors(Store.activities(this, includeArchived = true))
 
         val scroll = android.widget.HorizontalScrollView(this)
         scroll.isHorizontalScrollBarEnabled = false
@@ -949,7 +951,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         row.addView(chip("Todo", "all", null))
-        for (c in cats) row.addView(chip(c, c, catColor[c]))
+        for (c in cats) {
+            row.addView(chip(c.optString("name", "General"), c.getString("id"), Color.parseColor(c.optString("color", "#2F4B8F"))))
+        }
         scroll.addView(row)
         wrap.addView(scroll)
         return wrap
@@ -1067,7 +1071,7 @@ class MainActivity : AppCompatActivity() {
         for (a in acts) {
             val t = Store.secsFor(this, a.getString("id"), from, to)
             if (t > 0) {
-                val c = a.optString("type", "General").ifEmpty { "General" }
+                val c = Store.categoryForActivity(this, a).getString("id")
                 sums[c] = (sums[c] ?: 0L) + t
             }
         }
@@ -1096,7 +1100,7 @@ class MainActivity : AppCompatActivity() {
             for (a in acts) {
                 val t = Store.secsFor(this, a.getString("id"), ds, ds + DAY_MS)
                 if (t > 0) {
-                    val c = a.optString("type", "General").ifEmpty { "General" }
+                    val c = Store.categoryForActivity(this, a).getString("id")
                     perCat[c] = (perCat[c] ?: 0L) + t
                 }
             }
@@ -1351,8 +1355,8 @@ class MainActivity : AppCompatActivity() {
         b.setOnClickListener {
             val (rFrom, rTo) = Store.periodRange(statsPeriod, statsOffset)
             val periodTxt = periodLabel(statsPeriod, statsOffset, rFrom, rTo)
-            val filterLabel = if (statsCategory == "all") periodTxt
-                else "$periodTxt · $statsCategory"
+            val catName = Store.categoryById(this, statsCategory)?.optString("name", "") ?: statsCategory
+            val filterLabel = if (statsCategory == "all") periodTxt else "$periodTxt · $catName"
             AlertDialog.Builder(this, R.style.AppDialog)
                 .setTitle("Exportar CSV")
                 .setItems(arrayOf("Todo el historial", "Solo lo filtrado ($filterLabel)")) { _, which ->
@@ -1374,13 +1378,103 @@ class MainActivity : AppCompatActivity() {
         nameIn.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         nameIn.setText(existing?.optString("name") ?: "")
 
-        val typeIn = EditText(this)
-        typeIn.hint = "Categoría (Materia, Libro, Proyecto…)"
-        typeIn.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        typeIn.setText(existing?.optString("type") ?: "")
-
         box.addView(nameIn)
-        box.addView(typeIn)
+
+        // ---------------- categoría (dropdown, no texto libre) ----------------
+        val catLabel = TextView(this)
+        catLabel.text = "Categoría"
+        catLabel.setTextColor(col(R.color.muted))
+        catLabel.textSize = 12f
+        catLabel.setPadding(0, dp(14), 0, dp(6))
+        box.addView(catLabel)
+
+        // Perfil recién creado, todavía sin ninguna categoría: sembramos una por defecto
+        // para que el selector nunca quede vacío.
+        if (Store.categories(this).isEmpty()) Store.addCategory(this, "General", "", Store.COLORS[0])
+        var selectedCatId = existing?.let { Store.categoryForActivity(this, it).getString("id") }
+            ?: Store.categories(this).first().getString("id")
+
+        val catScroll = android.widget.HorizontalScrollView(this)
+        catScroll.isHorizontalScrollBarEnabled = false
+        val catRow = LinearLayout(this)
+        catRow.orientation = LinearLayout.HORIZONTAL
+        catScroll.addView(catRow)
+        box.addView(catScroll)
+
+        fun rebuildCatRow() {
+            catRow.removeAllViews()
+            for (cat in Store.categories(this)) {
+                val id = cat.getString("id")
+                val chip = LinearLayout(this)
+                chip.orientation = LinearLayout.HORIZONTAL
+                chip.gravity = Gravity.CENTER_VERTICAL
+                chip.setPadding(dp(10), dp(7), dp(12), dp(7))
+                val clp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                clp.rightMargin = dp(6)
+                chip.layoutParams = clp
+                val active = id == selectedCatId
+                val bg = GradientDrawable()
+                bg.cornerRadius = dp(16).toFloat()
+                if (active) bg.setColor(col(R.color.ink))
+                else { bg.setColor(col(R.color.card)); bg.setStroke(dp(1), col(R.color.line)) }
+                chip.background = bg
+
+                val resId = CategoryIcons.resOf(cat.optString("icon", ""))
+                if (resId != null) {
+                    val iv = ImageView(this)
+                    iv.setImageResource(resId)
+                    iv.setColorFilter(if (active) col(R.color.paper) else Color.parseColor(cat.optString("color", "#2F4B8F")))
+                    val ilp = LinearLayout.LayoutParams(dp(14), dp(14)); ilp.rightMargin = dp(6)
+                    iv.layoutParams = ilp
+                    chip.addView(iv)
+                } else {
+                    val dot = View(this)
+                    val dotBg = GradientDrawable()
+                    dotBg.shape = GradientDrawable.OVAL
+                    dotBg.setColor(Color.parseColor(cat.optString("color", "#2F4B8F")))
+                    dot.background = dotBg
+                    val dlp = LinearLayout.LayoutParams(dp(8), dp(8)); dlp.rightMargin = dp(6)
+                    dot.layoutParams = dlp
+                    chip.addView(dot)
+                }
+
+                val t = TextView(this)
+                t.text = cat.optString("name", "General")
+                t.textSize = 12f
+                t.setTextColor(if (active) col(R.color.paper) else col(R.color.inkSoft))
+                chip.addView(t)
+
+                chip.setOnClickListener { selectedCatId = id; rebuildCatRow() }
+                chip.setOnLongClickListener {
+                    openCategorySheet(cat) { keepId -> selectedCatId = keepId; rebuildCatRow() }
+                    true
+                }
+                catRow.addView(chip)
+            }
+
+            val add = TextView(this)
+            add.text = "+ Nueva"
+            add.textSize = 12f
+            add.setTypeface(add.typeface, Typeface.BOLD)
+            add.setTextColor(col(R.color.indigo))
+            add.setPadding(dp(12), dp(7), dp(12), dp(7))
+            val abg = GradientDrawable()
+            abg.cornerRadius = dp(16).toFloat()
+            abg.setStroke(dp(1), col(R.color.indigo))
+            add.background = abg
+            add.setOnClickListener {
+                openCategorySheet(null) { newId -> selectedCatId = newId; rebuildCatRow() }
+            }
+            catRow.addView(add)
+        }
+        rebuildCatRow()
+
+        val catHint = TextView(this)
+        catHint.text = "Mantené presionada una categoría para editarla o borrarla"
+        catHint.textSize = 10.5f
+        catHint.setTextColor(col(R.color.muted))
+        catHint.setPadding(0, dp(6), 0, 0)
+        box.addView(catHint)
 
         val colorLabel = TextView(this)
         colorLabel.text = "Color"
@@ -1446,9 +1540,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Guardar") { _, _ ->
                 val name = nameIn.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    val type = typeIn.text.toString().trim().ifEmpty { "General" }
-                    if (existing == null) Store.addActivity(this, name, type, picked)
-                    else Store.updateActivity(this, existing.getString("id"), name, type, picked)
+                    if (existing == null) Store.addActivity(this, name, selectedCatId, picked)
+                    else Store.updateActivity(this, existing.getString("id"), name, selectedCatId, picked)
                     render()
                     doSync()
                 }
@@ -1459,6 +1552,145 @@ class MainActivity : AppCompatActivity() {
         }
         val dialog = builder.create()
         dlg = dialog
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(col(R.color.live))
+    }
+
+    // Alta/edición de una categoría (nombre + ícono + color). onDone recibe el id que
+    // el selector de categorías de openActivitySheet debe dejar seleccionado al volver
+    // (el nuevo id si se creó, el mismo id si se editó, o un id de reemplazo si se borró).
+    private fun openCategorySheet(existing: JSONObject?, onDone: (String) -> Unit) {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(20), dp(8), dp(20), 0)
+
+        val nameIn = EditText(this)
+        nameIn.hint = "Nombre (ej. Materia, Libro, Proyecto…)"
+        nameIn.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        nameIn.setText(existing?.optString("name") ?: "")
+        box.addView(nameIn)
+
+        val iconLabel = TextView(this)
+        iconLabel.text = "Ícono"
+        iconLabel.setTextColor(col(R.color.muted))
+        iconLabel.textSize = 12f
+        iconLabel.setPadding(0, dp(14), 0, dp(6))
+        box.addView(iconLabel)
+
+        var pickedIcon = existing?.optString("icon", "") ?: ""
+        val iconRow = LinearLayout(this)
+        iconRow.orientation = LinearLayout.HORIZONTAL
+        val iconViews = ArrayList<Pair<String, View>>()
+        fun styleIcon(key: String, v: View) {
+            val bg = GradientDrawable()
+            bg.cornerRadius = dp(8).toFloat()
+            bg.setColor(col(R.color.card))
+            val on = key == pickedIcon
+            bg.setStroke(if (on) dp(2) else dp(1), if (on) col(R.color.indigo) else col(R.color.line))
+            v.background = bg
+        }
+        // "sin ícono" = usar la inicial del nombre (comportamiento de siempre).
+        val noneBtn = TextView(this)
+        noneBtn.text = "Aa"
+        noneBtn.gravity = Gravity.CENTER
+        noneBtn.setTextColor(col(R.color.inkSoft))
+        noneBtn.textSize = 13f
+        val nlp = LinearLayout.LayoutParams(dp(38), dp(38)); nlp.rightMargin = dp(8)
+        noneBtn.layoutParams = nlp
+        iconRow.addView(noneBtn)
+        iconViews.add("" to noneBtn)
+        for (key in CategoryIcons.ORDER) {
+            val iv = ImageView(this)
+            iv.setImageResource(CategoryIcons.resOf(key)!!)
+            iv.setColorFilter(col(R.color.ink))
+            iv.scaleType = ImageView.ScaleType.CENTER
+            iv.setPadding(dp(9), dp(9), dp(9), dp(9))
+            val ilp = LinearLayout.LayoutParams(dp(38), dp(38)); ilp.rightMargin = dp(8)
+            iv.layoutParams = ilp
+            iconRow.addView(iv)
+            iconViews.add(key to iv)
+        }
+        for ((key, v) in iconViews) {
+            styleIcon(key, v)
+            v.setOnClickListener {
+                pickedIcon = key
+                for ((k, vv) in iconViews) styleIcon(k, vv)
+            }
+        }
+        val iconScroll = android.widget.HorizontalScrollView(this)
+        iconScroll.isHorizontalScrollBarEnabled = false
+        iconScroll.addView(iconRow)
+        box.addView(iconScroll)
+
+        val colorLabel = TextView(this)
+        colorLabel.text = "Color"
+        colorLabel.setTextColor(col(R.color.muted))
+        colorLabel.textSize = 12f
+        colorLabel.setPadding(0, dp(14), 0, dp(6))
+        box.addView(colorLabel)
+
+        var pickedColor = existing?.optString("color")
+            ?: Store.COLORS[Store.categories(this).size % Store.COLORS.size]
+        val colorRow = LinearLayout(this)
+        colorRow.orientation = LinearLayout.HORIZONTAL
+        val swatches = ArrayList<View>()
+        fun styleColor(v: View, c: String) {
+            val d = GradientDrawable()
+            d.cornerRadius = dp(8).toFloat()
+            d.setColor(Color.parseColor(c))
+            if (c == pickedColor) d.setStroke(dp(3), col(R.color.ink))
+            v.background = d
+        }
+        for (c in Store.COLORS) {
+            val sw = View(this)
+            val slp = LinearLayout.LayoutParams(dp(34), dp(34)); slp.rightMargin = dp(8)
+            sw.layoutParams = slp
+            styleColor(sw, c)
+            sw.setOnClickListener {
+                pickedColor = c
+                for ((i, s) in swatches.withIndex()) styleColor(s, Store.COLORS[i])
+            }
+            swatches.add(sw)
+            colorRow.addView(sw)
+        }
+        val colorScroll = android.widget.HorizontalScrollView(this)
+        colorScroll.isHorizontalScrollBarEnabled = false
+        colorScroll.addView(colorRow)
+        box.addView(colorScroll)
+
+        val builder = AlertDialog.Builder(this, R.style.AppDialog)
+            .setTitle(if (existing == null) "Nueva categoría" else "Editar categoría")
+            .setView(box)
+            .setPositiveButton("Guardar") { _, _ ->
+                val name = nameIn.text.toString().trim().ifEmpty { "General" }
+                if (existing == null) {
+                    onDone(Store.addCategory(this, name, pickedIcon, pickedColor))
+                } else {
+                    Store.updateCategory(this, existing.getString("id"), name, pickedIcon, pickedColor)
+                    onDone(existing.getString("id"))
+                }
+                render()
+                doSync()
+            }
+            .setNegativeButton("Cancelar", null)
+        if (existing != null) {
+            builder.setNeutralButton("Borrar") { _, _ ->
+                AlertDialog.Builder(this, R.style.AppDialog)
+                    .setTitle("Borrar categoría \"${existing.optString("name", "")}\"")
+                    .setMessage("Las actividades que la usan quedan sin categoría (General).")
+                    .setPositiveButton("Borrar") { _, _ ->
+                        Store.deleteCategory(this, existing.getString("id"))
+                        val fallback = Store.categories(this).firstOrNull()?.getString("id")
+                            ?: Store.addCategory(this, "General", "", Store.COLORS[0])
+                        onDone(fallback)
+                        render()
+                        doSync()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+        }
+        val dialog = builder.create()
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(col(R.color.live))
     }
@@ -1491,7 +1723,7 @@ class MainActivity : AppCompatActivity() {
                 val (from, to) = Store.periodRange(statsPeriod, statsOffset)
                 val ids: Set<String>? = if (statsCategory == "all") null
                     else Store.activities(this, includeArchived = true)
-                        .filter { it.optString("type", "General").ifEmpty { "General" } == statsCategory }
+                        .filter { Store.categoryForActivity(this, it).getString("id") == statsCategory }
                         .map { it.getString("id") }.toSet()
                 Store.exportCsv(this, from, to, ids)
             } else {

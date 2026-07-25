@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variante "pausado": el mismo botón de Pausar/Resumir se resalta con un borde en
+     el color live para invitar a retomar (sustituto estático del pulso del mockup). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/indigo" />
+    <corners android:radius="23dp" />
+    <stroke android:width="2dp" android:color="@color/live" />
+</shape>

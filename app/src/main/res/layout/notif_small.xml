@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vista colapsada: nombre + cronómetro mediano en una línea. -->
+<!-- Vista colapsada: swatch de identidad + nombre/categoría + cronómetro + un par de
+     botones chicos (solo ícono), para poder pausar/parar sin necesidad de expandir. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -10,23 +11,117 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <TextView
-        android:id="@+id/n_status"
+    <FrameLayout
+        android:layout_width="34dp"
+        android:layout_height="34dp">
+
+        <ImageView
+            android:id="@+id/n_swatch_ring"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/swatch_ring"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/n_swatch_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/swatch_shape" />
+
+        <ImageView
+            android:id="@+id/n_swatch_icon"
+            android:layout_width="19dp"
+            android:layout_height="19dp"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/n_swatch_letter"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:text="L" />
+    </FrameLayout>
+
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text="—" />
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/n_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+            android:textSize="13.5sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Actividad" />
+
+        <TextView
+            android:id="@+id/n_cat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Compat.Notification"
+            android:textSize="10sp"
+            android:letterSpacing="0.05"
+            android:textAllCaps="true"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Categoría" />
+    </LinearLayout>
 
     <Chronometer
         android:id="@+id/n_chrono"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-        android:textSize="20sp"
+        android:textSize="19sp"
         android:fontFamily="monospace"
-        android:paddingLeft="8dp"
+        android:layout_marginStart="6dp"
         android:text="0:00" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="6dp">
+
+        <FrameLayout
+            android:id="@+id/n_pause"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@drawable/circle_primary"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/n_pause_icon"
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_pause" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/n_stop"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/circle_ghost"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/n_stop_icon"
+                android:layout_width="11dp"
+                android:layout_height="11dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_stop" />
+        </FrameLayout>
+    </LinearLayout>
 </LinearLayout>

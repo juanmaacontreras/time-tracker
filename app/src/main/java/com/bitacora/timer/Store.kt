@@ -66,15 +66,125 @@ object Store {
         if (!obj.has("runPaused")) obj.put("runPaused", false)
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
+        if (!obj.has("categories")) migrateCategoriesFromTypes(ctx, obj)
         cachedRoot = obj; cachedProfile = pid
         return obj
     }
 
-    private fun newActivity(name: String, type: String, color: String): JSONObject =
+    // Categoría "General" implícita para actividades cuyo id de categoría no resuelve
+    // (dato viejo/corrupto, o categoría borrada) — nunca debería pasar en uso normal,
+    // pero evita nulls en cascada por toda la UI.
+    private fun fallbackCategory(): JSONObject =
+        JSONObject().put("id", "").put("name", "General").put("icon", "").put("color", "#2F4B8F")
+
+    // Antes "type" en cada actividad era un string libre. Esta migración corre una sola
+    // vez (cuando el perfil todavía no tiene "categories") y convierte cada valor distinto
+    // de "type" en una categoría real, reescribiendo el campo de la actividad de nombre a
+    // id. El color de cada categoría nueva es el de su primera actividad (mismo criterio
+    // que ya usaba categoryColors() en MainActivity), y quedan con updatedAt=0L para que
+    // cualquier edición real posterior (acá o en otro dispositivo) siempre les gane en el merge.
+    private fun migrateCategoriesFromTypes(ctx: Context, obj: JSONObject) {
+        val activities = obj.getJSONArray("activities")
+        val byName = LinkedHashMap<String, JSONObject>()
+        for (i in 0 until activities.length()) {
+            val a = activities.getJSONObject(i)
+            val raw = a.optString("type", "").trim()
+            val name = raw.ifEmpty { "General" }
+            val cat = byName.getOrPut(name) {
+                JSONObject()
+                    .put("id", uid())
+                    .put("name", name)
+                    .put("icon", "")
+                    .put("color", a.optString("color", COLORS[byName.size % COLORS.size]))
+                    .put("updatedAt", 0L)
+                    .put("deleted", false)
+            }
+            a.put("type", cat.getString("id"))
+        }
+        val arr = JSONArray()
+        for (cat in byName.values) arr.put(cat)
+        obj.put("categories", arr)
+        write(ctx, obj)
+    }
+
+    // ---------- categories ----------
+    @Synchronized
+    fun categories(ctx: Context): List<JSONObject> {
+        val arr = root(ctx).getJSONArray("categories")
+        val out = ArrayList<JSONObject>()
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            if (!c.optBoolean("deleted", false)) out.add(c)
+        }
+        return out
+    }
+
+    @Synchronized
+    fun categoryById(ctx: Context, id: String): JSONObject? {
+        if (id.isEmpty()) return null
+        val arr = root(ctx).getJSONArray("categories")
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            if (c.getString("id") == id && !c.optBoolean("deleted", false)) return c
+        }
+        return null
+    }
+
+    // Resuelve la categoría de una actividad (el campo "type" ahora guarda un id, no un
+    // nombre libre). Nunca devuelve null: cae a "General" si el id no resuelve.
+    @Synchronized
+    fun categoryForActivity(ctx: Context, act: JSONObject): JSONObject =
+        categoryById(ctx, act.optString("type", "")) ?: fallbackCategory()
+
+    @Synchronized
+    fun addCategory(ctx: Context, name: String, icon: String, color: String): String {
+        val obj = root(ctx)
+        val id = uid()
+        obj.getJSONArray("categories").put(
+            JSONObject().put("id", id).put("name", name.trim())
+                .put("icon", icon).put("color", color)
+                .put("updatedAt", now()).put("deleted", false)
+        )
+        write(ctx, obj)
+        return id
+    }
+
+    @Synchronized
+    fun updateCategory(ctx: Context, id: String, name: String, icon: String, color: String) {
+        val obj = root(ctx)
+        val arr = obj.getJSONArray("categories")
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            if (c.getString("id") == id) {
+                c.put("name", name.trim()).put("icon", icon).put("color", color).put("updatedAt", now())
+            }
+        }
+        write(ctx, obj)
+    }
+
+    // Borra la categoría (tombstone, igual que activities/sessions) y deja "sin
+    // categoría" a las actividades que la usaban en vez de arrastrar un id fantasma.
+    @Synchronized
+    fun deleteCategory(ctx: Context, id: String) {
+        val obj = root(ctx)
+        val arr = obj.getJSONArray("categories")
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            if (c.getString("id") == id) c.put("deleted", true).put("updatedAt", now())
+        }
+        val acts = obj.getJSONArray("activities")
+        for (i in 0 until acts.length()) {
+            val a = acts.getJSONObject(i)
+            if (a.optString("type", "") == id) a.put("type", "").put("updatedAt", now())
+        }
+        write(ctx, obj)
+    }
+
+    private fun newActivity(name: String, categoryId: String, color: String): JSONObject =
         JSONObject()
             .put("id", uid())
             .put("name", name)
-            .put("type", type)
+            .put("type", categoryId)
             .put("color", color)
             .put("archived", false)
             .put("updatedAt", now())
@@ -104,20 +214,20 @@ object Store {
     }
 
     @Synchronized
-    fun addActivity(ctx: Context, name: String, type: String, color: String) {
+    fun addActivity(ctx: Context, name: String, categoryId: String, color: String) {
         val obj = root(ctx)
-        obj.getJSONArray("activities").put(newActivity(name, type, color))
+        obj.getJSONArray("activities").put(newActivity(name, categoryId, color))
         write(ctx, obj)
     }
 
     @Synchronized
-    fun updateActivity(ctx: Context, id: String, name: String, type: String, color: String) {
+    fun updateActivity(ctx: Context, id: String, name: String, categoryId: String, color: String) {
         val obj = root(ctx)
         val arr = obj.getJSONArray("activities")
         for (i in 0 until arr.length()) {
             val a = arr.getJSONObject(i)
             if (a.getString("id") == id) {
-                a.put("name", name).put("type", type).put("color", color).put("updatedAt", now())
+                a.put("name", name).put("type", categoryId).put("color", color).put("updatedAt", now())
             }
         }
         write(ctx, obj)
@@ -474,7 +584,7 @@ object Store {
         for (s in list) {
             val a = activityById(ctx, s.getString("actId"))
             val name = a?.getString("name") ?: "?"
-            val type = a?.optString("type", "") ?: ""
+            val type = if (a != null) categoryForActivity(ctx, a).optString("name", "") else ""
             val min = (s.getLong("end") - s.getLong("start")) / 60000.0
             sb.append("\"$name\",\"$type\",\"${fmt.format(s.getLong("start"))}\",")
             sb.append("\"${fmt.format(s.getLong("end"))}\",${String.format(Locale.US, "%.1f", min)}\n")
@@ -499,6 +609,7 @@ object Store {
         return JSONObject()
             .put("activities", JSONArray(r.getJSONArray("activities").toString()))
             .put("sessions", JSONArray(r.getJSONArray("sessions").toString()))
+            .put("categories", JSONArray(r.getJSONArray("categories").toString()))
             .put("run", run)
     }
 
@@ -507,6 +618,7 @@ object Store {
         val obj = root(ctx)
         mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))
         mergeList(obj.getJSONArray("sessions"), remote.optJSONArray("sessions"))
+        mergeList(obj.getJSONArray("categories"), remote.optJSONArray("categories"))
         // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.
         // El bloque run se reemplaza entero, nunca campo por campo.
         val rr = remote.optJSONObject("run")

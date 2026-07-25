@@ -1147,6 +1147,14 @@ class MainActivity : AppCompatActivity() {
             val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, barH)
             slp.topMargin = dp(3); slp.leftMargin = dp(1); slp.rightMargin = dp(1)
             stack.layoutParams = slp
+            // Los segmentos son Views planos sin radio propio; el redondeo de las puntas
+            // superiores lo da el fondo de este contenedor + clipToOutline (recorta los
+            // hijos al contorno redondeado, como el overflow:hidden del espejo web).
+            val stackBg = GradientDrawable()
+            val r = dp(4).toFloat()
+            stackBg.cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+            stack.background = stackBg
+            stack.clipToOutline = true
             for ((c, secs) in segs) {
                 val segH = Math.max(dp(1), (secs.toDouble() / total * barH).toInt())
                 val seg = View(this)

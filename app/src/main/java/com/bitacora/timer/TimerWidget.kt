@@ -134,7 +134,12 @@ class TimerWidget : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.w_stop, stopPi)
             } else {
                 views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
-                views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
+                // Texto fijo en vez de setChronometer(started=false): un Chronometer parado
+                // igual depende de que el host aplique base+started correctamente en cada
+                // render; si el widget queda con la vista vieja de una sesión ya terminada
+                // (el host solo re-renderiza en eventos puntuales, no de forma continua),
+                // puede mostrar el tiempo corrido de esa sesión vieja en vez de 00:00.
+                views.setTextViewText(R.id.w_chrono, "00:00")
                 views.setViewVisibility(R.id.w_pause, View.GONE)
                 views.setViewVisibility(R.id.w_stop, View.GONE)
             }

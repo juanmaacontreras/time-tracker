@@ -10,10 +10,16 @@ import androidx.work.WorkerParameters
 class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
         try {
+            // Solo re-renderizar si el sync trajo cambios reales, igual que
+            // TimerWidget.ACTION_REFRESH: evita reconstruir el Chronometer del widget
+            // (con el riesgo de un frame raro) cada ~15 min cuando no cambió nada.
+            val before = Store.payload(applicationContext).toString()
             Sync.pullMerge(applicationContext)
-            Notifs.update(applicationContext)
-            TimerWidget.refresh(applicationContext)
-            ResumenWidget.refresh(applicationContext)
+            if (Store.payload(applicationContext).toString() != before) {
+                Notifs.update(applicationContext)
+                TimerWidget.refresh(applicationContext)
+                ResumenWidget.refresh(applicationContext)
+            }
         } catch (e: Exception) {
             return Result.retry()
         }

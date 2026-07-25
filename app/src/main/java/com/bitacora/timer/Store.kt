@@ -188,11 +188,10 @@ object Store {
     }
 
     // Limpieza de las categorías duplicadas que ya se crearon ANTES de este fix (ids
-    // random distintos para el mismo nombre). Agrupa por nombre normalizado, deja una
-    // sola categoría por grupo con el id ESTABLE (stableCategoryId), reasigna las
-    // actividades que apuntaban a cualquier id del grupo hacia ese id único, y marca
-    // el resto como borradas. Corre en cada root(): una vez consolidado, no vuelve a
-    // encontrar duplicados y no hace nada (es barato).
+    // random distintos para el mismo nombre). Agrupa por nombre normalizado, conserva
+    // una sola por grupo — con el id que ya tenía, sin reescribirlo —, reapunta las
+    // actividades de las otras hacia ella y marca esas otras como borradas. Corre en
+    // cada root(): una vez consolidado no encuentra duplicados y no escribe nada.
     private fun dedupeCategoriesByName(ctx: Context, obj: JSONObject) {
         val cats = obj.getJSONArray("categories")
         // OJO: agrupamos TAMBIÉN las ya borradas. Una actividad puede seguir apuntando
@@ -210,28 +209,28 @@ object Store {
         for ((_, group) in groups) {
             if (group.size < 2) continue
             val alive = group.filter { !it.optBoolean("deleted", false) }
-            val displayName = (alive.firstOrNull() ?: group[0]).optString("name", "General")
-            val canonicalId = stableCategoryId(displayName)
-            // Preferimos una viva con ícono ya elegido a mano; si todas quedaron
-            // borradas, resucitamos la primera (puede haber actividades que la necesiten).
+            // Preferimos una viva con ícono ya elegido a mano. Si TODAS están borradas,
+            // se consolida igual (para que el remap de actividades funcione) pero queda
+            // borrada: nunca se resucita una categoría que el usuario borró a propósito.
             val keep = alive.firstOrNull { it.optString("icon", "").isNotEmpty() }
                 ?: alive.firstOrNull() ?: group[0]
+            // El id de la que se conserva NO se reescribe nunca. Antes se le asignaba un
+            // "id canónico" derivado del nombre, y como la tabla de remapeo es común a
+            // todos los grupos, el id viejo de un grupo podía coincidir con el id canónico
+            // de otro: el remapeo se pisaba y las actividades terminaban en la categoría
+            // equivocada. Usando el id que la conservada ya tenía, un id que se conserva
+            // nunca es origen de un remapeo y esa colisión no puede existir.
+            val keepId = keep.getString("id")
             for (c in group) {
-                val oldId = c.getString("id")
-                if (oldId != canonicalId) remap[oldId] = canonicalId
-                if (c !== keep) { c.put("deleted", true).put("updatedAt", now()); changed = true }
+                if (c === keep) continue
+                remap[c.getString("id")] = keepId
+                // Solo se toca lo que realmente cambia: reescribir updatedAt de entradas
+                // ya borradas en cada carga generaba escrituras y sync a lo pavote.
+                if (!c.optBoolean("deleted", false)) {
+                    c.put("deleted", true).put("updatedAt", now())
+                    changed = true
+                }
             }
-            if (keep.getString("id") != canonicalId) {
-                keep.put("id", canonicalId)
-                changed = true
-            }
-            if (keep.optBoolean("deleted", false)) {
-                keep.put("deleted", false).put("updatedAt", now())
-                changed = true
-            }
-            keep.put("name", displayName)
-                .put("icon", keep.optString("icon", ""))
-                .put("color", keep.optString("color", "#2F4B8F"))
         }
         if (remap.isNotEmpty()) {
             val activities = obj.getJSONArray("activities")
@@ -431,6 +430,10 @@ object Store {
     @Synchronized fun runningPaused(ctx: Context): Boolean = root(ctx).optBoolean("runPaused", false)
     @Synchronized fun runningPausedAt(ctx: Context): Long = root(ctx).optLong("runPausedAt", 0L)
     @Synchronized fun runningPausedAccum(ctx: Context): Long = root(ctx).optLong("runPausedAccum", 0L)
+    // Sello de la última mutación del estado "corriendo". La UI lo usa para detectar
+    // cambios hechos por fuera de ella (botones de la notificación/widget, sync en
+    // background) y redibujar sin esperar al ciclo de sync.
+    @Synchronized fun runningChangedAt(ctx: Context): Long = root(ctx).optLong("runChangedAt", 0L)
 
     // Milisegundos reales corridos de la sesión activa (descontando pausas). 0 si no hay nada.
     @Synchronized

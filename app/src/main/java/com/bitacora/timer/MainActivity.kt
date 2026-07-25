@@ -63,9 +63,20 @@ class MainActivity : AppCompatActivity() {
     private val expandedIds = HashSet<String>()
     private val handler = Handler(Looper.getMainLooper())
 
+    // Firma del estado "corriendo" tal como quedó dibujado en pantalla. Sirve para
+    // detectar cambios hechos por fuera de la UI (botones de la notificación o del
+    // widget, sync en background) y redibujar enseguida.
+    private var lastStateSig = ""
+    private fun stateSig(): String =
+        Store.runningActId(this) + "|" + Store.runningPaused(this) + "|" + Store.runningChangedAt(this)
+
     private val ticker = object : Runnable {
         override fun run() {
-            updateRunningRow()
+            // Comparación barata (lee 3 campos del JSON ya cacheado en memoria, sin
+            // tocar disco ni red). Antes la app solo se enteraba de estos cambios en el
+            // syncLoop, que corre cada 10s: por eso pausar desde la notificación tardaba
+            // varios segundos en reflejarse con la app abierta.
+            if (stateSig() != lastStateSig) render() else updateRunningRow()
             handler.postDelayed(this, 1000)
         }
     }
@@ -433,6 +444,9 @@ class MainActivity : AppCompatActivity() {
         TimerWidget.refresh(this)
         ResumenWidget.refresh(this)
         Notifs.update(this)
+        // Queda registrado qué estado corresponde a lo que hay dibujado ahora, para que
+        // el ticker solo vuelva a redibujar si algo lo cambia por fuera (ver stateSig).
+        lastStateSig = stateSig()
     }
 
     // ---------------- TIMER TAB ----------------

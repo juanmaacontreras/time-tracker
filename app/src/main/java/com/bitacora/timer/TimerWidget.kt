@@ -42,32 +42,11 @@ class TimerWidget : AppWidgetProvider() {
         when (intent.action) {
             ACTION_TOGGLE -> {
                 val actId = intent.getStringExtra("actId") ?: return
-                runInBackground(context) {
-                    Sync.pullMerge(context)
-                    Store.toggle(context, actId)
-                    refresh(context)
-                    Notifs.update(context); ResumenWidget.refresh(context)
-                    Sync.pushOnly(context)
-                    refresh(context)
-                }
+                applyThenSync(context) { Store.toggle(context, actId) }
             }
-            ACTION_STOP -> {
-                runInBackground(context) {
-                    Sync.pullMerge(context)
-                    Store.stop(context)
-                    refresh(context)
-                    Notifs.update(context); ResumenWidget.refresh(context)
-                    Sync.pushOnly(context)
-                }
-            }
-            ACTION_PAUSE -> {
-                runInBackground(context) {
-                    Sync.pullMerge(context)
-                    if (Store.runningPaused(context)) Store.resume(context) else Store.pause(context)
-                    refresh(context)
-                    Notifs.update(context); ResumenWidget.refresh(context)
-                    Sync.pushOnly(context)
-                }
+            ACTION_STOP -> applyThenSync(context) { Store.stop(context) }
+            ACTION_PAUSE -> applyThenSync(context) {
+                if (Store.runningPaused(context)) Store.resume(context) else Store.pause(context)
             }
             ACTION_REFRESH -> {
                 // Solo re-renderiza si el sync trajo cambios reales. Así, tocar para
@@ -89,6 +68,32 @@ class TimerWidget : AppWidgetProvider() {
         val pending = goAsync()
         Thread {
             try { block() } finally { pending.finish() }
+        }.start()
+    }
+
+    // Acción del usuario (widget o notificación): primero se muta el estado local y se
+    // redibuja — instantáneo —, y recién después se va a la red.
+    //
+    // Antes el pullMerge se hacía ANTES de mutar, así que cada toque en Pausar/Parar
+    // esperaba un round-trip de red completo (hasta 12s de timeout en Sync.auth) para
+    // recién ahí aplicar el cambio: esa era la demora de varios segundos al pausar
+    // desde la notificación. Invertir el orden es seguro porque toda mutación sella
+    // runChangedAt = now(), así que en el merge posterior le gana a cualquier estado
+    // remoto más viejo — el cambio del usuario no se pierde ni se pisa.
+    private fun applyThenSync(context: Context, mutate: () -> Unit) {
+        mutate()
+        refresh(context)
+        Notifs.update(context)
+        ResumenWidget.refresh(context)
+        val pending = goAsync()
+        Thread {
+            try {
+                Sync.pushOnly(context)
+                Sync.pullMerge(context)
+                refresh(context)
+                Notifs.update(context)
+                ResumenWidget.refresh(context)
+            } finally { pending.finish() }
         }.start()
     }
 

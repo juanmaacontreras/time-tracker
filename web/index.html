@@ -532,19 +532,22 @@ const Store = {
     for (const group of groups.values()) {
       if (group.length < 2) continue;
       const alive = group.filter(c => !c.deleted);
-      const displayName = (alive[0] || group[0]).name || "General";
-      const canonicalId = this._stableCategoryId(displayName);
-      // Preferimos una viva con ícono ya elegido a mano; si todas quedaron borradas,
-      // resucitamos la primera (puede haber actividades que la necesiten).
+      // Preferimos una viva con ícono ya elegido a mano. Si TODAS están borradas, se
+      // consolida igual (para que el remap de actividades funcione) pero queda borrada:
+      // nunca se resucita una categoría que el usuario borró a propósito.
       const keep = alive.find(c => c.icon) || alive[0] || group[0];
+      // El id de la que se conserva NO se reescribe nunca (ver el comentario largo en
+      // Store.dedupeCategoriesByName): asignarle un "id canónico" derivado del nombre
+      // hacía que la tabla de remapeo, que es común a todos los grupos, se pisara entre
+      // grupos y mandara actividades a la categoría equivocada.
+      const keepId = keep.id;
       for (const c of group) {
-        const oldId = c.id;
-        if (oldId !== canonicalId) remap.set(oldId, canonicalId);
-        if (c !== keep) { c.deleted = true; c.updatedAt = now(); changed = true; }
+        if (c === keep) continue;
+        remap.set(c.id, keepId);
+        // Solo se toca lo que realmente cambia: reescribir updatedAt de entradas ya
+        // borradas en cada carga generaba escrituras y sync a lo pavote.
+        if (!c.deleted) { c.deleted = true; c.updatedAt = now(); changed = true; }
       }
-      if (keep.id !== canonicalId) { keep.id = canonicalId; changed = true; }
-      if (keep.deleted) { keep.deleted = false; keep.updatedAt = now(); changed = true; }
-      keep.name = displayName;
     }
     if (remap.size) {
       for (const a of obj.activities) {

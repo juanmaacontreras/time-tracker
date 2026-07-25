@@ -118,6 +118,11 @@ object Notifs {
         small.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
         small.setInt(R.id.n_stop, "setBackgroundResource", R.drawable.circle_ghost)
 
+        // Sin .setStyle(DecoratedCustomViewStyle()): esa era justamente la que le pedía
+        // al sistema dibujar la fila de ícono + nombre de la app + hora arriba de
+        // nuestra vista. Sin ningún Style, Android usa las vistas custom tal cual, de
+        // punta a punta, sin agregar nada propio (setContentTitle/Text quedan solo
+        // como respaldo para accesibilidad/reloj, no se ven en la notificación en sí).
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(name)
@@ -125,11 +130,9 @@ object Notifs {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPi)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(small)
             .setCustomBigContentView(big)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        if (cat != null) builder.setSubText(cat.optString("name", ""))
 
         val n = builder.build()
         try {

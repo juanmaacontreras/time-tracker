@@ -67,6 +67,7 @@ object Store {
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
         if (!obj.has("categories")) migrateCategoriesFromTypes(ctx, obj)
+        repairCorruptCategoryNames(ctx, obj)
         cachedRoot = obj; cachedProfile = pid
         return obj
     }
@@ -76,6 +77,12 @@ object Store {
     // pero evita nulls en cascada por toda la UI.
     private fun fallbackCategory(): JSONObject =
         JSONObject().put("id", "").put("name", "General").put("icon", "").put("color", "#2F4B8F")
+
+    // Detecta un string con forma de id (uid()/UUID). Sirve para blindar la migración:
+    // si "type" YA es un id (por ejemplo porque la migración corrió una vez en otro
+    // dispositivo/versión y esto es un re-run sobre datos que ya estaban migrados),
+    // nunca hay que adoptar ese id como si fuera el nombre legible de una categoría.
+    private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
     // Antes "type" en cada actividad era un string libre. Esta migración corre una sola
     // vez (cuando el perfil todavía no tiene "categories") y convierte cada valor distinto
@@ -89,7 +96,7 @@ object Store {
         for (i in 0 until activities.length()) {
             val a = activities.getJSONObject(i)
             val raw = a.optString("type", "").trim()
-            val name = raw.ifEmpty { "General" }
+            val name = if (raw.isEmpty() || UUID_RE.matches(raw)) "General" else raw
             val cat = byName.getOrPut(name) {
                 JSONObject()
                     .put("id", uid())
@@ -105,6 +112,23 @@ object Store {
         for (cat in byName.values) arr.put(cat)
         obj.put("categories", arr)
         write(ctx, obj)
+    }
+
+    // Reparación defensiva: si alguna categoría ya sincronizada quedó con el nombre
+    // igual a un id (el bug de arriba, ya sincronizado entre dispositivos antes de este
+    // fix), la corrige in-situ en vez de mostrar el UUID crudo en toda la UI. updatedAt
+    // se actualiza para que la reparación se propague al resto de los dispositivos.
+    private fun repairCorruptCategoryNames(ctx: Context, obj: JSONObject) {
+        val arr = obj.getJSONArray("categories")
+        var changed = false
+        for (i in 0 until arr.length()) {
+            val c = arr.getJSONObject(i)
+            if (UUID_RE.matches(c.optString("name", ""))) {
+                c.put("name", "General").put("updatedAt", now())
+                changed = true
+            }
+        }
+        if (changed) write(ctx, obj)
     }
 
     // ---------- categories ----------

@@ -424,6 +424,7 @@ const Store = {
     if (obj.runPausedAt == null) obj.runPausedAt = 0;
     if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
     if (!Array.isArray(obj.categories)) this._migrateCategoriesFromTypes(obj);
+    this._repairCorruptCategoryNames(obj);
     this._root = obj; this._rootProfile = pid;
     return obj;
   },
@@ -431,6 +432,14 @@ const Store = {
     const pid = this.currentProfileId();
     this._root = obj; this._rootProfile = pid;
     try { localStorage.setItem(this.dataKey(pid), JSON.stringify(obj)); } catch (e) {}
+  },
+
+  // Un string con forma de id (uid()). Blinda la migración: si "type" YA es un id
+  // (por ejemplo porque esto es un re-run sobre datos que otra plataforma/versión ya
+  // había migrado), nunca hay que adoptar ese id como si fuera el nombre de una
+  // categoría — mismo criterio que Store.UUID_RE en Kotlin.
+  _looksLikeId(s) {
+    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
   },
 
   // Antes "type" en cada actividad era un string libre. Espejo exacto de
@@ -441,7 +450,8 @@ const Store = {
     const byName = new Map();
     let i = 0;
     for (const a of obj.activities) {
-      const name = (a.type || "").trim() || "General";
+      const raw = (a.type || "").trim();
+      const name = (!raw || this._looksLikeId(raw)) ? "General" : raw;
       let cat = byName.get(name);
       if (!cat) {
         cat = { id: uid(), name, icon: "", color: a.color || COLORS[i % COLORS.length], updatedAt: 0, deleted: false };
@@ -451,6 +461,17 @@ const Store = {
       a.type = cat.id;
     }
     obj.categories = [...byName.values()];
+  },
+
+  // Reparación defensiva: si alguna categoría ya sincronizada quedó con el nombre
+  // igual a un id (el bug de arriba, ya propagado entre dispositivos antes de este
+  // fix), la corrige in-situ en vez de mostrar el UUID crudo en toda la UI.
+  _repairCorruptCategoryNames(obj) {
+    let changed = false;
+    for (const c of obj.categories) {
+      if (this._looksLikeId(c.name || "")) { c.name = "General"; c.updatedAt = now(); changed = true; }
+    }
+    if (changed) this.write(obj);
   },
 
   // ---- categories ----

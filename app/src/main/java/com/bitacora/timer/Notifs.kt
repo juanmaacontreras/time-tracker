@@ -97,7 +97,6 @@ object Notifs {
             views.setTextViewText(R.id.n_name, name)
             views.setTextViewText(R.id.n_cat, cat?.optString("name", "General") ?: "General")
             views.setChronometer(R.id.n_chrono, base, null, running)
-            if (cat != null) bindSwatch(views, cat, running, liveColor)
 
             views.setImageViewResource(R.id.n_pause_icon, pauseIcon)
             views.setInt(R.id.n_stop_icon, "setColorFilter", mutedColor)
@@ -107,6 +106,9 @@ object Notifs {
 
         val big = RemoteViews(ctx.packageName, R.layout.notif)
         bindCommon(big)
+        // El swatch de identidad solo existe en la vista expandida (ver notif_small.xml:
+        // a ese ancho, el nombre necesita el espacio más que el color/ícono).
+        if (cat != null) bindSwatch(big, cat, running, liveColor)
         big.setTextViewText(R.id.n_eyebrow, if (paused) "Pausado" else "Cronometrando")
         big.setTextColor(R.id.n_eyebrow, if (paused) mutedColor else liveColor)
         big.setTextViewText(R.id.n_pause_label, pauseLabel)

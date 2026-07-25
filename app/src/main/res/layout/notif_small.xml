@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vista colapsada: swatch de identidad + nombre/categoría + cronómetro + un par de
-     botones chicos (solo ícono), para poder pausar/parar sin necesidad de expandir. -->
+<!-- Vista colapsada: nombre/categoría + cronómetro + un par de botones chicos (solo
+     ícono), para poder pausar/parar sin necesidad de expandir. Sin swatch de color acá
+     (a diferencia de la expandida): a este ancho, el nombre necesita el espacio más que
+     la identidad visual — el swatch sigue estando en la vista expandida. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -11,45 +13,10 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <FrameLayout
-        android:layout_width="34dp"
-        android:layout_height="34dp">
-
-        <ImageView
-            android:id="@+id/n_swatch_ring"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:src="@drawable/swatch_ring"
-            android:visibility="gone" />
-
-        <ImageView
-            android:id="@+id/n_swatch_bg"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:src="@drawable/swatch_shape" />
-
-        <ImageView
-            android:id="@+id/n_swatch_icon"
-            android:layout_width="19dp"
-            android:layout_height="19dp"
-            android:layout_gravity="center"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/n_swatch_letter"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:textStyle="bold"
-            android:textSize="13sp"
-            android:text="L" />
-    </FrameLayout>
-
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="8dp"
         android:orientation="vertical">
 
         <TextView

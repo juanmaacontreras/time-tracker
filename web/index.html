@@ -425,6 +425,7 @@ const Store = {
     if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
     if (!Array.isArray(obj.categories)) this._migrateCategoriesFromTypes(obj);
     this._repairCorruptCategoryNames(obj);
+    this._dedupeCategoriesByName(obj);
     this._root = obj; this._rootProfile = pid;
     return obj;
   },
@@ -434,12 +435,29 @@ const Store = {
     try { localStorage.setItem(this.dataKey(pid), JSON.stringify(obj)); } catch (e) {}
   },
 
-  // Un string con forma de id (uid()). Blinda la migración: si "type" YA es un id
-  // (por ejemplo porque esto es un re-run sobre datos que otra plataforma/versión ya
-  // había migrado), nunca hay que adoptar ese id como si fuera el nombre de una
-  // categoría — mismo criterio que Store.UUID_RE en Kotlin.
+  // Un string con forma de id (UUID random o el hash estable de abajo). Blinda la
+  // migración: si "type" YA es un id (por ejemplo porque esto es un re-run sobre datos
+  // que otra plataforma/versión ya había migrado), nunca hay que adoptar ese id como si
+  // fuera el nombre de una categoría — mismo criterio que Store.looksLikeId en Kotlin.
   _looksLikeId(s) {
-    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
+    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s)
+      || s.startsWith("cat-");
+  },
+
+  // Id ESTABLE derivado del nombre (FNV-1a 32 bits — mismo algoritmo, bit a bit, que
+  // Store.stableCategoryId en Kotlin). Antes la migración usaba uid() (random): si
+  // corría de forma independiente en el celu, en la web, o tras una reinstalación,
+  // cada una generaba un id DISTINTO para la misma categoría ("Materia" x3, "Libro"
+  // x3...). Con un id determinístico, dos migraciones para el mismo nombre siempre
+  // coinciden y ya no pueden crear duplicados.
+  _stableCategoryId(name) {
+    const bytes = new TextEncoder().encode(name.trim().toLowerCase());
+    let hash = 0x811c9dc5;
+    for (const b of bytes) {
+      hash ^= b;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return "cat-" + hash.toString(16).padStart(8, "0");
   },
 
   // Antes "type" en cada actividad era un string libre. Espejo exacto de
@@ -454,7 +472,7 @@ const Store = {
       const name = (!raw || this._looksLikeId(raw)) ? "General" : raw;
       let cat = byName.get(name);
       if (!cat) {
-        cat = { id: uid(), name, icon: "", color: a.color || COLORS[i % COLORS.length], updatedAt: 0, deleted: false };
+        cat = { id: this._stableCategoryId(name), name, icon: "", color: a.color || COLORS[i % COLORS.length], updatedAt: 0, deleted: false };
         byName.set(name, cat);
         i++;
       }
@@ -470,6 +488,49 @@ const Store = {
     let changed = false;
     for (const c of obj.categories) {
       if (this._looksLikeId(c.name || "")) { c.name = "General"; c.updatedAt = now(); changed = true; }
+    }
+    if (changed) this.write(obj);
+  },
+
+  // Limpieza de las categorías duplicadas creadas ANTES de este fix (ids random
+  // distintos para el mismo nombre). Espejo exacto de Store.dedupeCategoriesByName en
+  // Kotlin: agrupa por nombre normalizado, deja una sola categoría por grupo con el id
+  // ESTABLE, reasigna las actividades que apuntaban a cualquier id del grupo, y marca
+  // el resto como borradas.
+  _dedupeCategoriesByName(obj) {
+    // OJO: agrupamos TAMBIÉN las ya borradas — una actividad puede seguir apuntando al
+    // id de una categoría marcada "deleted" en una limpieza anterior; si la excluimos
+    // del grupo esa actividad nunca entra al remapeo y se queda huérfana ("General").
+    const groups = new Map();
+    for (const c of obj.categories) {
+      const key = (c.name || "General").trim().toLowerCase() || "general";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    }
+    const remap = new Map();
+    let changed = false;
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const alive = group.filter(c => !c.deleted);
+      const displayName = (alive[0] || group[0]).name || "General";
+      const canonicalId = this._stableCategoryId(displayName);
+      // Preferimos una viva con ícono ya elegido a mano; si todas quedaron borradas,
+      // resucitamos la primera (puede haber actividades que la necesiten).
+      const keep = alive.find(c => c.icon) || alive[0] || group[0];
+      for (const c of group) {
+        const oldId = c.id;
+        if (oldId !== canonicalId) remap.set(oldId, canonicalId);
+        if (c !== keep) { c.deleted = true; c.updatedAt = now(); changed = true; }
+      }
+      if (keep.id !== canonicalId) { keep.id = canonicalId; changed = true; }
+      if (keep.deleted) { keep.deleted = false; keep.updatedAt = now(); changed = true; }
+      keep.name = displayName;
+    }
+    if (remap.size) {
+      for (const a of obj.activities) {
+        const newId = remap.get(a.type);
+        if (newId) { a.type = newId; a.updatedAt = now(); changed = true; }
+      }
     }
     if (changed) this.write(obj);
   },
@@ -676,6 +737,11 @@ const Store = {
     o.activities = mergeList(o.activities, remote.activities);
     o.sessions = mergeList(o.sessions, remote.sessions);
     o.categories = mergeList(o.categories, remote.categories);
+    // root() solo corre la limpieza de categorías la primera vez que arma el objeto en
+    // memoria; un merge posterior puede traer duplicados nuevos de otro dispositivo
+    // sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
+    this._repairCorruptCategoryNames(o);
+    this._dedupeCategoriesByName(o);
     const rr = remote.run;
     if (rr) {
       const remoteChanged = rr.changedAt || 0;

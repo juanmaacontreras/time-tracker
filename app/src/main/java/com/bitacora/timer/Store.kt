@@ -68,6 +68,7 @@ object Store {
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
         if (!obj.has("categories")) migrateCategoriesFromTypes(ctx, obj)
         repairCorruptCategoryNames(ctx, obj)
+        dedupeCategoriesByName(ctx, obj)
         cachedRoot = obj; cachedProfile = pid
         return obj
     }
@@ -78,11 +79,29 @@ object Store {
     private fun fallbackCategory(): JSONObject =
         JSONObject().put("id", "").put("name", "General").put("icon", "").put("color", "#2F4B8F")
 
-    // Detecta un string con forma de id (uid()/UUID). Sirve para blindar la migración:
-    // si "type" YA es un id (por ejemplo porque la migración corrió una vez en otro
-    // dispositivo/versión y esto es un re-run sobre datos que ya estaban migrados),
-    // nunca hay que adoptar ese id como si fuera el nombre legible de una categoría.
+    // Detecta un string con forma de id (UUID random o el hash estable de abajo). Sirve
+    // para blindar la migración: si "type" YA es un id (por ejemplo porque la migración
+    // corrió antes en otro dispositivo/versión y esto es un re-run sobre datos que ya
+    // estaban migrados), nunca hay que adoptar ese id como si fuera el nombre legible
+    // de una categoría.
     private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    private fun looksLikeId(s: String): Boolean = UUID_RE.matches(s) || s.startsWith("cat-")
+
+    // Id ESTABLE derivado del nombre (FNV-1a 32 bits, mismo algoritmo bit a bit en
+    // web/index.html). Antes la migración usaba uid() (random): si corría de forma
+    // independiente en el celu, en la web, o en una reinstalación, cada una generaba un
+    // id DISTINTO para la misma categoría ("Materia" x3, "Libro" x3...) — el merge por id
+    // nunca las veía como la misma categoría. Con un id determinístico, dos migraciones
+    // para el mismo nombre siempre coinciden, así que ya no pueden crear duplicados.
+    private fun stableCategoryId(name: String): String {
+        val bytes = name.trim().lowercase(Locale.ROOT).toByteArray(Charsets.UTF_8)
+        var hash = 0x811c9dc5L
+        for (b in bytes) {
+            hash = hash xor (b.toLong() and 0xFFL)
+            hash = (hash * 0x01000193L) and 0xFFFFFFFFL
+        }
+        return "cat-" + hash.toString(16).padStart(8, '0')
+    }
 
     // Antes "type" en cada actividad era un string libre. Esta migración corre una sola
     // vez (cuando el perfil todavía no tiene "categories") y convierte cada valor distinto
@@ -96,10 +115,10 @@ object Store {
         for (i in 0 until activities.length()) {
             val a = activities.getJSONObject(i)
             val raw = a.optString("type", "").trim()
-            val name = if (raw.isEmpty() || UUID_RE.matches(raw)) "General" else raw
+            val name = if (raw.isEmpty() || looksLikeId(raw)) "General" else raw
             val cat = byName.getOrPut(name) {
                 JSONObject()
-                    .put("id", uid())
+                    .put("id", stableCategoryId(name))
                     .put("name", name)
                     .put("icon", "")
                     .put("color", a.optString("color", COLORS[byName.size % COLORS.size]))
@@ -123,9 +142,66 @@ object Store {
         var changed = false
         for (i in 0 until arr.length()) {
             val c = arr.getJSONObject(i)
-            if (UUID_RE.matches(c.optString("name", ""))) {
+            if (looksLikeId(c.optString("name", ""))) {
                 c.put("name", "General").put("updatedAt", now())
                 changed = true
+            }
+        }
+        if (changed) write(ctx, obj)
+    }
+
+    // Limpieza de las categorías duplicadas que ya se crearon ANTES de este fix (ids
+    // random distintos para el mismo nombre). Agrupa por nombre normalizado, deja una
+    // sola categoría por grupo con el id ESTABLE (stableCategoryId), reasigna las
+    // actividades que apuntaban a cualquier id del grupo hacia ese id único, y marca
+    // el resto como borradas. Corre en cada root(): una vez consolidado, no vuelve a
+    // encontrar duplicados y no hace nada (es barato).
+    private fun dedupeCategoriesByName(ctx: Context, obj: JSONObject) {
+        val cats = obj.getJSONArray("categories")
+        // OJO: agrupamos TAMBIÉN las ya borradas. Una actividad puede seguir apuntando
+        // al id de una categoría que quedó marcada "deleted" en una limpieza anterior
+        // (o en una versión previa de esta migración) — si la excluimos del grupo, esa
+        // actividad nunca entra al remapeo y se queda huérfana (cae a "General").
+        val groups = LinkedHashMap<String, MutableList<JSONObject>>()
+        for (i in 0 until cats.length()) {
+            val c = cats.getJSONObject(i)
+            val key = c.optString("name", "General").trim().lowercase(Locale.ROOT).ifEmpty { "general" }
+            groups.getOrPut(key) { mutableListOf() }.add(c)
+        }
+        val remap = HashMap<String, String>()
+        var changed = false
+        for ((_, group) in groups) {
+            if (group.size < 2) continue
+            val alive = group.filter { !it.optBoolean("deleted", false) }
+            val displayName = (alive.firstOrNull() ?: group[0]).optString("name", "General")
+            val canonicalId = stableCategoryId(displayName)
+            // Preferimos una viva con ícono ya elegido a mano; si todas quedaron
+            // borradas, resucitamos la primera (puede haber actividades que la necesiten).
+            val keep = alive.firstOrNull { it.optString("icon", "").isNotEmpty() }
+                ?: alive.firstOrNull() ?: group[0]
+            for (c in group) {
+                val oldId = c.getString("id")
+                if (oldId != canonicalId) remap[oldId] = canonicalId
+                if (c !== keep) { c.put("deleted", true).put("updatedAt", now()); changed = true }
+            }
+            if (keep.getString("id") != canonicalId) {
+                keep.put("id", canonicalId)
+                changed = true
+            }
+            if (keep.optBoolean("deleted", false)) {
+                keep.put("deleted", false).put("updatedAt", now())
+                changed = true
+            }
+            keep.put("name", displayName)
+                .put("icon", keep.optString("icon", ""))
+                .put("color", keep.optString("color", "#2F4B8F"))
+        }
+        if (remap.isNotEmpty()) {
+            val activities = obj.getJSONArray("activities")
+            for (i in 0 until activities.length()) {
+                val a = activities.getJSONObject(i)
+                val newId = remap[a.optString("type", "")]
+                if (newId != null) { a.put("type", newId).put("updatedAt", now()); changed = true }
             }
         }
         if (changed) write(ctx, obj)
@@ -643,6 +719,11 @@ object Store {
         mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))
         mergeList(obj.getJSONArray("sessions"), remote.optJSONArray("sessions"))
         mergeList(obj.getJSONArray("categories"), remote.optJSONArray("categories"))
+        // root() solo corre la limpieza de categorías la primera vez que arma el objeto
+        // en memoria (cachedRoot); un merge posterior puede traer duplicados nuevos de
+        // otro dispositivo sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
+        repairCorruptCategoryNames(ctx, obj)
+        dedupeCategoriesByName(ctx, obj)
         // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.
         // El bloque run se reemplaza entero, nunca campo por campo.
         val rr = remote.optJSONObject("run")

@@ -68,8 +68,13 @@ class MainActivity : AppCompatActivity() {
     // detectar cambios hechos por fuera de la UI (botones de la notificación o del
     // widget, sync en background) y redibujar enseguida.
     private var lastStateSig = ""
+    // Incluye Store.revision para captar TODO cambio del dataset, no solo los del
+    // cronómetro: una actividad renombrada en otro dispositivo llega por push y se
+    // fusiona en un hilo de fondo, y sin eso la pantalla abierta no se enteraba hasta
+    // el siguiente ciclo de sync.
     private fun stateSig(): String =
-        Store.runningActId(this) + "|" + Store.runningPaused(this) + "|" + Store.runningChangedAt(this)
+        Store.runningActId(this) + "|" + Store.runningPaused(this) + "|" +
+            Store.runningChangedAt(this) + "|" + Store.revision
 
     private val ticker = object : Runnable {
         override fun run() {

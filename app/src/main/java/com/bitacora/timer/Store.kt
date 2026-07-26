@@ -52,6 +52,14 @@ object Store {
     @Volatile private var cachedRoot: JSONObject? = null
     @Volatile private var cachedProfile: String? = null
 
+    // Sube en cada escritura del dataset. La UI lo mira para redibujar ante CUALQUIER
+    // cambio, no solo los del cronómetro: un push que trae una actividad renombrada
+    // desde otro dispositivo se fusiona en un hilo de fondo, y sin esto la pantalla
+    // abierta no se enteraba hasta el siguiente ciclo de sync (hasta 60 s).
+    // Es un contador en memoria, mucho más barato que serializar todo para comparar.
+    @Volatile var revision: Long = 0L
+        private set
+
     @Synchronized
     fun root(ctx: Context): JSONObject {
         val pid = currentProfileId(ctx)
@@ -331,6 +339,7 @@ object Store {
         val pid = currentProfileId(ctx)
         cachedRoot = obj; cachedProfile = pid
         prefs(ctx).edit().putString(dataKey(pid), obj.toString()).apply()
+        revision++
     }
 
     // ---------- activities ----------

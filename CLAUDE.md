@@ -179,17 +179,32 @@ edita a mano.
   escritura al bucket igual funciona y nadie se entera. Para diagnosticar hay que
   mirar `net._http_response` en el SQL Editor y los logs de la Edge Function.
 - **NUNCA subir un bucket si el contenido no cambió.** Es la regla más importante desde
-  que existe el push: cada escritura dispara el trigger, que despierta a los demás
-  dispositivos. Los ciclos de sync corren cada 10 s (app) y 8 s (web) y antes subían
-  siempre, así que tener la app abierta en un dispositivo le mandaba un push a los
-  otros **cada 10 segundos**. La guarda está dentro de `Sync.push()` y de `push()` en
-  la web (`lastPushed` por bucket, se registra solo tras un envío exitoso). Si alguna
-  vez se agrega otro camino de escritura, tiene que pasar por ahí.
+  que existe el push: cada ESCRITURA dispara el trigger, que despierta a los demás
+  dispositivos. Los ciclos de sync antes subían siempre, así que tener la app abierta en
+  un dispositivo le mandaba un push a los otros **cada 10 segundos**. La guarda está
+  dentro de `Sync.push()` y de `push()` en la web (`lastPushed` por bucket, se registra
+  solo tras un envío exitoso). Si alguna vez se agrega otro camino de escritura, tiene
+  que pasar por ahí. **Leer no dispara nada**: sondear seguido es barato, lo caro es
+  escribir de más.
+- **Los intervalos de sync de app y web NO son intercambiables.** La app sondea cada
+  60 s porque tiene push y se entera en segundos por esa vía; **la web sondea cada 10 s
+  porque NO recibe push** (necesitaría un service worker) y ese ciclo es su única forma
+  de enterarse. Ya se cometió el error de subir los dos a 60 s "porque el push cubre el
+  caso urgente": la web pasó a tardar hasta un minuto en reflejar cambios del celular.
+  Si en la web parece que "no se actualiza", mirar primero este intervalo. Detalle que
+  confunde el diagnóstico: la web sincroniza al instante cuando la ventana gana foco
+  (`focus` / `visibilitychange`), así que al hacerle clic parece instantánea aunque el
+  ciclo esté mal configurado.
 - **Redibujar solo si el sync trajo cambios.** Mismo motivo, versión local: `render()`
   reconstruye la lista, la notificación y los dos widgets, y refrescar el widget
   reaplica `setChronometer` sobre un cronómetro en vivo (el "flash del número
   gigante"). `doSync()`, `SyncWorker` y `ACTION_REFRESH` comparan el payload
   antes/después y solo redibujan si difiere.
+- **La pantalla abierta necesita `Store.revision` para captar cambios que NO son del
+  cronómetro.** `PushService` fusiona lo que llega por push en un hilo de fondo pero no
+  redibuja `MainActivity`. El ticker de 1 s compara `stateSig()`, que incluye ese
+  contador (sube en cada `Store.write`), así que una actividad renombrada en otro
+  dispositivo aparece en ~1 s en vez de esperar el ciclo de 60 s.
 
 ## Estado actual
 

@@ -1719,10 +1719,16 @@ setInterval(() => {
 }, 1000);
 
 /* Sync loop + eventos.
-   Antes cada 8s, cuando era la única forma de enterarse de un cambio hecho en otro
-   dispositivo. Con el push andando eso llega en segundos por la otra vía, así que este
-   ciclo quedó solo como respaldo — además del sync inmediato al volver a la pestaña. */
-setInterval(sync, 60000);
+   OJO: acá el intervalo NO se puede alargar como en la app. La app tiene push y se
+   entera en segundos por esa vía, pero la web NO recibe push (necesitaría un service
+   worker; ver CLAUDE.md), así que este ciclo es su única forma de enterarse de algo
+   hecho en otro dispositivo. Se probó subirlo a 60s y el efecto fue que la web tardaba
+   hasta un minuto en reflejar cambios del celular.
+
+   Sondear seguido acá es barato: son GET, y leer no dispara el trigger de Postgres, así
+   que no despierta a ningún otro dispositivo. Lo que había que evitar eran las
+   ESCRITURAS innecesarias, y de eso ya se encarga la guarda de lastPushed en push(). */
+setInterval(sync, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
 window.addEventListener("focus", sync);
 

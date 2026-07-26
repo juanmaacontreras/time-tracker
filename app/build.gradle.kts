@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -50,4 +51,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // BoM: fija versiones coherentes entre los artefactos de Firebase. Se eligió la
+    // línea 33.1.x a propósito — las versiones más nuevas exigen compileSdk 35 y acá
+    // estamos en 34. Si algún día se sube el compileSdk, se puede subir el BoM.
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-messaging")
 }

@@ -10,6 +10,8 @@ import java.net.URLEncoder
 
 object Sync {
 
+    const val DEFAULT_TIMEOUT_MS = 12000
+
     private fun currentDataKey(ctx: Context) = Config.bucketKey(Store.currentProfileId(ctx))
 
     /** Pull + merge + push del índice de perfiles y del perfil activo. Fuera del hilo principal. */
@@ -21,14 +23,26 @@ object Sync {
         return ok
     }
 
-    /** Solo baja el estado del perfil activo y lo fusiona (sin subir). Fuera del hilo principal. */
-    fun pullMerge(ctx: Context): Boolean {
+    /**
+     * Solo baja el estado del perfil activo y lo fusiona (sin subir). Fuera del hilo principal.
+     *
+     * timeoutMs se puede acortar para el camino del push: al recibir un mensaje FCM el
+     * sistema da del orden de 10 segundos antes de poder matar el proceso, y el default
+     * de 12s no entra en ese presupuesto con mala señal.
+     */
+    fun pullMerge(ctx: Context, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Boolean {
         if (!Config.syncEnabled()) return false
         return try {
-            val remote = pull(currentDataKey(ctx))
+            val remote = pull(currentDataKey(ctx), timeoutMs)
             if (remote != null) Store.merge(ctx, remote)
             true
         } catch (e: Exception) { false }
+    }
+
+    /** Pull + merge + push del registro de dispositivos (tokens de push). */
+    fun syncDevices(ctx: Context): Boolean {
+        if (!Config.syncEnabled()) return false
+        return syncBucket(Config.DEVICES_KEY, { Devices.payload(ctx) }, { r -> Devices.merge(ctx, r) })
     }
 
     /** Solo sube el estado del perfil activo. Fuera del hilo principal. */
@@ -62,21 +76,21 @@ object Sync {
 
     private fun base() = Config.SUPABASE_URL.trimEnd('/')
 
-    private fun auth(conn: HttpURLConnection) {
+    private fun auth(conn: HttpURLConnection, timeoutMs: Int = DEFAULT_TIMEOUT_MS) {
         conn.setRequestProperty("apikey", Config.SUPABASE_KEY)
         if (Config.SUPABASE_KEY.startsWith("eyJ")) {
             conn.setRequestProperty("Authorization", "Bearer ${Config.SUPABASE_KEY}")
         }
-        conn.connectTimeout = 12000
-        conn.readTimeout = 12000
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs
     }
 
-    private fun pull(userKey: String): JSONObject? {
+    private fun pull(userKey: String, timeoutMs: Int = DEFAULT_TIMEOUT_MS): JSONObject? {
         val key = URLEncoder.encode(userKey, "UTF-8")
         val conn = URL("${base()}/rest/v1/buckets?user_key=eq.$key&select=data")
             .openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
-        auth(conn)
+        auth(conn, timeoutMs)
         conn.setRequestProperty("Accept", "application/json")
         val code = conn.responseCode
         if (code !in 200..299) { conn.disconnect(); return null }

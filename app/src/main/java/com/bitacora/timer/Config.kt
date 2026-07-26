@@ -16,6 +16,10 @@ object Config {
     // adoptan sin moverse. Los demás perfiles usan USER_KEY::<idPerfil>.
     const val DEFAULT_PROFILE = "default"
     val INDEX_KEY = "$USER_KEY::index"
+    // Registro de dispositivos para push (tokens FCM). Compartido por todos los
+    // perfiles del mismo USER_KEY: cada entrada dice qué perfil tiene activo cada
+    // dispositivo, para despertar solo a los que corresponde.
+    val DEVICES_KEY = "$USER_KEY::devices"
     fun bucketKey(profileId: String): String =
         if (profileId == DEFAULT_PROFILE || profileId.isEmpty()) USER_KEY else "$USER_KEY::$profileId"
 

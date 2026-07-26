@@ -32,6 +32,7 @@ import androidx.core.content.FileProvider
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.google.firebase.messaging.FirebaseMessaging
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -150,7 +151,26 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(ticker); handler.post(ticker)
         doSync()
         handler.removeCallbacks(syncLoop); handler.postDelayed(syncLoop, 10000)
+        registerPushToken()
         if (!updateChecked) { updateChecked = true; checkForUpdates() }
+    }
+
+    // Registra el token de push junto con el perfil activo. Se llama desde beginSession,
+    // que corre tanto al abrir la app como al cambiar de perfil (selectProfile termina
+    // acá): así el registro siempre refleja en qué perfil está parado este dispositivo,
+    // que es lo que decide a quién despertar. Devices.registerLocal devuelve false si
+    // nada cambió, así que el arranque normal no genera tráfico.
+    private fun registerPushToken() {
+        try {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                if (Devices.registerLocal(this, token)) {
+                    Thread { Sync.syncDevices(applicationContext) }.start()
+                }
+            }
+        } catch (e: Exception) {
+            // Dispositivo sin Google Play Services: la app sigue funcionando igual,
+            // solo que se entera de los cambios por el SyncWorker y no al instante.
+        }
     }
 
     // Al abrir la app: si hay una versión nueva en GitHub, ofrece actualizar.

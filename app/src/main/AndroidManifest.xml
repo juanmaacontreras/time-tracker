@@ -59,5 +59,22 @@
                 android:resource="@xml/widget_resumen_info" />
         </receiver>
 
+        <!-- Push silencioso: recibe el aviso de que cambió algo y refresca notificación
+             y widgets. No dibuja ninguna notificación propia. -->
+        <service
+            android:name=".PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Seguro por si alguna vez llegara un push de tipo "notification" (nosotros
+             solo mandamos data): sin esto Android usaría el ícono completo de la app y
+             se vería el cuadrado blanco en la barra de estado, el bug ya conocido. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notif" />
+
     </application>
 </manifest>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "302837911213",
+    "project_id": "bitacora-7ddfa",
+    "storage_bucket": "bitacora-7ddfa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302837911213:android:3bf3796956a51773e10024",
+        "android_client_info": {
+          "package_name": "com.bitacora.timer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJEzWUdNg-51yCXy27wQMa66UQfwtRe_I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

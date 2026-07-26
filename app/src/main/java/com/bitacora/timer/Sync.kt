@@ -76,10 +76,6 @@ object Sync {
         } catch (e: Exception) { false }
     }
 
-    /** Baja el dataset crudo de un bucket cualquiera (para previsualizar un perfil sin activarlo). */
-    fun pullBucketRaw(userKey: String): JSONObject? =
-        try { pull(userKey) } catch (e: Exception) { null }
-
     private fun syncBucket(userKey: String, payloadFn: () -> JSONObject, mergeFn: (JSONObject) -> Unit): Boolean {
         return try {
             val remote = pull(userKey)
@@ -116,7 +112,22 @@ object Sync {
         return arr.getJSONObject(0).optJSONObject("data")
     }
 
+    // Última carga subida con éxito por bucket, para no reescribir la fila cuando el
+    // contenido no cambió.
+    //
+    // Esto pasó a ser CRÍTICO al agregar el push: cada escritura dispara el trigger de
+    // Postgres, que le manda una notificación a los demás dispositivos. Como el ciclo
+    // de sync corre cada 10 segundos con la app abierta y antes subía siempre, tener la
+    // app abierta en un dispositivo le estaba mandando un push a los otros CADA 10
+    // SEGUNDOS — despertándolos todo el tiempo al pedo y tirando abajo justamente el
+    // ahorro de batería que el push venía a dar.
+    private val lastPushed = HashMap<String, String>()
+
     private fun push(userKey: String, data: JSONObject) {
+        val body = data.toString()
+        synchronized(lastPushed) {
+            if (lastPushed[userKey] == body) return
+        }
         val conn = URL("${base()}/rest/v1/buckets?on_conflict=user_key")
             .openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
@@ -134,5 +145,7 @@ object Sync {
         try { conn.inputStream.bufferedReader().use { it.readText() } } catch (_: Exception) {}
         conn.disconnect()
         if (code !in 200..299) throw RuntimeException("push $code")
+        // Solo se recuerda después de un envío exitoso: si falló, hay que reintentar.
+        synchronized(lastPushed) { lastPushed[userKey] = body }
     }
 }

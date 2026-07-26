@@ -178,6 +178,18 @@ edita a mano.
 - **`net.http_post` es fire-and-forget**: si el trigger falla al llamar la función, la
   escritura al bucket igual funciona y nadie se entera. Para diagnosticar hay que
   mirar `net._http_response` en el SQL Editor y los logs de la Edge Function.
+- **NUNCA subir un bucket si el contenido no cambió.** Es la regla más importante desde
+  que existe el push: cada escritura dispara el trigger, que despierta a los demás
+  dispositivos. Los ciclos de sync corren cada 10 s (app) y 8 s (web) y antes subían
+  siempre, así que tener la app abierta en un dispositivo le mandaba un push a los
+  otros **cada 10 segundos**. La guarda está dentro de `Sync.push()` y de `push()` en
+  la web (`lastPushed` por bucket, se registra solo tras un envío exitoso). Si alguna
+  vez se agrega otro camino de escritura, tiene que pasar por ahí.
+- **Redibujar solo si el sync trajo cambios.** Mismo motivo, versión local: `render()`
+  reconstruye la lista, la notificación y los dos widgets, y refrescar el widget
+  reaplica `setChronometer` sobre un cronómetro en vivo (el "flash del número
+  gigante"). `doSync()`, `SyncWorker` y `ACTION_REFRESH` comparan el payload
+  antes/después y solo redibujan si difiere.
 
 ## Estado actual
 
@@ -198,6 +210,10 @@ Confirmado funcionando en dispositivo real:
   demás en segundos, con la app cerrada. Verificado.
 - ✅ Auto-actualización: CI publica Release con APK + `versionCode`; la app chequea
   al abrir y ofrece instalar.
+- ✅ **Backup completo en JSON** (`Store.fullBackup`, tercera opción del diálogo de
+  exportar). Vuelca el dataset crudo de cada perfil guardado localmente más el índice.
+  Existe porque el CSV solo exporta sesiones de un período y no sirve para reconstruir
+  el estado — y porque las limpiezas automáticas ya corrompieron datos dos veces.
 
 ## Pendiente / sin confirmar
 
@@ -212,6 +228,14 @@ Confirmado funcionando en dispositivo real:
 - **`supabase/trigger.sql` está commiteado con el placeholder** `PONER_ACA_EL_PUSH_SECRET`.
   El valor real vive solo en la base y en los secrets de Supabase — no volver a
   commitearlo con el secreto adentro.
+- **El repo es público y `Config.kt` / `web/index.html` traen `SUPABASE_URL`,
+  `SUPABASE_KEY` y `USER_KEY` commiteados.** Cualquiera que encuentre el repo puede
+  leer y escribir todo el historial. No se arregla rotando la clave (la nueva quedaría
+  igual de expuesta): una app sin login que habla directo contra el backend siempre
+  tiene la credencial del lado del cliente. La salida que preserva la auto-actualización
+  sería repo de código privado + un repo público aparte solo con los APK de los
+  releases, y `Updater.LATEST_URL` apuntando a ese segundo. Decisión pendiente del
+  usuario, informada y consciente.
 - Nada de esto tiene tests automatizados; toda verificación es lectura/inspección
   manual del código Kotlin (no se puede compilar en este entorno) o ejecución en
   vivo en el Browser pane (solo para `web/`).

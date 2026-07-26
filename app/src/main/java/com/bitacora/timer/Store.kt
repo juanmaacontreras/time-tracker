@@ -732,6 +732,41 @@ object Store {
         return sb.toString()
     }
 
+    // ---------- backup ----------
+    /**
+     * Volcado crudo de TODO lo que este dispositivo tiene guardado: el dataset completo
+     * de cada perfil (actividades, sesiones, categorías y estado del cronómetro) más el
+     * índice de perfiles. Solo lee, no modifica ni sincroniza nada.
+     *
+     * Existe como red de seguridad: el CSV exporta sesiones de un período y no sirve
+     * para reconstruir el estado. Esto sí.
+     *
+     * Ojo: incluye únicamente los perfiles cuyos datos estén guardados en ESTE
+     * dispositivo. Un perfil que nunca se abrió acá no tiene nada local que volcar.
+     *
+     * A propósito SIN @Synchronized: no toca el cache de Store (solo lee
+     * SharedPreferences, que ya es thread-safe) y llama a ProfileStore. Tomar el lock de
+     * Store para después pedir el de ProfileStore invertiría el orden que usa
+     * ProfileStore.deleteProfile() -> Store.clearProfileData(), y eso sería un deadlock
+     * esperando a que alguien sincronice clearProfileData.
+     */
+    fun fullBackup(ctx: Context): JSONObject {
+        val porPerfil = JSONObject()
+        for (p in ProfileStore.profiles(ctx)) {
+            val pid = p.optString("id", "")
+            if (pid.isEmpty()) continue
+            val raw = prefs(ctx).getString(dataKey(pid), null) ?: continue
+            try { porPerfil.put(pid, JSONObject(raw)) } catch (e: Exception) { /* dato ilegible: se omite */ }
+        }
+        return JSONObject()
+            .put("app", "bitacora")
+            .put("formato", 1)
+            .put("exportadoEl", now())
+            .put("perfilActivo", currentProfileId(ctx))
+            .put("indiceDePerfiles", ProfileStore.payload(ctx))
+            .put("perfiles", porPerfil)
+    }
+
     // ---------- sync payload + merge ----------
     @Synchronized
     fun payload(ctx: Context): JSONObject {

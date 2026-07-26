@@ -741,6 +741,28 @@ const Store = {
     return sb;
   },
 
+  // ---- backup ----
+  // Volcado crudo de TODO lo guardado en este navegador: el dataset completo de cada
+  // perfil más el índice. Solo lee. Espejo de Store.fullBackup en Kotlin — mismos
+  // nombres de campo, así un backup de un lado se entiende del otro.
+  // Incluye únicamente los perfiles que tengan datos en ESTE navegador.
+  fullBackup() {
+    const porPerfil = {};
+    for (const p of ProfileStore.profiles()) {
+      const raw = localStorage.getItem(this.dataKey(p.id));
+      if (!raw) continue;
+      try { porPerfil[p.id] = JSON.parse(raw); } catch (e) { /* dato ilegible: se omite */ }
+    }
+    return {
+      app: "bitacora",
+      formato: 1,
+      exportadoEl: now(),
+      perfilActivo: this.currentProfileId(),
+      indiceDePerfiles: ProfileStore.payload(),
+      perfiles: porPerfil
+    };
+  },
+
   // ---- sync payload + merge (contrato con la app) ----
   payload() {
     const r = this.root();
@@ -838,7 +860,15 @@ async function pull(userKey) {
   const arr = await r.json();
   return arr.length ? arr[0].data : null;
 }
+// Última carga subida con éxito por bucket, para no reescribir la fila cuando el
+// contenido no cambió. Espejo de Sync.lastPushed en Kotlin, y por el mismo motivo
+// crítico: cada escritura dispara el trigger que manda el push a los demás
+// dispositivos, y este sync corre cada 8 segundos. Sin esta guarda, tener la web
+// abierta le despierta el celu al usuario cada 8 segundos.
+const lastPushed = {};
 async function push(userKey, data) {
+  const payload = JSON.stringify(data);
+  if (lastPushed[userKey] === payload) return;
   const url = `${CFG.url}/rest/v1/buckets?on_conflict=user_key`;
   const body = [{ user_key: userKey, data, updated_at: now() }];
   const r = await fetch(url, {
@@ -847,6 +877,8 @@ async function push(userKey, data) {
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error("push " + r.status);
+  // Solo se recuerda después de un envío exitoso: si falló, hay que reintentar.
+  lastPushed[userKey] = payload;
 }
 function setSync(state) { const d = document.getElementById("syncDot"); d.className = "dot-sync " + state; }
 async function syncBucket(userKey, payloadFn, mergeFn) {
@@ -1496,11 +1528,24 @@ function onExportClick() {
   const catName = statsCategory === "all" ? "" : (Store.categoryById(statsCategory)?.name || statsCategory);
   const filterLbl = statsCategory === "all" ? periodTxt : `${periodTxt} · ${catName}`;
   const d = h("div", { class: "dialog" },
-    h("h3", null, "Exportar CSV"),
-    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(false); } }, "Todo el historial"),
-    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(true); } }, `Solo lo filtrado (${filterLbl})`),
+    h("h3", null, "Exportar"),
+    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(false); } }, "Historial completo (CSV)"),
+    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(true); } }, `Solo lo filtrado (CSV) · ${filterLbl}`),
+    h("button", { class: "dchoice", onclick: () => { closeModal(); doBackup(); } }, "Backup completo (JSON)"),
     h("div", { class: "dbtns" }, h("button", { class: "dbtn ghost", onclick: closeModal }, "Cancelar")));
   showModal(d);
+}
+// Backup crudo y completo, para poder volver atrás si algo corrompe los datos. El CSV
+// no sirve para eso: exporta sesiones de un período, no el estado entero.
+function doBackup() {
+  const json = JSON.stringify(Store.fullBackup(), null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const fecha = new Date().toISOString().slice(0, 10);
+  const a = document.createElement("a");
+  // Nombre con fecha para que dos backups no se pisen entre sí.
+  a.href = url; a.download = `bitacora-backup-${fecha}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function doExport(filtered) {
   let csv;
@@ -1673,8 +1718,11 @@ setInterval(() => {
   updateTitle();
 }, 1000);
 
-/* Sync loop + eventos */
-setInterval(sync, 8000);
+/* Sync loop + eventos.
+   Antes cada 8s, cuando era la única forma de enterarse de un cambio hecho en otro
+   dispositivo. Con el push andando eso llega en segundos por la otra vía, así que este
+   ciclo quedó solo como respaldo — además del sync inmediato al volver a la pestaña. */
+setInterval(sync, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
 window.addEventListener("focus", sync);
 

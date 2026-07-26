@@ -81,10 +81,16 @@ class MainActivity : AppCompatActivity() {
             handler.postDelayed(this, 1000)
         }
     }
+    // Antes cada 10s, cuando el sync periódico era la ÚNICA forma de enterarse de un
+    // cambio hecho en otro dispositivo. Con el push andando eso llega en segundos por
+    // la otra vía, así que este ciclo quedó solo como respaldo para cuando el push no
+    // llega (sin señal, o si algo del lado del servidor se rompe).
+    private val SYNC_LOOP_MS = 60000L
+
     private val syncLoop = object : Runnable {
         override fun run() {
             doSync()
-            handler.postDelayed(this, 10000)
+            handler.postDelayed(this, SYNC_LOOP_MS)
         }
     }
 
@@ -158,7 +164,7 @@ class MainActivity : AppCompatActivity() {
         render()
         handler.removeCallbacks(ticker); handler.post(ticker)
         doSync()
-        handler.removeCallbacks(syncLoop); handler.postDelayed(syncLoop, 10000)
+        handler.removeCallbacks(syncLoop); handler.postDelayed(syncLoop, SYNC_LOOP_MS)
         registerPushToken()
         if (!updateChecked) { updateChecked = true; checkForUpdates() }
     }
@@ -1402,9 +1408,19 @@ class MainActivity : AppCompatActivity() {
             val catName = Store.categoryById(this, statsCategory)?.optString("name", "") ?: statsCategory
             val filterLabel = if (statsCategory == "all") periodTxt else "$periodTxt · $catName"
             AlertDialog.Builder(this, R.style.AppDialog)
-                .setTitle("Exportar CSV")
-                .setItems(arrayOf("Todo el historial", "Solo lo filtrado ($filterLabel)")) { _, which ->
-                    exportCsv(filtered = which == 1)
+                .setTitle("Exportar")
+                .setItems(
+                    arrayOf(
+                        "Historial completo (CSV)",
+                        "Solo lo filtrado (CSV) · $filterLabel",
+                        "Backup completo (JSON)"
+                    )
+                ) { _, which ->
+                    when (which) {
+                        0 -> exportCsv(filtered = false)
+                        1 -> exportCsv(filtered = true)
+                        else -> exportBackup()
+                    }
                 }
                 .show()
         }
@@ -1754,11 +1770,19 @@ class MainActivity : AppCompatActivity() {
         d.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(col(R.color.live))
     }
 
+    // Solo redibuja si el sync trajo cambios reales. Mismo criterio que SyncWorker y que
+    // TimerWidget.ACTION_REFRESH, que acá había quedado sin aplicar: como este ciclo corre
+    // cada 10 segundos con la app abierta, render() reconstruía toda la lista, la
+    // notificación y AMBOS widgets sin que hubiera cambiado nada. Y refrescar el widget
+    // reaplica setChronometer sobre un Chronometer en vivo, que es exactamente el "flash
+    // del número gigante" ya documentado.
     private fun doSync() {
         if (!Config.syncEnabled()) return
         Thread {
+            val before = Store.payload(this).toString()
             val ok = Sync.syncNow(this)
-            runOnUiThread { if (ok) render() }
+            val changed = Store.payload(this).toString() != before
+            runOnUiThread { if (ok && changed) render() }
         }.start()
     }
 
@@ -1784,6 +1808,27 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent.createChooser(send, "Exportar CSV"))
         } catch (e: Exception) {
             Toast.makeText(this, "No se pudo exportar", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Backup crudo y completo, para poder volver atrás si algo corrompe los datos.
+    // El CSV no sirve para eso: exporta sesiones de un período, no el estado entero.
+    private fun exportBackup() {
+        try {
+            val json = Store.fullBackup(this).toString(2)
+            val fecha = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                .format(java.util.Date(Store.now()))
+            // Nombre con fecha para que dos backups no se pisen entre sí.
+            val file = File(cacheDir, "bitacora-backup-$fecha.json")
+            file.writeText(json)
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND)
+            send.type = "application/json"
+            send.putExtra(Intent.EXTRA_STREAM, uri)
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, "Guardar backup"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No se pudo generar el backup", Toast.LENGTH_SHORT).show()
         }
     }
 }

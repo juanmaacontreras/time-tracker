@@ -163,9 +163,11 @@ class MainActivity : AppCompatActivity() {
     private fun registerPushToken() {
         try {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                if (Devices.registerLocal(this, token)) {
-                    Thread { Sync.syncDevices(applicationContext) }.start()
-                }
+                // Se sincroniza SIEMPRE, no solo cuando el token cambió localmente: es
+                // la única forma de enterarse de que el servidor dio de baja esta
+                // entrada por token muerto. Es un pedido por apertura de la app, no por
+                // ciclo de sync, así que el costo es despreciable.
+                Thread { Sync.syncDevices(applicationContext, token) }.start()
             }
         } catch (e: Exception) {
             // Dispositivo sin Google Play Services: la app sigue funcionando igual,

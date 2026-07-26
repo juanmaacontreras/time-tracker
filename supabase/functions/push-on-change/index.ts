@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
   // Mensaje SOLO de datos (sin bloque "notification"): Android no dibuja nada por su
   // cuenta, se lo entrega a PushService y la app decide. priority HIGH es lo que hace
   // que el equipo se despierte aunque esté en Doze.
+  const dead: string[] = [];
   const results = await Promise.all(
     targets.map(async (token: string) => {
       const r = await fetch(
@@ -167,18 +168,44 @@ Deno.serve(async (req) => {
         },
       );
       if (!r.ok) {
-        // Un 404/UNREGISTERED significa token muerto (app desinstalada o datos
-        // borrados). No se limpia acá a propósito: con pocos dispositivos no molesta,
-        // y limpiarlo implicaría reescribir el bucket desde el servidor.
-        console.error(`fcm ${r.status} para ${token.slice(0, 12)}…: ${await r.text()}`);
+        const body = await r.text();
+        console.error(`fcm ${r.status} para ${token.slice(0, 12)}…: ${body}`);
+        // Token muerto: la instalación a la que pertenecía ya no existe (se desinstaló
+        // la app, se borraron sus datos, o cambió la firma del APK). Se marca borrado
+        // para que la app lo note y se vuelva a registrar sola en su próxima apertura.
+        // Sin esto el push queda roto en silencio y para siempre.
+        if (r.status === 404 || body.includes("UNREGISTERED") || body.includes("INVALID_ARGUMENT")) {
+          dead.push(token);
+        }
       }
       return r.ok;
     }),
   );
 
+  if (dead.length > 0) {
+    const limpio = devices.map((d: Record<string, unknown>) =>
+      dead.includes(String(d.token)) ? { ...d, deleted: true, updatedAt: Date.now() } : d
+    );
+    // Escribir este bucket vuelve a disparar el trigger, pero el sufijo "devices" está
+    // salteado más arriba, así que no hay realimentación.
+    await fetch(`${SUPABASE_URL}/rest/v1/buckets?on_conflict=user_key`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE,
+        Authorization: `Bearer ${SERVICE_ROLE}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify([
+        { user_key: devicesKey, data: { devices: limpio }, updated_at: Date.now() },
+      ]),
+    });
+    console.log(`marcados ${dead.length} token(s) muertos para re-registro`);
+  }
+
   const sent = results.filter(Boolean).length;
   console.log(`perfil ${profileId}: ${sent}/${targets.length} enviados`);
-  return new Response(JSON.stringify({ profileId, sent, total: targets.length }), {
+  return new Response(JSON.stringify({ profileId, sent, total: targets.length, dead: dead.length }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

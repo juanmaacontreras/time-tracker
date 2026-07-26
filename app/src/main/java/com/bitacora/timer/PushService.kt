@@ -17,9 +17,7 @@ class PushService : FirebaseMessagingService() {
         // El token rota solo a veces (reinstalación, borrado de datos, restore). Si no
         // se re-registra, el dispositivo deja de recibir push en silencio.
         val ctx = applicationContext
-        if (Devices.registerLocal(ctx, token)) {
-            Thread { Sync.syncDevices(ctx) }.start()
-        }
+        Thread { Sync.syncDevices(ctx, token) }.start()
     }
 
     override fun onMessageReceived(message: RemoteMessage) {

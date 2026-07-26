@@ -39,10 +39,25 @@ object Sync {
         } catch (e: Exception) { false }
     }
 
-    /** Pull + merge + push del registro de dispositivos (tokens de push). */
-    fun syncDevices(ctx: Context): Boolean {
+    /**
+     * Registra este dispositivo en el bucket de tokens. Fuera del hilo principal.
+     *
+     * El orden importa y es la parte delicada: primero se BAJA el registro remoto y se
+     * fusiona, y recién después se registra el token local. Así, si el servidor marcó
+     * esta entrada como borrada — cosa que hace la Edge Function cuando FCM le contesta
+     * que el token está muerto —, la app se entera y se vuelve a registrar con un token
+     * fresco. Al revés (registrar y después fusionar) el dispositivo nunca se enteraría
+     * de esa baja y el push quedaría roto para siempre, en silencio.
+     */
+    fun syncDevices(ctx: Context, token: String): Boolean {
         if (!Config.syncEnabled()) return false
-        return syncBucket(Config.DEVICES_KEY, { Devices.payload(ctx) }, { r -> Devices.merge(ctx, r) })
+        return try {
+            val remote = pull(Config.DEVICES_KEY)
+            if (remote != null) Devices.merge(ctx, remote)
+            Devices.registerLocal(ctx, token)
+            push(Config.DEVICES_KEY, Devices.payload(ctx))
+            true
+        } catch (e: Exception) { false }
     }
 
     /** Solo sube el estado del perfil activo. Fuera del hilo principal. */

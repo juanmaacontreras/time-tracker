@@ -132,10 +132,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Con el push andando, este worker dejó de ser la vía principal para enterarse de
+    // los cambios y quedó solo como red de seguridad (el push es best-effort: sin señal
+    // se pierde). Por eso pasó de 15 minutos a 1 hora: de ~96 despertadas diarias a ~24,
+    // casi todas para descubrir que no cambió nada.
+    //
+    // UPDATE en vez de KEEP a propósito: con KEEP, WorkManager conserva el trabajo ya
+    // encolado con el intervalo viejo y el cambio no tendría ningún efecto en los
+    // dispositivos donde la app ya venía instalada.
     private fun scheduleBackgroundSync() {
-        val req = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).build()
+        val req = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS).build()
         WorkManager.getInstance(this)
-            .enqueueUniquePeriodicWork("bitacora-sync", ExistingPeriodicWorkPolicy.KEEP, req)
+            .enqueueUniquePeriodicWork("bitacora-sync", ExistingPeriodicWorkPolicy.UPDATE, req)
     }
 
     override fun onResume() {

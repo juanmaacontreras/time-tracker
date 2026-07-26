@@ -3,7 +3,8 @@
 Cronómetro de estudio/lectura. Android nativo (Kotlin, Views programáticas, sin
 Compose) + una versión web espejo (`web/index.html`, un solo archivo). Sincronizan
 contra el mismo backend Supabase. Multi-perfil (varias personas, mismo dispositivo o
-distintos), 5 temas de color, widgets de home screen, notificación persistente,
+distintos), 5 temas de color, categorías con ícono propio, widgets de home screen,
+notificación persistente, push silencioso entre dispositivos (FCM) y
 auto-actualización desde GitHub Releases.
 
 No hay Gradle/Android SDK en el entorno donde se desarrolla esto — todo el trabajo en
@@ -20,14 +21,23 @@ app/src/main/java/com/bitacora/timer/
   Store.kt          — modelo de datos del perfil activo (actividades, sesiones, timer). Cache en memoria + @Synchronized.
   ProfileStore.kt   — índice de perfiles (sincronizado), separado del dataset de cada perfil.
   Themes.kt         — 5 paletas de color, resuelve @color/indigo y @color/live según el tema del perfil activo.
-  Sync.kt           — pull/push contra Supabase, parametrizado por "bucket key" (perfil).
-  SyncWorker.kt     — WorkManager, corre cada ~15 min en background aunque la app esté cerrada.
+  Sync.kt           — pull/push contra Supabase, parametrizado por "bucket key" (perfil). Timeout configurable.
+  SyncWorker.kt     — WorkManager, corre cada ~1 h en background aunque la app esté cerrada (red de seguridad del push).
   TimerWidget.kt / ResumenWidget.kt — widgets de home screen.
-  Notifs.kt         — notificación persistente (vista custom con cronómetro grande).
+  Notifs.kt         — notificación persistente (vista custom, swatch de categoría + cronómetro grande).
+  Devices.kt        — registro de tokens FCM por dispositivo, con el perfil que cada uno tiene activo.
+  PushService.kt    — recibe el push silencioso y refresca notificación + widgets.
+  CategoryIcons.kt  — set curado de 10 íconos de categoría (claves compartidas con la web).
   Updater.kt        — chequea GitHub Releases al abrir la app, ofrece descargar+instalar.
   Config.kt         — credenciales Supabase + helpers de bucket key por perfil.
 web/index.html      — versión web, espejo funcional 1:1 de Store/ProfileStore/Sync. Un solo archivo, sin build step.
+supabase/
+  functions/push-on-change/index.ts — Edge Function (Deno) que manda el push FCM al cambiar un bucket.
+  trigger.sql       — trigger de Postgres + pg_net que llama a esa función. Se corre a mano en el SQL Editor.
 ```
+
+`supabase/` queda fuera de las rutas que disparan el workflow de CI, así que se puede
+editar sin gatillar builds de APK.
 
 ## Decisiones de arquitectura
 
@@ -38,6 +48,32 @@ datos que ya existían antes de que existieran los perfiles). Hay un bucket extr
 `USER_KEY::index`, con el índice de perfiles (id/nombre/tema), que también se
 sincroniza y se fusiona igual que actividades/sesiones (gana el `updatedAt` más
 nuevo).
+
+**Categorías = entidad propia, no texto libre.** El campo `type` de cada actividad
+guarda un **id de categoría**, no un nombre. Las categorías viven en el array
+`categories` del mismo bucket del perfil (`{id, name, icon, color}`) y se fusionan
+como todo lo demás. Hay una migración automática que corre una sola vez y convierte
+los `type` de texto libre que existían antes. El id de una categoría nueva se deriva
+del nombre con un hash estable (FNV-1a, mismo algoritmo bit a bit en Kotlin y en la
+web): si dos dispositivos migran por separado, "Materia" da el mismo id en los dos y
+no se duplica. `Store.categoryForActivity()` nunca devuelve null — cae a un "General"
+virtual si el id no resuelve.
+
+**Push silencioso vía FCM.** Un trigger de Postgres sobre la tabla `buckets` llama
+(con `pg_net`) a una Edge Function, que busca en el bucket `USER_KEY::devices` qué
+dispositivos tienen activo **ese** perfil y les manda un mensaje de datos con
+`priority: HIGH`. El mensaje es solo un "timbre": no lleva ningún dato, solo el
+`profileId`, y la app sale a buscar el resto por su cuenta — así los datos reales
+nunca pasan por Google. Los buckets `::index` y `::devices` se saltean explícitamente
+en la función; saltear `::devices` es lo que corta la realimentación (registrar un
+token escribe ese bucket).
+
+**El sistema de tokens se repara solo.** Si FCM contesta `UNREGISTERED` (token muerto
+por reinstalación o cambio de firma), la Edge Function marca esa entrada como borrada,
+y la app lo detecta al abrirse y se registra de nuevo. Para que eso funcione el orden
+en `Sync.syncDevices()` es crítico: **primero baja y fusiona el registro remoto, y
+recién después registra el token local**. Al revés, el dispositivo nunca se entera de
+su propia baja y el push queda roto en silencio para siempre.
 
 **Store tiene cache en memoria + `@Synchronized`.** Antes cada llamada a
 `Store.root()` releía y re-parseaba TODO el JSON desde SharedPreferences — con
@@ -103,31 +139,79 @@ edita a mano.
 - **No hay `keytool` en el PATH** de este entorno; está en
   `C:\Program Files\Java\jre1.8.0_471\bin\keytool.exe` (usado para generar
   `app.keystore`).
+- **Las limpiezas de categorías NO deben reescribir ids existentes.** Una versión
+  anterior del dedupe le asignaba a la categoría conservada un "id canónico" derivado
+  del nombre. Como la tabla de remapeo es común a todos los grupos, el id viejo de un
+  grupo podía coincidir con el id canónico de otro, el remapeo se pisaba y **las
+  actividades terminaban en la categoría equivocada** (pasó de verdad: "Scout" saltó
+  de Otros a Libro). Ahora se conserva el id que la categoría ya tenía, así un id que
+  se conserva nunca es origen de un remapeo y la colisión es imposible.
+- **Nunca resucitar una categoría borrada.** El dedupe tenía una rama que, si todas
+  las entradas de un nombre estaban borradas, revivía la primera. Con nombres
+  duplicados en el historial eso hacía que **borrar una categoría la hiciera
+  reaparecer**. Si todo el grupo está borrado, se consolida pero queda borrado.
+- **Las pasadas de limpieza no deben escribir si no cambió nada.** Reescribían
+  `updatedAt` de entradas ya borradas en cada carga, generando escrituras y sync
+  constantes de la nada. Toda limpieza tiene que ser idempotente: dos cargas
+  seguidas no pueden producir ningún cambio.
+- **Acciones del widget/notificación: primero mutar local, después la red.** Antes
+  cada botón hacía `Sync.pullMerge()` ANTES de tocar el estado, así que pausar
+  esperaba un round-trip completo (hasta 12s de timeout). Es seguro invertirlo porque
+  toda mutación sella `runChangedAt = now()` y le gana a cualquier estado remoto más
+  viejo en el merge. Ver `TimerWidget.applyThenSync()`.
+- **La UI abierta necesita detectar cambios externos.** `MainActivity` solo se
+  enteraba de lo que hacían la notificación o el widget en su ciclo de sync de 10s.
+  El ticker de 1s ahora compara una firma barata del estado (`stateSig()`) y
+  redibuja apenas cambia.
+- **`onMessageReceived` tiene ~10s de presupuesto** y el timeout normal de `Sync` es
+  de 12s: el camino del push usa uno más corto (`PUSH_TIMEOUT_MS`). Si no llega a
+  tiempo no se pierde nada, lo levanta el `SyncWorker`.
+- **`ExistingPeriodicWorkPolicy.KEEP` ignora cambios de intervalo.** Al pasar el
+  worker de 15 min a 1 h hubo que cambiarlo a `UPDATE`; con `KEEP`, WorkManager
+  conserva el trabajo ya encolado y el cambio no tiene efecto donde la app ya estaba
+  instalada.
+- **La Edge Function tiene que desplegarse con "Verify JWT" DESACTIVADO.** El trigger
+  se autentica con el header propio `x-push-secret`, no con un JWT de Supabase. Con
+  la verificación activada el trigger nunca la puede llamar. Diagnóstico rápido: un
+  POST sin el header debe devolver `401 unauthorized` en texto plano (si devuelve un
+  JSON de error de Supabase, la verificación sigue prendida).
+- **`net.http_post` es fire-and-forget**: si el trigger falla al llamar la función, la
+  escritura al bucket igual funciona y nadie se entera. Para diagnosticar hay que
+  mirar `net._http_response` en el SQL Editor y los logs de la Edge Function.
 
-## Estado actual (todo implementado, nada confirmado en dispositivo real todavía)
+## Estado actual
+
+Confirmado funcionando en dispositivo real:
 
 - ✅ Cronómetro con pausa/resumen, widgets, notificación, sync, export CSV.
 - ✅ Perfiles multi-usuario sincronizados (app + web), con borrado que exige escribir
   "borrar".
 - ✅ 5 temas de color por perfil (app + web).
 - ✅ Resumen con navegación de períodos pasados (◀ ▶) y gráfico semanal apilado por
-  categoría (recién implementado, verificado en el Browser pane para la web).
-- ✅ Notificación con cronómetro grande (vista custom, `DecoratedCustomViewStyle`).
+  categoría, con bordes redondeados en las barras apiladas.
+- ✅ Categorías como entidad, con ícono y color propios, desplegable de selección y
+  alta/edición/borrado (app + web). Migración desde los `type` de texto libre.
+- ✅ Notificación rediseñada estilo reproductor: swatch de identidad, cronómetro
+  grande, botones propios (no `.addAction()`) presentes también sin expandir, y sin
+  la fila de ícono/nombre de la app (se sacó `DecoratedCustomViewStyle`).
+- ✅ **Push silencioso end-to-end**: cambiar algo en un dispositivo actualiza los
+  demás en segundos, con la app cerrada. Verificado.
 - ✅ Auto-actualización: CI publica Release con APK + `versionCode`; la app chequea
   al abrir y ofrece instalar.
 
 ## Pendiente / sin confirmar
 
-- **El usuario todavía no probó en el celu** el fix del perfil que se reseteaba, la
-  notificación grande, ni la auto-actualización end-to-end (bajar+instalar un APK
-  real desde un Release).
-- **Cambio de firma del keystore**: la próxima instalación en cada dispositivo va a
-  requerir desinstalar la versión vieja una vez (firma distinta). A partir de esa,
-  las actualizaciones futuras se instalan una sobre otra sin reinstalar. Falta
-  confirmar que el flujo completo (banner "Actualizar" → descarga → instalador de
-  Android) funciona en la práctica.
+- **Tokens FCM muertos que quedaron de antes**: la Edge Function ahora los da de baja
+  sola, pero si aparecieran entradas viejas huérfanas en `USER_KEY::devices` (de
+  instalaciones que ya no existen y nunca se vuelven a abrir) nadie las borra. Con
+  pocos dispositivos no molesta; si crece, conviene una limpieza por antigüedad.
+- **La web no recibe push** — necesitaría un service worker, y como normalmente está
+  abierta en una pestaña ya sincroniza al volver a ella. Decisión consciente.
 - **Widget/notificación no siguen el tema del perfil** — decisión consciente, pero
   si el usuario lo pide hay que revisar esos tres archivos.
+- **`supabase/trigger.sql` está commiteado con el placeholder** `PONER_ACA_EL_PUSH_SECRET`.
+  El valor real vive solo en la base y en los secrets de Supabase — no volver a
+  commitearlo con el secreto adentro.
 - Nada de esto tiene tests automatizados; toda verificación es lectura/inspección
   manual del código Kotlin (no se puede compilar en este entorno) o ejecución en
   vivo en el Browser pane (solo para `web/`).

@@ -139,11 +139,18 @@ class TimerWidget : AppWidgetProvider() {
                 views.setOnClickPendingIntent(R.id.w_stop, stopPi)
             } else {
                 views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
-                // Texto fijo en vez de setChronometer(started=false): un Chronometer parado
-                // igual depende de que el host aplique base+started correctamente en cada
-                // render; si el widget queda con la vista vieja de una sesión ya terminada
-                // (el host solo re-renderiza en eventos puntuales, no de forma continua),
-                // puede mostrar el tiempo corrido de esa sesión vieja en vez de 00:00.
+                // Las DOS cosas, y en este orden. Son para dos problemas distintos:
+                //
+                // 1) setChronometer(started = false) es lo único que realmente DETIENE
+                //    el Chronometer. w_chrono es un Chronometer, no un TextView: si
+                //    quedó corriendo, escribirle texto no lo frena y al segundo
+                //    siguiente pisa lo que se le puso (era el bug de "paro el timer
+                //    desde la app y el widget sigue contando"). base = ahora lo deja
+                //    además en 00:00.
+                // 2) setTextViewText fija el texto para el caso en que el host
+                //    reaplique un estado viejo (por ejemplo tras reiniciar el celu) y
+                //    aparezca el tiempo corrido de una sesión ya terminada.
+                views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
                 views.setTextViewText(R.id.w_chrono, "00:00")
                 views.setViewVisibility(R.id.w_pause, View.GONE)
                 views.setViewVisibility(R.id.w_stop, View.GONE)

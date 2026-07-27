@@ -41,7 +41,12 @@ jobs:
           echo "Versión publicada: $VER"
           grep -n "const VERSION" web/sw.js
 
+      # enablement: intenta activar Pages por API si el repo todavía no lo tiene.
+      # Sin esto, el primer despliegue falla con "Get Pages site failed ... Not Found"
+      # hasta que alguien lo prenda a mano en Settings → Pages.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       # Se sube SOLO web/: el sitio queda con index.html en la raíz, así que todas las
       # rutas relativas del manifest y del service worker resuelven bien.

@@ -7,7 +7,10 @@
 <!-- PWA: permite instalarla como aplicación (ventana propia, ícono, sin barra del
      navegador). Solo tiene efecto servida por HTTPS — desde file:// se ignora. -->
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#2F4B8F" />
+<!-- Color de la barra de título de la ventana instalada (Chrome/Edge la pintan con
+     esto). Arranca en el tono oscuro y se corrige por JS según el tema real ni bien
+     carga la página — ver applyTitlebarColor más abajo. -->
+<meta name="theme-color" id="themeColorMeta" content="#0E1420" />
 <link rel="icon" href="icons/icon-192.png" />
 <style>
 /* ==========================================================================
@@ -47,6 +50,14 @@
 
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html,body { margin:0; padding:0; }
+
+/* Scrollbar acorde al tema en vez del gris nativo del navegador (Firefox + Chromium/Edge). */
+html { scrollbar-color: var(--line) var(--paper); scrollbar-width: thin; }
+::-webkit-scrollbar { width:12px; height:12px; }
+::-webkit-scrollbar-track { background:var(--paper); }
+::-webkit-scrollbar-thumb { background:var(--line); border-radius:8px; border:3px solid var(--paper); }
+::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+
 body {
   background:var(--paper); color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -1701,6 +1712,17 @@ document.getElementById("tabResumen").onclick = () => switchTab("resumen");
 function initTheme() {
   const saved = localStorage.getItem("theme");
   if (saved) document.documentElement.setAttribute("data-theme", saved);
+  applyTitlebarColor();
+}
+// Mantiene la barra de título de la ventana instalada (Chrome/Edge) en el mismo tono
+// que el fondo de la app, en vez de quedar fija en el indigo del ícono. Un solo <meta
+// name="theme-color"> actualizado por JS, en vez de variantes con
+// prefers-color-scheme: así respeta también el toggle manual claro/oscuro de acá
+// adentro, no solo la preferencia del sistema.
+function applyTitlebarColor() {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const isDark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.getElementById("themeColorMeta").setAttribute("content", isDark ? "#0E1420" : "#F4F6FA");
 }
 document.getElementById("themeBtn").onclick = () => {
   const cur = document.documentElement.getAttribute("data-theme");
@@ -1708,6 +1730,7 @@ document.getElementById("themeBtn").onclick = () => {
   const next = isDark ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
+  applyTitlebarColor();
 };
 
 /* Ticker: refresca el tiempo en vivo sin re-renderizar toda la lista.

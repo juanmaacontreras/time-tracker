@@ -1,0 +1,53 @@
+name: Publicar web (GitHub Pages)
+
+# Solo cuando cambia la web. El workflow de la APK filtra por 'app/**' y demás, así que
+# los dos no se pisan: tocar el HTML no dispara un build de Android ni al revés.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Si se empujan dos cambios seguidos, que gane el último en vez de encimarse.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historial completo para contar commits
+
+      # El service worker se publica con un número de versión real. Es lo que hace que
+      # el navegador detecte que cambió y le ofrezca actualizar al usuario. Se usa la
+      # misma cuenta de commits que el versionCode de la APK, así los números coinciden.
+      - name: Inyectar versión en el service worker
+        run: |
+          VER=$(git rev-list --count HEAD)
+          sed -i "s/__VERSION__/$VER/g" web/sw.js
+          echo "Versión publicada: $VER"
+          grep -n "const VERSION" web/sw.js
+
+      - uses: actions/configure-pages@v5
+
+      # Se sube SOLO web/: el sitio queda con index.html en la raíz, así que todas las
+      # rutas relativas del manifest y del service worker resuelven bien.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

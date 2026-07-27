@@ -4,6 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Bitácora</title>
+<!-- PWA: permite instalarla como aplicación (ventana propia, ícono, sin barra del
+     navegador). Solo tiene efecto servida por HTTPS — desde file:// se ignora. -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#2F4B8F" />
+<link rel="icon" href="icons/icon-192.png" />
 <style>
 /* ==========================================================================
    Bitácora — versión web. Un solo archivo, sin dependencias.
@@ -1746,6 +1751,57 @@ if (Store.hasChosenProfile()) {
   pullIndex().then(() => { if (!Store.hasChosenProfile()) showMandatoryPicker(); });
 }
 sync();
+
+/* ====================== PWA: instalación y actualizaciones ==================
+   Solo corre servida por HTTPS; desde file:// no hay service worker y todo esto
+   se saltea sin romper nada.
+
+   El punto delicado es el estado "waiting". Cuando el navegador encuentra un sw.js
+   distinto, lo instala en segundo plano pero NO lo activa: se queda esperando a que
+   se cierren todas las pestañas de la app. Como esta web se usa siempre abierta, sin
+   manejarlo explícitamente te podés quedar semanas con la versión vieja sintiendo que
+   "no se actualiza". Por eso acá se detecta ese estado, se le pregunta al usuario, y
+   al aceptar se le ordena activarse y se recarga. */
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  let recargando = false;
+  // Cuando el service worker nuevo toma el control, la página se recarga una sola vez.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (recargando) return;
+    recargando = true;
+    location.reload();
+  });
+
+  const ofrecerActualizacion = (esperando) => {
+    confirmDialog(
+      "Hay una versión nueva",
+      "Ya está descargada. Actualizar recarga la app; no se pierde nada de lo que tengas registrado.",
+      "Actualizar", false,
+      () => esperando.postMessage("SKIP_WAITING")
+    );
+  };
+
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    // Caso 1: al abrir ya había una versión esperando de una visita anterior.
+    if (reg.waiting && navigator.serviceWorker.controller) ofrecerActualizacion(reg.waiting);
+
+    // Caso 2: aparece una versión nueva con la app abierta.
+    reg.addEventListener("updatefound", () => {
+      const nuevo = reg.installing;
+      if (!nuevo) return;
+      nuevo.addEventListener("statechange", () => {
+        // controller existe solo si YA había un service worker activo: sin eso, este
+        // "installed" es la primera instalación y no hay nada que avisar.
+        if (nuevo.state === "installed" && navigator.serviceWorker.controller) {
+          ofrecerActualizacion(nuevo);
+        }
+      });
+    });
+
+    // El navegador chequea solo cada tanto, pero una pestaña que queda abierta días
+    // puede tardar en enterarse. Un chequeo por hora es barato (una request a sw.js).
+    setInterval(() => reg.update().catch(() => {}), 3600000);
+  }).catch(() => { /* sin service worker la app funciona igual, solo no es instalable */ });
+}
 </script>
 </body>
 </html>

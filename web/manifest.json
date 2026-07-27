@@ -1,0 +1,26 @@
+{
+  "name": "Bitácora",
+  "short_name": "Bitácora",
+  "description": "Cronómetro de estudio y lectura, sincronizado entre dispositivos.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#2F4B8F",
+  "background_color": "#0E1420",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

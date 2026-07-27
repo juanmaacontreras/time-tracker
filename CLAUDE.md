@@ -31,13 +31,17 @@ app/src/main/java/com/bitacora/timer/
   Updater.kt        — chequea GitHub Releases al abrir la app, ofrece descargar+instalar.
   Config.kt         — credenciales Supabase + helpers de bucket key por perfil.
 web/index.html      — versión web, espejo funcional 1:1 de Store/ProfileStore/Sync. Un solo archivo, sin build step.
+web/manifest.json   — PWA: la vuelve instalable (ventana propia, ícono). Rutas relativas: el sitio cuelga de /time-tracker/.
+web/sw.js           — service worker: cache offline + detección de versión nueva. VERSION la inyecta el CI.
+web/icons/          — íconos PNG 192/512, generados replicando ic_launcher (reloj blanco sobre #2F4B8F).
 supabase/
   functions/push-on-change/index.ts — Edge Function (Deno) que manda el push FCM al cambiar un bucket.
   trigger.sql       — trigger de Postgres + pg_net que llama a esa función. Se corre a mano en el SQL Editor.
 ```
 
 `supabase/` queda fuera de las rutas que disparan el workflow de CI, así que se puede
-editar sin gatillar builds de APK.
+editar sin gatillar builds de APK. Hay dos workflows y no se pisan: `build.yml` filtra
+por `app/**` y compila la APK; `pages.yml` filtra por `web/**` y publica la web.
 
 ## Decisiones de arquitectura
 
@@ -200,6 +204,17 @@ edita a mano.
   reaplica `setChronometer` sobre un cronómetro en vivo (el "flash del número
   gigante"). `doSync()`, `SyncWorker` y `ACTION_REFRESH` comparan el payload
   antes/después y solo redibujan si difiere.
+- **El service worker NUNCA debe cachear las llamadas a Supabase.** El handler de
+  `fetch` en `sw.js` deja pasar derecho todo lo que no sea del propio origen. Si se
+  cachearan, el sync devolvería datos viejos y la app mostraría un estado que ya no
+  existe — el peor bug posible acá. El HTML va network-first (siempre fresco online,
+  cache solo como respaldo offline) y `sw.js` se excluye explícitamente del cache,
+  porque cachearlo impediría detectar versiones nuevas.
+- **El estado "waiting" del service worker hay que manejarlo a mano.** Un SW nuevo se
+  instala pero no se activa hasta que se cierren TODAS las pestañas de la app. Como
+  esta web se usa siempre abierta, sin el flujo explícito (avisar → `SKIP_WAITING` →
+  `controllerchange` → recargar) te quedás con la versión vieja indefinidamente,
+  sintiendo que "no se actualiza".
 - **La pantalla abierta necesita `Store.revision` para captar cambios que NO son del
   cronómetro.** `PushService` fusiona lo que llega por push en un hilo de fondo pero no
   redibuja `MainActivity`. El ticker de 1 s compara `stateSig()`, que incluye ese

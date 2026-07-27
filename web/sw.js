@@ -16,6 +16,9 @@ const SHELL = [
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-transparent-32.png",
+  "./icons/icon-transparent-192.png",
+  "./icons/icon-transparent-512.png",
 ];
 
 self.addEventListener("install", (e) => {

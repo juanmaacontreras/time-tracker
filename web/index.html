@@ -11,7 +11,12 @@
      esto). Arranca en el tono oscuro y se corrige por JS según el tema real ni bien
      carga la página — ver applyTitlebarColor más abajo. -->
 <meta name="theme-color" id="themeColorMeta" content="#0E1420" />
-<link rel="icon" href="icons/icon-192.png" />
+<!-- Sin fondo (canal alfa real): para la barra de título, la pestaña y la barra de
+     tareas, donde un cuadrado sólido se ve como un bloque de color pegado al texto.
+     El ícono CON fondo (manifest.json) se sigue usando para el ícono de la app
+     instalada — ahí sí hace falta, si no queda un vacío en el launcher/escritorio. -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-transparent-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-transparent-192.png" />
 <style>
 /* ==========================================================================
    Bitácora — versión web. Un solo archivo, sin dependencias.
@@ -1013,12 +1018,11 @@ function applyProfileChrome() {
   if (btn) btn.textContent = ProfileStore.nameOf(pid) + " ▾";
 }
 
+// Antes mostraba el cronómetro en vivo (▶ 17:02 · Bovédas de Acero) en el título de la
+// pestaña/ventana. Se dejó fijo a pedido: en la ventana instalada como PWA eso se ve
+// en la barra de título, y se prefiere que quede en blanco.
 function updateTitle() {
-  const id = Store.runningActId();
-  if (!id) { document.title = "Bitácora"; return; }
-  const a = Store.activityById(id);
-  const t = exact(Math.floor(Store.runningElapsedMs() / 1000));
-  document.title = (Store.runningPaused() ? "⏸ " : "▶ ") + t + " · " + (a ? a.name : "");
+  document.title = "Bitácora";
 }
 
 const todayEls = {};

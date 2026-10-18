@@ -15,11 +15,22 @@ Gradle, y el Android SDK se baja con `sdkmanager` (`platforms;android-34`,
 `.gitignore` y los `build/` quedarían sin trackear. La parte `web/` se prueba
 ejecutando su lógica en Node o en Chromium (Playwright).
 
+**Tests:** `tests/fixtures/shared.json` tiene casos de fusión, dedupe de categorías,
+estadísticas e ids de categoría que corren LOS DOS lados contra su propio código:
+`gradle testDebugUnitTest` (app, `SharedFixturesTest.kt`, sobre las funciones puras
+`Store.mergeData`/`remoteBehind`/`msByActivity`/`stableCategoryId`) y
+`node tests/web.test.js` (web, extrae el código real de `index.html`). CI los corre
+antes de publicar la APK y la web: si un lado deja de coincidir con el otro, no se
+publica. Todo cambio a la lógica de sync/merge/stats lleva un caso nuevo acá.
+
 ## Estructura
 
 ```
 app/src/main/java/com/bitacora/timer/
-  MainActivity.kt   — UI completa de la app (Views armadas por código, sin XML de layout salvo activity_main.xml)
+  MainActivity.kt   — ciclo de vida, sync, pestañas y helpers de UI compartidos (dp, col, card, sectionLabel).
+  TimerTab.kt / ResumenTab.kt / ProfilesUi.kt / ActivitySheets.kt — cada pantalla, como funciones
+                      de extensión de MainActivity (comparten su estado vía campos `internal`).
+                      Views armadas por código, sin XML de layout salvo activity_main.xml.
   Store.kt          — modelo de datos del perfil activo (actividades, sesiones, timer). Cache en memoria + @Synchronized.
   ProfileStore.kt   — índice de perfiles (sincronizado), separado del dataset de cada perfil.
   Themes.kt         — 5 paletas de color, resuelve @color/indigo y @color/live según el tema del perfil activo.
@@ -41,6 +52,8 @@ web/icons/          — íconos PNG 192/512, generados replicando ic_launcher (r
 supabase/
   functions/push-on-change/index.ts — Edge Function (Deno) que manda el push FCM al cambiar un bucket.
   trigger.sql       — trigger de Postgres + pg_net que llama a esa función. Se corre a mano en el SQL Editor.
+  realtime.sql      — agrega `buckets` a la publicación de Realtime (para la web en vivo). Idem, a mano.
+tests/              — casos compartidos app ↔ web (ver "Tests" arriba).
 ```
 
 `supabase/` queda fuera de las rutas que disparan el workflow de CI, así que se puede
@@ -207,11 +220,14 @@ edita a mano.
   ya no es ese; el chequeo vive dentro del lock de `Store`, el mismo de
   `setCurrentProfile`. En la web, `Store.merge(pid, remote)` hace lo mismo.
 - **Los intervalos de sync de app y web NO son intercambiables.** La app sondea cada
-  60 s porque tiene push y se entera en segundos por esa vía; **la web sondea cada 10 s
-  porque NO recibe push** (necesitaría un service worker) y ese ciclo es su única forma
-  de enterarse. Ya se cometió el error de subir los dos a 60 s "porque el push cubre el
-  caso urgente": la web pasó a tardar hasta un minuto en reflejar cambios del celular.
-  Si en la web parece que "no se actualiza", mirar primero este intervalo. Detalle que
+  60 s porque tiene push y se entera en segundos por esa vía. **La web se entera por
+  Supabase Realtime** (`Live` en `index.html`: WebSocket con el protocolo Phoenix a
+  mano, sin supabase-js) y con eso sondea cada 60 s; **si Live no está conectado
+  (Realtime apagado en la tabla, conexión caída) vuelve sola a 10 s**, que es su única
+  forma de enterarse. Ya se cometió el error de subir el sondeo a 60 s sin un canal en
+  vivo: la web pasó a tardar hasta un minuto en reflejar cambios del celular. Si en la
+  web parece que "no se actualiza", mirar primero si Live está conectado
+  (`Live.ok` en la consola) y si `supabase/realtime.sql` se corrió. Detalle que
   confunde el diagnóstico: la web sincroniza al instante cuando la ventana gana foco
   (`focus` / `visibilitychange`), así que al hacerle clic parece instantánea aunque el
   ciclo esté mal configurado.
@@ -286,8 +302,13 @@ Confirmado funcionando en dispositivo real:
   sola, pero si aparecieran entradas viejas huérfanas en `USER_KEY::devices` (de
   instalaciones que ya no existen y nunca se vuelven a abrir) nadie las borra. Con
   pocos dispositivos no molesta; si crece, conviene una limpieza por antigüedad.
-- **La web no recibe push** — necesitaría un service worker, y como normalmente está
-  abierta en una pestaña ya sincroniza al volver a ella. Decisión consciente.
+- **La web no recibe push con la pestaña cerrada** (necesitaría Web Push en el service
+  worker). Abierta, se entera al instante por Realtime. Decisión consciente.
+- **Datos por fila en vez de un bloque por perfil**: evaluado y postergado. En
+  octubre de 2026 el bucket más grande pesa ~44 KB (186 sesiones), así que bajarlo
+  entero cuesta poco y la latencia la dominaba el sondeo de la web, que Realtime ya
+  resolvió. Conviene retomarlo si un bucket pasa de unos cientos de KB: tablas por
+  entidad, subida de solo lo cambiado y bajada por "cambios desde".
 - **Widget/notificación no siguen el tema del perfil** — decisión consciente, pero
   si el usuario lo pide hay que revisar esos tres archivos.
 - **`supabase/trigger.sql` está commiteado con el placeholder** `PONER_ACA_EL_PUSH_SECRET`.

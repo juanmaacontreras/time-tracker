@@ -57,4 +57,9 @@ dependencies {
     // estamos en 34. Si algún día se sube el compileSdk, se puede subir el BoM.
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-messaging")
+
+    // Tests de JVM (tests/fixtures compartidos con la web). org.json real: el que trae
+    // android.jar en los unit tests es un stub que tira "not mocked".
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

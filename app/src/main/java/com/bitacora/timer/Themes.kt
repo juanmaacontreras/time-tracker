@@ -18,10 +18,6 @@ object Themes {
     )
 
     val ORDER = listOf("azul", "verde", "violeta", "arcilla", "grafito")
-    val NAMES = mapOf(
-        "azul" to "Azul", "verde" to "Verde", "violeta" to "Violeta",
-        "arcilla" to "Arcilla", "grafito" to "Grafito"
-    )
 
     private val PALETTES = mapOf(
         "azul"    to Accent(0xFF2F4B8F.toInt(), 0xFF7B96D4.toInt(), 0xFF1C74C9.toInt(), 0xFF62AEEA.toInt()),

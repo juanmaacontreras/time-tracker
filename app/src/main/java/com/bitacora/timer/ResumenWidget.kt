@@ -17,9 +17,16 @@ class ResumenWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         for (id in ids) renderOne(context, mgr, id)
+        syncInBackground(context)
+    }
+
+    // Solo redibuja si el sync trajo cambios reales (ver Surfaces).
+    private fun syncInBackground(context: Context) {
         val pending = goAsync()
         Thread {
-            try { Sync.pullMerge(context); refresh(context) } finally { pending.finish() }
+            try {
+                if (Sync.syncProfile(context)) Surfaces.refresh(context)
+            } finally { pending.finish() }
         }.start()
     }
 
@@ -30,10 +37,7 @@ class ResumenWidget : AppWidgetProvider() {
                 val p = intent.getStringExtra("period") ?: "day"
                 setPeriod(context, p)
                 refresh(context)
-                val pending = goAsync()
-                Thread {
-                    try { Sync.pullMerge(context); refresh(context) } finally { pending.finish() }
-                }.start()
+                syncInBackground(context)
             }
         }
     }
@@ -73,10 +77,11 @@ class ResumenWidget : AppWidgetProvider() {
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_resumen)
             val period = getPeriod(context)
-            val from = Store.periodStart(period)
+            val (from, to) = Store.periodRange(period, 0)
+            val secs = Store.secsByActivity(context, from, to)
 
             val per = Store.activities(context)
-                .map { it to Store.secsFor(context, it.getString("id"), from) }
+                .map { it to (secs[it.getString("id")] ?: 0L) }
                 .filter { it.second > 0 }
                 .sortedByDescending { it.second }
             val total = per.sumOf { it.second }

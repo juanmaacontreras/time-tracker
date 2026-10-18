@@ -16,16 +16,7 @@ class TimerWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         for (id in ids) renderOne(context, mgr, id)
-        val pending = goAsync()
-        Thread {
-            try {
-                Sync.pullMerge(context)
-                refresh(context)
-                Notifs.update(context); ResumenWidget.refresh(context)
-            } finally {
-                pending.finish()
-            }
-        }.start()
+        syncInBackground(context)
     }
 
     // El usuario agrandó/achicó el widget: re-renderizar para mostrar 6 o 9 actividades
@@ -48,53 +39,32 @@ class TimerWidget : AppWidgetProvider() {
             ACTION_PAUSE -> applyThenSync(context) {
                 if (Store.runningPaused(context)) Store.resume(context) else Store.pause(context)
             }
-            ACTION_REFRESH -> {
-                // Solo re-renderiza si el sync trajo cambios reales. Así, tocar para
-                // actualizar cuando no cambió nada no re-infla el cronómetro en vivo
-                // (evita el "flash" de números locos al re-dibujar el Chronometer).
-                runInBackground(context) {
-                    val before = Store.payload(context).toString()
-                    Sync.pullMerge(context)
-                    if (Store.payload(context).toString() != before) {
-                        refresh(context)
-                        Notifs.update(context); ResumenWidget.refresh(context)
-                    }
-                }
-            }
+            ACTION_REFRESH -> syncInBackground(context)
         }
     }
 
-    private fun runInBackground(context: Context, block: () -> Unit) {
+    // Sincroniza fuera del hilo principal y solo redibuja si el sync trajo cambios
+    // reales: así no se re-infla el cronómetro en vivo sin motivo (el "flash").
+    private fun syncInBackground(context: Context) {
         val pending = goAsync()
         Thread {
-            try { block() } finally { pending.finish() }
+            try {
+                if (Sync.syncProfile(context)) Surfaces.refresh(context)
+            } finally { pending.finish() }
         }.start()
     }
 
     // Acción del usuario (widget o notificación): primero se muta el estado local y se
     // redibuja — instantáneo —, y recién después se va a la red.
     //
-    // Antes el pullMerge se hacía ANTES de mutar, así que cada toque en Pausar/Parar
-    // esperaba un round-trip de red completo (hasta 12s de timeout en Sync.auth) para
-    // recién ahí aplicar el cambio: esa era la demora de varios segundos al pausar
-    // desde la notificación. Invertir el orden es seguro porque toda mutación sella
-    // runChangedAt = now(), así que en el merge posterior le gana a cualquier estado
-    // remoto más viejo — el cambio del usuario no se pierde ni se pisa.
+    // Antes la red iba ANTES de mutar, así que cada toque en Pausar/Parar esperaba un
+    // round-trip completo (hasta 12s de timeout) para recién ahí aplicar el cambio.
+    // Invertir el orden es seguro porque toda mutación sella runChangedAt = now(), así
+    // que en el merge posterior le gana a cualquier estado remoto más viejo.
     private fun applyThenSync(context: Context, mutate: () -> Unit) {
         mutate()
-        refresh(context)
-        Notifs.update(context)
-        ResumenWidget.refresh(context)
-        val pending = goAsync()
-        Thread {
-            try {
-                Sync.pushOnly(context)
-                Sync.pullMerge(context)
-                refresh(context)
-                Notifs.update(context)
-                ResumenWidget.refresh(context)
-            } finally { pending.finish() }
-        }.start()
+        Surfaces.refresh(context)
+        syncInBackground(context)
     }
 
     companion object {
@@ -107,8 +77,8 @@ class TimerWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget)
             val runId = Store.runningActId(context)
             // Ordenadas por tiempo acumulado hoy (descendente); mostramos las 6 primeras.
-            val acts = Store.activities(context)
-                .sortedByDescending { Store.secsFor(context, it.getString("id"), Store.startOfToday()) }
+            val today = Store.secsByActivity(context, Store.startOfToday())
+            val acts = Store.activities(context).sortedByDescending { today[it.getString("id")] ?: 0L }
 
             val paused = Store.runningPaused(context)
             if (runId.isNotEmpty()) {

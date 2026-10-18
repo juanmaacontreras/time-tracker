@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.os.Build
 import android.os.SystemClock
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -19,11 +18,9 @@ object Notifs {
     private const val NOTIF_ID = 1001
 
     private fun ensureChannel(ctx: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(CHANNEL, "Cronómetro", NotificationManager.IMPORTANCE_LOW)
-            ch.setShowBadge(false)
-            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
-        }
+        val ch = NotificationChannel(CHANNEL, "Cronómetro", NotificationManager.IMPORTANCE_LOW)
+        ch.setShowBadge(false)
+        ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
     }
 
     // Blanco o tinta oscura según qué tan claro sea el color de fondo (swatch de la

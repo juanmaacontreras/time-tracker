@@ -7,11 +7,13 @@ distintos), 5 temas de color, categorías con ícono propio, widgets de home scr
 notificación persistente, push silencioso entre dispositivos (FCM) y
 auto-actualización desde GitHub Releases.
 
-No hay Gradle/Android SDK en el entorno donde se desarrolla esto — todo el trabajo en
-`app/` se hace por lectura/edición cuidadosa + verificación estática (balance de
-llaves, grep de referencias). El build real y las pruebas en dispositivo las hace el
-usuario, compilando vía GitHub Actions. La parte `web/` sí se puede probar en vivo
-con el Browser pane.
+El build oficial lo hace GitHub Actions y las pruebas en dispositivo las hace el
+usuario. En una sesión en la nube de Claude Code sí se puede compilar: hay Java y
+Gradle, y el Android SDK se baja con `sdkmanager` (`platforms;android-34`,
+`build-tools;34.0.0`) a un directorio temporal; `gradle assembleDebug lintDebug` con
+`ANDROID_HOME` apuntando ahí. Compilar en una copia del repo, nunca dentro: no hay
+`.gitignore` y los `build/` quedarían sin trackear. La parte `web/` se prueba
+ejecutando su lógica en Node o en Chromium (Playwright).
 
 ## Estructura
 
@@ -21,7 +23,9 @@ app/src/main/java/com/bitacora/timer/
   Store.kt          — modelo de datos del perfil activo (actividades, sesiones, timer). Cache en memoria + @Synchronized.
   ProfileStore.kt   — índice de perfiles (sincronizado), separado del dataset de cada perfil.
   Themes.kt         — 5 paletas de color, resuelve @color/indigo y @color/live según el tema del perfil activo.
-  Sync.kt           — pull/push contra Supabase, parametrizado por "bucket key" (perfil). Timeout configurable.
+  Sync.kt           — pull → merge → push-si-hace-falta contra Supabase, por "bucket key". Todo devuelve "¿cambió algo?".
+  Merge.kt          — fusión por updatedAt (Merge.list) y detección de "el remoto quedó atrás" (Merge.behind), común a los 3 buckets.
+  Surfaces.kt       — refresca notificación + los dos widgets juntos (solo tras un cambio real).
   SyncWorker.kt     — WorkManager, corre cada ~1 h en background aunque la app esté cerrada (red de seguridad del push).
   TimerWidget.kt / ResumenWidget.kt — widgets de home screen.
   Notifs.kt         — notificación persistente (vista custom, swatch de categoría + cronómetro grande).
@@ -122,12 +126,12 @@ edita a mano.
   de tema real hecho antes. Fix: sembrar con `updatedAt = 0L` (Android y web) para
   que cualquier edición real siempre gane.
 - **Flash del cronómetro del widget** al refrescar: re-inflar un `Chronometer` en
-  vivo muestra un frame con un número gigante. Fix: `ACTION_REFRESH` solo
-  re-renderiza si el sync trajo cambios reales (compara el payload antes/después).
+  vivo muestra un frame con un número gigante. Fix: redibujar solo si el sync trajo
+  cambios reales (ver "Redibujar solo si el sync trajo cambios", abajo).
 - **`setSmallIcon` con el ícono completo de la app** rompía la notificación (cuadrado
   blanco en la barra de estado, fondo negro al expandir). Los íconos de notificación
   tienen que ser una silueta con canal alfa real, sin relleno opaco de fondo — ver
-  `ic_notif.xml` vs `ic_launcher.xml`.
+  `ic_notif.xml` vs `ic_launcher_foreground.xml`.
 - **`secsFor`/`totalBetween` sin tope superior**: originalmente solo tomaban un
   `from`, así que no servían para navegar a períodos pasados (sumaban de más).
   Ahora aceptan `to` opcional (default `Long.MAX_VALUE`, retrocompatible).
@@ -159,7 +163,7 @@ edita a mano.
   constantes de la nada. Toda limpieza tiene que ser idempotente: dos cargas
   seguidas no pueden producir ningún cambio.
 - **Acciones del widget/notificación: primero mutar local, después la red.** Antes
-  cada botón hacía `Sync.pullMerge()` ANTES de tocar el estado, así que pausar
+  cada botón hacía la sync ANTES de tocar el estado, así que pausar
   esperaba un round-trip completo (hasta 12s de timeout). Es seguro invertirlo porque
   toda mutación sella `runChangedAt = now()` y le gana a cualquier estado remoto más
   viejo en el merge. Ver `TimerWidget.applyThenSync()`.
@@ -185,11 +189,23 @@ edita a mano.
 - **NUNCA subir un bucket si el contenido no cambió.** Es la regla más importante desde
   que existe el push: cada ESCRITURA dispara el trigger, que despierta a los demás
   dispositivos. Los ciclos de sync antes subían siempre, así que tener la app abierta en
-  un dispositivo le mandaba un push a los otros **cada 10 segundos**. La guarda está
-  dentro de `Sync.push()` y de `push()` en la web (`lastPushed` por bucket, se registra
-  solo tras un envío exitoso). Si alguna vez se agrega otro camino de escritura, tiene
-  que pasar por ahí. **Leer no dispara nada**: sondear seguido es barato, lo caro es
-  escribir de más.
+  un dispositivo le mandaba un push a los otros **cada 10 segundos**. La guarda es
+  `Merge.behind` (Kotlin) / `isBehind` (web): después de fusionar, se sube SOLO si lo
+  local tiene alguna entrada que el remoto no tiene o tiene más vieja. Reemplazó a un
+  `lastPushed` en memoria, que se perdía al reiniciar el proceso y no detectaba cuando
+  otro dispositivo pisaba la fila con una versión sin lo nuestro. Todo camino de
+  escritura pasa por `Sync.syncBucket` / `syncBucket` en la web. **Leer no dispara
+  nada**: sondear seguido es barato, lo caro es escribir de más.
+- **Si la bajada falla, no se sube.** `pull` lanza ante cualquier error HTTP en vez de
+  devolver null ("no existe"); antes un 5xx al bajar terminaba en una subida que pisaba
+  la fila remota con una versión que no incluía lo de los otros dispositivos.
+- **Cambiar de perfil a mitad de un sync mezclaba los datos de dos perfiles.** El ciclo
+  bajaba el bucket del perfil A, el usuario pasaba a B, y la fusión se aplicaba sobre
+  B — y la subida llevaba la mezcla al bucket de A. Como la fusión nunca borra, la
+  contaminación era permanente. Ahora el perfil se fija una vez al empezar y
+  `Store.merge(ctx, pid, remote)` devuelve null (descarta el ciclo) si el perfil activo
+  ya no es ese; el chequeo vive dentro del lock de `Store`, el mismo de
+  `setCurrentProfile`. En la web, `Store.merge(pid, remote)` hace lo mismo.
 - **Los intervalos de sync de app y web NO son intercambiables.** La app sondea cada
   60 s porque tiene push y se entera en segundos por esa vía; **la web sondea cada 10 s
   porque NO recibe push** (necesitaría un service worker) y ese ciclo es su única forma
@@ -202,8 +218,27 @@ edita a mano.
 - **Redibujar solo si el sync trajo cambios.** Mismo motivo, versión local: `render()`
   reconstruye la lista, la notificación y los dos widgets, y refrescar el widget
   reaplica `setChronometer` sobre un cronómetro en vivo (el "flash del número
-  gigante"). `doSync()`, `SyncWorker` y `ACTION_REFRESH` comparan el payload
-  antes/después y solo redibujan si difiere.
+  gigante"). `Store.merge` solo escribe (y sube `Store.revision`) si algo cambió de
+  verdad, y todos los caminos de sync devuelven ese "¿cambió?": `doSync()`,
+  `PushService`, `SyncWorker` y los widgets redibujan solo si es true. Antes
+  `Store.merge` escribía siempre, así que la pantalla abierta se reconstruía entera
+  en cada sync; y el push también le llega al dispositivo que escribió.
+- **La elección de qué categoría conservar en el dedupe tiene que ser determinística.**
+  Con "la primera de la lista local", dos dispositivos que creaban "Libro" a la vez se
+  borraban mutuamente la suya y la categoría desaparecía. Ahora gana el id menor
+  (dentro de: viva con ícono → viva → cualquiera).
+- **Un perfil borrado en otro dispositivo no puede quedar activo acá.** Al llegar el
+  borrado por sync (o al abrir la app, por si llegó con la app cerrada vía
+  `SyncWorker`), `MainActivity.leaveDeletedProfile()` / `onRemoteChange()` en la web
+  pasan al Principal.
+- **Varias pestañas de la web comparten localStorage pero no el cache en memoria.** Sin
+  el listener de `storage`, una pestaña con cache viejo pisaba al escribir lo que había
+  hecho la otra. El listener invalida los caches y redibuja.
+- **`SyncWorker` hace sync completo (baja Y sube)**, no solo baja: una acción desde el
+  widget hecha sin señal quedaba sin subir hasta volver a abrir la app.
+- **Las sesiones en curso se cuentan como van a quedar guardadas**: `[runStart,
+  runStart + tiempo real]` (ver `Store.runningSpan`). Antes se restaban todas las
+  pausas aunque la ventana del período cortara la sesión, y un día podía sumar de menos.
 - **El service worker NUNCA debe cachear las llamadas a Supabase.** El handler de
   `fetch` en `sw.js` deja pasar derecho todo lo que no sea del propio origen. Si se
   cachearan, el sync devolvería datos viejos y la app mostraría un estado que ya no
@@ -266,6 +301,5 @@ Confirmado funcionando en dispositivo real:
   sería repo de código privado + un repo público aparte solo con los APK de los
   releases, y `Updater.LATEST_URL` apuntando a ese segundo. Decisión pendiente del
   usuario, informada y consciente.
-- Nada de esto tiene tests automatizados; toda verificación es lectura/inspección
-  manual del código Kotlin (no se puede compilar en este entorno) o ejecución en
-  vivo en el Browser pane (solo para `web/`).
+- Nada de esto tiene tests automatizados en el repo. La verificación es compilar +
+  lint (ver arriba) y ejecutar la lógica de `web/` a mano en Node o Chromium.

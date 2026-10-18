@@ -62,8 +62,8 @@ object Updater {
 
     /** Descarga el APK y lanza el instalador del sistema (el usuario confirma). */
     fun downloadAndInstall(activity: Activity, apkUrl: String) {
-        // En Android 8+ hace falta permiso de "instalar apps desconocidas" para esta app.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+        // Hace falta el permiso de "instalar apps desconocidas" para esta app.
+        if (!activity.packageManager.canRequestPackageInstalls()) {
             Toast.makeText(activity, "Permití \"instalar apps desconocidas\" y volvé a tocar Actualizar.", Toast.LENGTH_LONG).show()
             try {
                 activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,

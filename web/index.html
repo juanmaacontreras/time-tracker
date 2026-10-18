@@ -344,7 +344,6 @@ const bucketKey = pid => (!pid || pid === "default") ? BASE : BASE + "::" + pid;
 /* 5 temas: cada uno cambia el acento (indigo) y el "corriendo" (live). Los neutros
    no cambian, igual que en la app. Aplicados por CSS vía data-palette. */
 const THEME_ORDER = ["azul", "verde", "violeta", "arcilla", "grafito"];
-const THEME_NAMES = { azul:"Azul", verde:"Verde", violeta:"Violeta", arcilla:"Arcilla", grafito:"Grafito" };
 const THEME_ACCENT = { azul:"#2F4B8F", verde:"#2E7D5B", violeta:"#6A4C93", arcilla:"#A6552E", grafito:"#4A5A78" };
 
 /* 14 colores de actividad — mismos que Store.COLORS en la app. */
@@ -444,11 +443,13 @@ const Store = {
     if (obj.runPaused == null) obj.runPaused = false;
     if (obj.runPausedAt == null) obj.runPausedAt = 0;
     if (obj.runPausedAccum == null) obj.runPausedAccum = 0;
-    if (!Array.isArray(obj.categories)) this._migrateCategoriesFromTypes(obj);
-    this._collapseDuplicateIds(obj);
-    this._repairCorruptCategoryNames(obj);
-    this._dedupeCategoriesByName(obj);
+    // Limpiezas idempotentes: solo escriben si de verdad cambiaron algo, así dos cargas
+    // seguidas nunca generan escrituras (ni sync) de la nada.
+    let changed = false;
+    if (!Array.isArray(obj.categories)) { this._migrateCategoriesFromTypes(obj); changed = true; }
+    changed = this._dedupeCategoriesByName(obj) || changed;
     this._root = obj; this._rootProfile = pid;
+    if (changed) this.write(obj);
     return obj;
   },
   write(obj) {
@@ -503,41 +504,11 @@ const Store = {
     obj.categories = [...byName.values()];
   },
 
-  // Reparación defensiva: si alguna categoría ya sincronizada quedó con el nombre
-  // igual a un id (el bug de arriba, ya propagado entre dispositivos antes de este
-  // fix), la corrige in-situ en vez de mostrar el UUID crudo en toda la UI.
-  _repairCorruptCategoryNames(obj) {
-    let changed = false;
-    for (const c of obj.categories) {
-      if (this._looksLikeId(c.name || "")) { c.name = "General"; c.updatedAt = now(); changed = true; }
-    }
-    if (changed) this.write(obj);
-  },
-
-  // Resguardo adicional: si el array de categorías tiene DOS entradas con el mismo id
-  // (posible tras una secuencia de merges de distintos dispositivos), se colapsan en
-  // una sola — se prefiere la viva sobre la borrada, y a igual estado la de updatedAt
-  // más reciente. Espejo exacto de Store.collapseDuplicateIds en Kotlin.
-  _collapseDuplicateIds(obj) {
-    const byId = new Map();
-    let changed = false;
-    for (const c of obj.categories) {
-      const existing = byId.get(c.id);
-      if (!existing) { byId.set(c.id, c); continue; }
-      const existingAlive = !existing.deleted, cAlive = !c.deleted;
-      const winner = cAlive !== existingAlive ? (cAlive ? c : existing)
-        : ((c.updatedAt || 0) > (existing.updatedAt || 0) ? c : existing);
-      byId.set(c.id, winner);
-      changed = true;
-    }
-    if (changed) { obj.categories = [...byId.values()]; this.write(obj); }
-  },
-
   // Limpieza de las categorías duplicadas creadas ANTES de este fix (ids random
   // distintos para el mismo nombre). Espejo exacto de Store.dedupeCategoriesByName en
-  // Kotlin: agrupa por nombre normalizado, deja una sola categoría por grupo con el id
-  // ESTABLE, reasigna las actividades que apuntaban a cualquier id del grupo, y marca
-  // el resto como borradas.
+  // Kotlin: agrupa por nombre normalizado, deja una sola categoría por grupo (con el id
+  // que ya tenía), reasigna las actividades que apuntaban a cualquier id del grupo, y
+  // marca el resto como borradas. Devuelve true si cambió algo.
   _dedupeCategoriesByName(obj) {
     // OJO: agrupamos TAMBIÉN las ya borradas — una actividad puede seguir apuntando al
     // id de una categoría marcada "deleted" en una limpieza anterior; si la excluimos
@@ -556,7 +527,12 @@ const Store = {
       // Preferimos una viva con ícono ya elegido a mano. Si TODAS están borradas, se
       // consolida igual (para que el remap de actividades funcione) pero queda borrada:
       // nunca se resucita una categoría que el usuario borró a propósito.
-      const keep = alive.find(c => c.icon) || alive[0] || group[0];
+      // Dentro de cada opción gana el id menor: la elección tiene que ser la MISMA en
+      // todos los dispositivos (ver Store.dedupeCategoriesByName). Con "la primera de la
+      // lista local", dos dispositivos podían borrarse mutuamente la misma categoría.
+      const withIcon = alive.filter(c => c.icon);
+      const pool = withIcon.length ? withIcon : (alive.length ? alive : group);
+      const keep = pool.reduce((m, c) => (c.id < m.id ? c : m));
       // El id de la que se conserva NO se reescribe nunca (ver el comentario largo en
       // Store.dedupeCategoriesByName): asignarle un "id canónico" derivado del nombre
       // hacía que la tabla de remapeo, que es común a todos los grupos, se pisara entre
@@ -576,7 +552,7 @@ const Store = {
         if (newId) { a.type = newId; a.updatedAt = now(); changed = true; }
       }
     }
-    if (changed) this.write(obj);
+    return changed;
   },
 
   // ---- categories ----
@@ -708,36 +684,32 @@ const Store = {
   },
 
   // ---- stats ----
-  secsFor(actId, from, to = Number.MAX_SAFE_INTEGER) {
-    let t = 0;
-    for (const s of this.root().sessions) {
-      if (s.deleted || s.actId !== actId) continue;
-      const a = Math.max(s.start, from), b = Math.min(s.end, to);
-      if (b > a) t += b - a;
-    }
+  // Tramo de la sesión en curso tal como va a quedar guardada al pararla: arranca en
+  // runStart y dura el tiempo real corrido (ver Store.runningSpan en Kotlin).
+  _msByActivity(from, to) {
+    const out = {};
+    const add = (actId, start, end) => {
+      const ms = Math.min(end, to) - Math.max(start, from);
+      if (ms > 0) out[actId] = (out[actId] || 0) + ms;
+    };
     const o = this.root();
-    if (o.runActId === actId) {
-      const end = o.runPaused ? o.runPausedAt : now();
-      const a = Math.max(o.runStart, from), b = Math.min(end, to);
-      const c = (b - a) - o.runPausedAccum;
-      if (c > 0) t += c;
-    }
-    return Math.floor(t / 1000);
+    for (const s of o.sessions) if (!s.deleted) add(s.actId, s.start, s.end);
+    if (o.runActId && o.runStart > 0) add(o.runActId, o.runStart, o.runStart + this.runningElapsedMs());
+    return out;
+  },
+  // Segundos por actividad en [from, to), en UNA sola pasada por las sesiones.
+  secsByActivity(from, to = Number.MAX_SAFE_INTEGER) {
+    const ms = this._msByActivity(from, to), out = {};
+    for (const id in ms) out[id] = Math.floor(ms[id] / 1000);
+    return out;
+  },
+  secsFor(actId, from, to = Number.MAX_SAFE_INTEGER) {
+    return Math.floor((this._msByActivity(from, to)[actId] || 0) / 1000);
   },
   totalBetween(from, to, actIds = null) {
+    const ms = this._msByActivity(from, to);
     let t = 0;
-    for (const s of this.root().sessions) {
-      if (s.deleted) continue;
-      if (actIds && !actIds.has(s.actId)) continue;
-      const a = Math.max(s.start, from), b = Math.min(s.end, to);
-      if (b > a) t += b - a;
-    }
-    const o = this.root();
-    if (o.runActId && (!actIds || actIds.has(o.runActId))) {
-      const end = o.runPaused ? o.runPausedAt : now();
-      const a = Math.max(o.runStart, from), b = Math.min(end, to);
-      if (b > a) t += Math.max(0, (b - a) - o.runPausedAccum);
-    }
+    for (const id in ms) if (!actIds || actIds.has(id)) t += ms[id];
     return Math.floor(t / 1000);
   },
 
@@ -752,12 +724,15 @@ const Store = {
     const list = this.root().sessions
       .filter(s => !s.deleted && (!actIds || actIds.has(s.actId)) && !(s.end < from || s.start >= to))
       .sort((a, b) => a.start - b.start);
+    const acts = new Map(this.root().activities.map(a => [a.id, a]));
+    // Comillas internas duplicadas (regla de CSV): un nombre con " ya no corre columnas.
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
     for (const s of list) {
-      const a = this.activityById(s.actId);
+      const a = acts.get(s.actId);
       const name = a ? a.name : "?";
       const type = a ? this.categoryForActivity(a).name : "";
       const min = ((s.end - s.start) / 60000).toFixed(1);
-      sb += `"${name}","${type}","${fmt(s.start)}","${fmt(s.end)}",${min}\n`;
+      sb += `${q(name)},${q(type)},${q(fmt(s.start))},${q(fmt(s.end))},${min}\n`;
     }
     return sb;
   },
@@ -785,8 +760,7 @@ const Store = {
   },
 
   // ---- sync payload + merge (contrato con la app) ----
-  payload() {
-    const r = this.root();
+  _payload(r) {
     return {
       activities: JSON.parse(JSON.stringify(r.activities)),
       sessions: JSON.parse(JSON.stringify(r.sessions)),
@@ -798,41 +772,57 @@ const Store = {
       }
     };
   },
-  merge(remote) {
+  // Espejo de Store.merge en Kotlin. remote null = el bucket todavía no existe.
+  // Devuelve null si el perfil activo ya no es pid (el remoto se bajó para OTRO perfil:
+  // fusionarlo mezclaría los datos de dos personas). Si no, { changed, upload }:
+  // upload !== null significa que el remoto quedó atrás y hay que subir eso.
+  merge(pid, remote) {
+    if (this.currentProfileId() !== pid) return null;
     const o = this.root();
-    o.activities = mergeList(o.activities, remote.activities);
-    o.sessions = mergeList(o.sessions, remote.sessions);
-    o.categories = mergeList(o.categories, remote.categories);
-    // root() solo corre la limpieza de categorías la primera vez que arma el objeto en
-    // memoria; un merge posterior puede traer duplicados nuevos de otro dispositivo
-    // sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
-    this._collapseDuplicateIds(o);
-    this._repairCorruptCategoryNames(o);
-    this._dedupeCategoriesByName(o);
-    const rr = remote.run;
-    if (rr) {
-      const remoteChanged = rr.changedAt || 0;
-      if (remoteChanged > (o.runChangedAt || 0)) {
-        o.runActId = rr.actId || ""; o.runStart = rr.start || 0;
-        o.runPaused = !!rr.paused; o.runPausedAt = rr.pausedAt || 0;
-        o.runPausedAccum = rr.pausedAccum || 0; o.runChangedAt = remoteChanged;
-      }
+    const r = remote || {};
+    let changed = mergeList(o.activities, r.activities);
+    changed = mergeList(o.sessions, r.sessions) || changed;
+    // Un merge puede traer categorías con un nombre que ya existía acá: misma limpieza.
+    if (mergeList(o.categories, r.categories)) { this._dedupeCategoriesByName(o); changed = true; }
+    // El estado "corriendo" cruza entre dispositivos: gana el cambio más nuevo, entero.
+    const rr = r.run;
+    const remoteRunAt = (rr && rr.changedAt) || 0;
+    if (rr && remoteRunAt > (o.runChangedAt || 0)) {
+      o.runActId = rr.actId || ""; o.runStart = rr.start || 0;
+      o.runPaused = !!rr.paused; o.runPausedAt = rr.pausedAt || 0;
+      o.runPausedAccum = rr.pausedAccum || 0; o.runChangedAt = remoteRunAt;
+      changed = true;
     }
-    this.write(o);
+    if (changed) this.write(o);
+    const behind = isBehind(r.activities, o.activities) || isBehind(r.sessions, o.sessions) ||
+      isBehind(r.categories, o.categories) || (o.runChangedAt || 0) > remoteRunAt;
+    return { changed, upload: behind ? this._payload(o) : null };
   }
 };
 
+// Fusión "gana el updatedAt más nuevo" (espejo de Merge.list en Kotlin). Muta local y
+// devuelve true si cambió.
 function mergeList(local, remoteArr) {
-  if (!Array.isArray(remoteArr)) return local;
+  if (!Array.isArray(remoteArr)) return false;
   const index = {};
   local.forEach((o, i) => { index[o.id] = i; });
+  let changed = false;
   for (const r of remoteArr) {
     if (!r || !r.id) continue;
     const at = index[r.id];
-    if (at === undefined) { local.push(r); index[r.id] = local.length - 1; }
-    else if ((r.updatedAt || 0) > (local[at].updatedAt || 0)) local[at] = r;
+    if (at === undefined) { local.push(r); index[r.id] = local.length - 1; changed = true; }
+    else if ((r.updatedAt || 0) > (local[at].updatedAt || 0)) { local[at] = r; changed = true; }
   }
-  return local;
+  return changed;
+}
+
+// True si local tiene algo que remote no tiene o tiene más viejo: hay que subir (espejo
+// de Merge.behind en Kotlin). Es la guarda que evita escrituras de más — cada escritura
+// dispara el push a los teléfonos — y se recupera sola si otro dispositivo pisó la fila.
+function isBehind(remoteArr, local) {
+  const remote = {};
+  if (Array.isArray(remoteArr)) for (const r of remoteArr) if (r && r.id) remote[r.id] = r;
+  return local.some(l => !remote[l.id] || (l.updatedAt || 0) > (remote[l.id].updatedAt || 0));
 }
 
 /* ====================== PROFILE STORE (índice de perfiles) ====================== */
@@ -853,6 +843,7 @@ const ProfileStore = {
   write(obj) { this._index = obj; try { localStorage.setItem(this.KEY, JSON.stringify(obj)); } catch (e) {} },
   profiles() { return this.index().profiles.filter(p => !p.deleted); },
   byId(id) { return this.index().profiles.find(p => p.id === id) || null; },
+  isDeleted(id) { const p = this.byId(id); return !!(p && p.deleted); },
   nameOf(id) { const p = this.byId(id); return p ? p.name : "Perfil"; },
   themeOf(id) { const p = this.byId(id); return (p && p.theme) || this.DEFAULT_THEME; },
   add(name, theme) { const o = this.index(); const id = uid();
@@ -864,7 +855,13 @@ const ProfileStore = {
   del(id) { if (id === "default") return; const o = this.index(); const p = o.profiles.find(x => x.id === id);
     if (p) { p.deleted = true; p.updatedAt = now(); } this.write(o); Store.clearProfileData(id); },
   payload() { return { profiles: JSON.parse(JSON.stringify(this.index().profiles)) }; },
-  merge(remote) { const o = this.index(); o.profiles = mergeList(o.profiles, remote.profiles || []); this.write(o); }
+  merge(remote) {
+    const o = this.index();
+    const rem = remote && remote.profiles;
+    const changed = mergeList(o.profiles, rem);
+    if (changed) this.write(o);
+    return { changed, upload: isBehind(rem, o.profiles) ? this.payload() : null };
+  }
 };
 
 /* ====================== SYNC (espejo de Sync.kt) ====================== */
@@ -874,52 +871,57 @@ function authHeaders(extra) {
   if (CFG.key.startsWith("eyJ")) h["Authorization"] = "Bearer " + CFG.key;
   return Object.assign(h, extra || {});
 }
+// null = el bucket todavía no existe. Cualquier error lanza: si la bajada falla no se
+// sube nada, porque subir a ciegas pisaría lo que subieron otros dispositivos.
 async function pull(userKey) {
   const url = `${CFG.url}/rest/v1/buckets?user_key=eq.${encodeURIComponent(userKey)}&select=data`;
   const r = await fetch(url, { headers: authHeaders({ Accept: "application/json" }) });
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("pull " + r.status);
   const arr = await r.json();
   return arr.length ? arr[0].data : null;
 }
-// Última carga subida con éxito por bucket, para no reescribir la fila cuando el
-// contenido no cambió. Espejo de Sync.lastPushed en Kotlin, y por el mismo motivo
-// crítico: cada escritura dispara el trigger que manda el push a los demás
-// dispositivos, y este sync corre cada 8 segundos. Sin esta guarda, tener la web
-// abierta le despierta el celu al usuario cada 8 segundos.
-const lastPushed = {};
 async function push(userKey, data) {
-  const payload = JSON.stringify(data);
-  if (lastPushed[userKey] === payload) return;
   const url = `${CFG.url}/rest/v1/buckets?on_conflict=user_key`;
   const body = [{ user_key: userKey, data, updated_at: now() }];
   const r = await fetch(url, {
     method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" }),
+    headers: authHeaders({ "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error("push " + r.status);
-  // Solo se recuerda después de un envío exitoso: si falló, hay que reintentar.
-  lastPushed[userKey] = payload;
 }
 function setSync(state) { const d = document.getElementById("syncDot"); d.className = "dot-sync " + state; }
-async function syncBucket(userKey, payloadFn, mergeFn) {
-  const remote = await pull(userKey);
-  if (remote) mergeFn(remote);
-  await push(userKey, payloadFn());
+// Bajar → fusionar → subir SOLO si el remoto quedó atrás. Nunca subir sin necesidad es
+// la regla más importante: cada escritura dispara el push que despierta a los teléfonos.
+// Devuelve true si algo local cambió.
+async function syncBucket(userKey, mergeFn) {
+  const result = mergeFn(await pull(userKey));
+  if (!result) return false;
+  if (result.upload) await push(userKey, result.upload);
+  return result.changed;
 }
-async function sync() {
-  if (syncing) return;
-  syncing = true; setSync("sync");
+const syncIndex = () => syncBucket(INDEX_KEY, r => ProfileStore.merge(r));
+// afterLocalChange: lo pide una acción del usuario. Si llega con otro sync en curso, se
+// encadena uno más al terminar, en vez de perderlo y esperar al próximo ciclo de 10 s
+// para que el cambio salga. Los pedidos sin cambio local (ciclo, foco) sí se descartan.
+let syncAgain = false;
+async function sync(afterLocalChange = false) {
+  if (syncing) { if (afterLocalChange) syncAgain = true; return; }
+  syncing = true; syncAgain = false; setSync("sync");
   try {
-    await syncBucket(INDEX_KEY, () => ProfileStore.payload(), r => ProfileStore.merge(r));
-    await syncBucket(bucketKey(Store.currentProfileId()), () => Store.payload(), r => Store.merge(r));
+    const indexChanged = await syncIndex();
+    // El perfil se fija UNA vez, antes de bajar: si el usuario cambia de perfil mientras
+    // tanto, Store.merge lo detecta y descarta el ciclo (no mezcla datos de dos perfiles).
+    const pid = Store.currentProfileId();
+    const dataChanged = await syncBucket(bucketKey(pid), r => Store.merge(pid, r));
     setSync("ok");
-    render();
+    // Solo se redibuja si llegó algo: este ciclo corre cada 10 s.
+    if (indexChanged || dataChanged) onRemoteChange();
   } catch (e) { setSync("err"); }
-  finally { syncing = false; }
-}
-async function pullIndex() {
-  try { const r = await pull(INDEX_KEY); if (r) ProfileStore.merge(r); } catch (e) {}
+  finally {
+    syncing = false;
+    if (syncAgain) sync(true);
+  }
 }
 
 /* ====================== HELPERS DE FECHA / FORMATO ====================== */
@@ -1037,8 +1039,11 @@ function renderTimer() {
   const runId = Store.runningActId();
   const withArch = Store.activities(true);
   const hasArchived = withArch.some(a => a.archived);
-  const acts = withArch.filter(a => !a.archived)
-    .sort((x, y) => Store.secsFor(y.id, startOfToday()) - Store.secsFor(x.id, startOfToday()));
+  // Orden por tiempo de hoy, con una sola pasada por el historial.
+  const today = Store.secsByActivity(startOfToday());
+  const secsToday = a => today[a.id] || 0;
+  const byToday = withArch.slice().sort((x, y) => secsToday(y) - secsToday(x));
+  const acts = byToday.filter(a => !a.archived);
 
   const list = h("div", { class: "rowc", style: "margin-top:16px" });
 
@@ -1049,7 +1054,7 @@ function renderTimer() {
     list.append(c);
   }
 
-  for (const a of acts) list.append(buildRow(a, runId));
+  for (const a of acts) list.append(buildRow(a, runId, secsToday(a)));
   if (acts.length === 0 && !hasArchived) {
     list.append(h("div", { style: "color:var(--muted);text-align:center;padding:10px 0 14px" },
       "Todavía no tenés actividades. Creá la primera acá abajo."));
@@ -1057,11 +1062,10 @@ function renderTimer() {
   list.append(h("div", { class: "addcard", onclick: () => openActivitySheet(null) }, "+  Nueva actividad"));
 
   if (showArchived) {
-    const arch = withArch.filter(a => a.archived)
-      .sort((x, y) => Store.secsFor(y.id, startOfToday()) - Store.secsFor(x.id, startOfToday()));
+    const arch = byToday.filter(a => a.archived);
     if (arch.length) {
       list.append(h("div", { class: "slabel-h" }, "ARCHIVADAS"));
-      for (const a of arch) list.append(buildRow(a, runId));
+      for (const a of arch) list.append(buildRow(a, runId, secsToday(a)));
     }
   }
   view.append(list);
@@ -1091,7 +1095,7 @@ function buildBanner() {
   return b;
 }
 
-function buildRow(act, runId) {
+function buildRow(act, runId, todaySecs) {
   const running = act.id === runId;
   const paused = running && Store.runningPaused();
   const expanded = expandedIds.has(act.id);
@@ -1117,7 +1121,7 @@ function buildRow(act, runId) {
 
   const todayColor = paused ? "var(--paused)" : running ? "var(--live)" : "var(--ink)";
   const todayEl = h("div", { class: "today mono", style: "color:" + todayColor },
-    exact(Store.secsFor(act.id, startOfToday())));
+    exact(todaySecs));
   todayEls[act.id] = todayEl;
   row.append(todayEl);
 
@@ -1188,7 +1192,9 @@ function renderResumen() {
   const acts = statsCategory === "all" ? allActs
     : allActs.filter(a => Store.categoryForActivity(a).id === statsCategory);
 
-  const perAct = acts.map(a => [a, Store.secsFor(a.id, from, to)])
+  // Una sola pasada por el historial para todo el período; el resto sale de acá.
+  const secs = Store.secsByActivity(from, to);
+  const perAct = acts.map(a => [a, secs[a.id] || 0])
     .filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
   const total = perAct.reduce((s, x) => s + x[1], 0);
 
@@ -1211,7 +1217,7 @@ function renderResumen() {
     view.append(h("div", { class: "slabel-h" }, "POR DÍA · CATEGORÍA"));
     // Orden fijo de categorías (por total de la semana) para que el mismo color quede
     // siempre en la misma posición dentro de cada barra apilada.
-    const catOrder = categoryBars(allActs, from, to).map(b => b.label);
+    const catOrder = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]).map(x => x[0]);
     view.append(buildStackedBarChart(weekCategoryStacks(allActs, from, catOrder), catColorsAll));
   } else if (statsPeriod === "day" || statsPeriod === "week") {
     view.append(h("div", { class: "slabel-h" }, "POR ACTIVIDAD"));
@@ -1227,12 +1233,7 @@ function renderResumen() {
     view.append(statRow(a.name, a.color || "#2F4B8F", sec, total, null));
 
   if (statsCategory === "all") {
-    const cats = {};
-    for (const a of allActs) {
-      const t = Store.secsFor(a.id, from, to);
-      if (t > 0) { const c = Store.categoryForActivity(a).id; cats[c] = (cats[c] || 0) + t; }
-    }
-    const entries = Object.entries(cats).sort((x, y) => y[1] - x[1]);
+    const entries = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]);
     if (entries.length) {
       const expanded = catExpanded == null ? entries.length <= 3 : catExpanded;
       view.append(h("div", { class: "slabel-h click", onclick: () => { catExpanded = !expanded; renderResumen(); } },
@@ -1290,14 +1291,14 @@ function buildCategorySelector(cats) {
   for (const c of cats) rowEl.append(chip(c.name, c.id, c.color || "#2F4B8F"));
   return rowEl;
 }
-function categoryBars(acts, from, to) {
+// Segundos por categoría, a partir de los segundos por actividad ya calculados.
+function categorySums(acts, secs) {
   const sums = {};
   for (const a of acts) {
-    const t = Store.secsFor(a.id, from, to);
+    const t = secs[a.id] || 0;
     if (t > 0) { const c = Store.categoryForActivity(a).id; sums[c] = (sums[c] || 0) + t; }
   }
-  return Object.entries(sums).sort((x, y) => y[1] - x[1])
-    .map(([label, secs]) => ({ label, secs, color: "var(--indigo)" }));
+  return sums;
 }
 function monthBars(actIds, monthStart, dayCount) {
   const out = [];
@@ -1313,11 +1314,7 @@ function weekCategoryStacks(acts, weekStart, catOrder) {
   const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
   return labels.map((lb, i) => {
     const ds = weekStart + i * DAY_MS;
-    const perCat = {};
-    for (const a of acts) {
-      const t = Store.secsFor(a.id, ds, ds + DAY_MS);
-      if (t > 0) { const c = Store.categoryForActivity(a).id; perCat[c] = (perCat[c] || 0) + t; }
-    }
+    const perCat = categorySums(acts, Store.secsByActivity(ds, ds + DAY_MS));
     const segs = catOrder.filter(c => perCat[c] > 0).map(c => ({ cat: c, secs: perCat[c] }));
     return { label: lb, total: segs.reduce((s, x) => s + x.secs, 0), segs };
   });
@@ -1614,6 +1611,16 @@ function showMandatoryPicker() {
   showModal(d, true);
 }
 
+// Llegó algo nuevo (sync remoto u otra pestaña). Si fue el borrado del perfil en el que
+// está parada esta pestaña, se pasa al Principal en vez de seguir usando uno que ya no
+// figura en ningún lado. Espejo de MainActivity.onRemoteChange.
+function onRemoteChange() {
+  if (!Store.hasChosenProfile()) return;
+  const cur = Store.currentProfileId();
+  if (cur !== "default" && ProfileStore.isDeleted(cur)) selectProfile("default");
+  else render();
+}
+
 function selectProfile(id) {
   if (id === Store.currentProfileId() && Store.hasChosenProfile()) { closeModal(); return; }
   Store.setCurrentProfile(id);
@@ -1698,7 +1705,7 @@ function afterMutation() {
   render();
   // sube el cambio local enseguida; el pull+merge periódico trae lo de otros dispositivos.
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(sync, 250);
+  pushTimer = setTimeout(() => sync(true), 250);
 }
 
 /* Tab switching */
@@ -1759,10 +1766,17 @@ setInterval(() => {
 
    Sondear seguido acá es barato: son GET, y leer no dispara el trigger de Postgres, así
    que no despierta a ningún otro dispositivo. Lo que había que evitar eran las
-   ESCRITURAS innecesarias, y de eso ya se encarga la guarda de lastPushed en push(). */
+   ESCRITURAS innecesarias, y de eso ya se encarga syncBucket: solo sube si el remoto
+   quedó atrás (isBehind). */
 setInterval(sync, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
-window.addEventListener("focus", sync);
+window.addEventListener("focus", () => sync());
+// Otra pestaña (o la ventana instalada) escribió en localStorage: el cache en memoria de
+// esta quedó viejo, y la próxima escritura de acá pisaría lo que hizo la otra.
+window.addEventListener("storage", () => {
+  Store._root = null; Store._rootProfile = null; ProfileStore._index = null;
+  onRemoteChange();
+});
 
 /* ====================== ARRANQUE ====================== */
 initTheme();
@@ -1775,7 +1789,7 @@ if (Store.hasChosenProfile()) {
 } else {
   // Primera vez: elegir perfil. Traemos el índice remoto por si hay perfiles de otro dispositivo.
   showMandatoryPicker();
-  pullIndex().then(() => { if (!Store.hasChosenProfile()) showMandatoryPicker(); });
+  syncIndex().catch(() => {}).then(() => { if (!Store.hasChosenProfile()) showMandatoryPicker(); });
 }
 sync();
 

@@ -165,7 +165,7 @@ class MainActivity : AppCompatActivity() {
 
     // Arranca (o reanuda) la sesión con el perfil activo: refresca todo y los loops.
     private fun beginSession() {
-        updateProfileChip()
+        if (leaveDeletedProfile()) return  // selectProfile vuelve a entrar acá
         render()
         handler.removeCallbacks(ticker); handler.post(ticker)
         doSync()
@@ -215,7 +215,7 @@ class MainActivity : AppCompatActivity() {
         showProfilePicker(mandatory = true)
         // Traemos el índice remoto por si hay perfiles creados en otro dispositivo.
         Thread {
-            Sync.pullIndex(applicationContext)
+            Sync.syncIndex(applicationContext)
             runOnUiThread {
                 if (!Store.hasChosenProfile(this) && pickerDialog?.isShowing == true) {
                     pickerDialog?.dismiss(); showProfilePicker(true)
@@ -481,10 +481,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun render() {
+        updateProfileChip()
         if (tab == "timer") renderTimer() else renderResumen()
-        TimerWidget.refresh(this)
-        ResumenWidget.refresh(this)
-        Notifs.update(this)
+        Surfaces.refresh(this)
         // Queda registrado qué estado corresponde a lo que hay dibujado ahora, para que
         // el ticker solo vuelva a redibujar si algo lo cambia por fuera (ver stateSig).
         lastStateSig = stateSig()
@@ -499,13 +498,13 @@ class MainActivity : AppCompatActivity() {
         val hasArchived = allWithArchived.any { it.optBoolean("archived", false) }
 
         // Orden por tiempo dedicado hoy (descendente), igual criterio que los widgets.
-        val acts = allWithArchived
-            .filter { !it.optBoolean("archived", false) }
-            .sortedByDescending { Store.secsFor(this, it.getString("id"), Store.startOfToday()) }
+        val today = Store.secsByActivity(this, Store.startOfToday())
+        val byToday = allWithArchived.sortedByDescending { today[it.getString("id")] ?: 0L }
+        val acts = byToday.filter { !it.optBoolean("archived", false) }
 
         if (hasArchived) list.addView(buildArchivedToggle())
 
-        for (act in acts) list.addView(buildRow(act, runId))
+        for (act in acts) list.addView(buildRow(act, runId, today[act.getString("id")] ?: 0L))
         if (acts.isEmpty() && !hasArchived) {
             val hint = TextView(this)
             hint.text = "Todavía no tenés actividades. Creá la primera acá abajo."
@@ -517,12 +516,10 @@ class MainActivity : AppCompatActivity() {
         list.addView(buildAddCard())
 
         if (showArchived) {
-            val archivedActs = allWithArchived
-                .filter { it.optBoolean("archived", false) }
-                .sortedByDescending { Store.secsFor(this, it.getString("id"), Store.startOfToday()) }
+            val archivedActs = byToday.filter { it.optBoolean("archived", false) }
             if (archivedActs.isNotEmpty()) {
                 list.addView(sectionLabel("ARCHIVADAS"))
-                for (act in archivedActs) list.addView(buildRow(act, runId))
+                for (act in archivedActs) list.addView(buildRow(act, runId, today[act.getString("id")] ?: 0L))
             }
         }
         renderBanner(runId)
@@ -594,7 +591,7 @@ class MainActivity : AppCompatActivity() {
         return RippleDrawable(rippleColor, content, mask)
     }
 
-    private fun buildRow(act: JSONObject, runId: String): View {
+    private fun buildRow(act: JSONObject, runId: String, todaySecs: Long): View {
         val id = act.getString("id")
         val running = id == runId
         val paused = running && Store.runningPaused(this)
@@ -662,7 +659,7 @@ class MainActivity : AppCompatActivity() {
         row.addView(mid)
 
         val today = TextView(this)
-        today.text = Store.exact(Store.secsFor(this, id, Store.startOfToday()))
+        today.text = Store.exact(todaySecs)
         today.setTextColor(
             when {
                 paused -> col(R.color.pausedColor)
@@ -859,7 +856,9 @@ class MainActivity : AppCompatActivity() {
         val acts = if (statsCategory == "all") allActs
             else allActs.filter { Store.categoryForActivity(this, it).getString("id") == statsCategory }
 
-        val perAct = acts.map { it to Store.secsFor(this, it.getString("id"), from, to) }
+        // Una sola pasada por el historial para todo el período; el resto sale de acá.
+        val secs = Store.secsByActivity(this, from, to)
+        val perAct = acts.map { it to (secs[it.getString("id")] ?: 0L) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
         val total = perAct.sumOf { it.second }
@@ -893,7 +892,7 @@ class MainActivity : AppCompatActivity() {
             resumenView.addView(sectionLabel("POR DÍA · CATEGORÍA"))
             // Orden fijo de categorías (por total de la semana) para que el mismo color
             // quede siempre en la misma posición dentro de cada barra apilada.
-            val catOrder = categoryBars(allActs, from, to).map { it.first }
+            val catOrder = categorySums(allActs, secs).entries.sortedByDescending { it.value }.map { it.key }
             val stacks = weekCategoryStacks(allActs, from, catOrder)
             resumenView.addView(buildStackedBarChart(stacks, catColorsAll))
         } else if (statsPeriod == "day" || statsPeriod == "week") {
@@ -912,14 +911,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (statsCategory == "all") {
-            val cats = LinkedHashMap<String, Long>()
-            for (a in allActs) {
-                val t = Store.secsFor(this, a.getString("id"), from, to)
-                if (t > 0) {
-                    val c = Store.categoryForActivity(this, a).getString("id")
-                    cats[c] = (cats[c] ?: 0L) + t
-                }
-            }
+            val cats = categorySums(allActs, secs)
             if (cats.isNotEmpty()) {
                 // Colapsable: por defecto expandida si hay pocas categorías.
                 val expanded = catExpanded ?: (cats.size <= 3)
@@ -1121,17 +1113,17 @@ class MainActivity : AppCompatActivity() {
 
     private val DAY_MS = 86400000L
 
-    private fun categoryBars(acts: List<JSONObject>, from: Long, to: Long): List<Triple<String, Long, Int>> {
+    // Segundos por categoría, a partir de los segundos por actividad ya calculados.
+    private fun categorySums(acts: List<JSONObject>, secs: Map<String, Long>): LinkedHashMap<String, Long> {
         val sums = LinkedHashMap<String, Long>()
         for (a in acts) {
-            val t = Store.secsFor(this, a.getString("id"), from, to)
+            val t = secs[a.getString("id")] ?: 0L
             if (t > 0) {
                 val c = Store.categoryForActivity(this, a).getString("id")
                 sums[c] = (sums[c] ?: 0L) + t
             }
         }
-        val color = col(R.color.indigo)
-        return sums.entries.sortedByDescending { it.value }.map { Triple(it.key, it.value, color) }
+        return sums
     }
 
     // dayCount: días a recorrer (parcial hasta hoy si es el mes actual, completo si es un mes pasado).
@@ -1151,14 +1143,7 @@ class MainActivity : AppCompatActivity() {
         val labels = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
         return (0..6).map { i ->
             val ds = weekStart + i * DAY_MS
-            val perCat = LinkedHashMap<String, Long>()
-            for (a in acts) {
-                val t = Store.secsFor(this, a.getString("id"), ds, ds + DAY_MS)
-                if (t > 0) {
-                    val c = Store.categoryForActivity(this, a).getString("id")
-                    perCat[c] = (perCat[c] ?: 0L) + t
-                }
-            }
+            val perCat = categorySums(acts, Store.secsByActivity(this, ds, ds + DAY_MS))
             val ordered = catOrder.mapNotNull { c -> perCat[c]?.let { c to it } }
             labels[i] to ordered
         }
@@ -1775,20 +1760,32 @@ class MainActivity : AppCompatActivity() {
         d.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(col(R.color.live))
     }
 
-    // Solo redibuja si el sync trajo cambios reales. Mismo criterio que SyncWorker y que
-    // TimerWidget.ACTION_REFRESH, que acá había quedado sin aplicar: como este ciclo corre
-    // cada 10 segundos con la app abierta, render() reconstruía toda la lista, la
-    // notificación y AMBOS widgets sin que hubiera cambiado nada. Y refrescar el widget
-    // reaplica setChronometer sobre un Chronometer en vivo, que es exactamente el "flash
-    // del número gigante" ya documentado.
+    // Solo redibuja si el sync trajo cambios reales: render() reconstruye la lista, la
+    // notificación y los dos widgets, y refrescar el widget reaplica setChronometer sobre
+    // un cronómetro en vivo (el "flash del número gigante").
     private fun doSync() {
         if (!Config.syncEnabled()) return
         Thread {
-            val before = Store.payload(this).toString()
-            val ok = Sync.syncNow(this)
-            val changed = Store.payload(this).toString() != before
-            runOnUiThread { if (ok && changed) render() }
+            if (Sync.syncNow(applicationContext)) runOnUiThread { onRemoteChange() }
         }.start()
+    }
+
+    // Llegó algo nuevo de otro dispositivo. Si fue el borrado del perfil en el que está
+    // parado este, se pasa al Principal: seguir usándolo dejaría escribiendo en un bucket
+    // que ya no figura en ningún lado.
+    private fun onRemoteChange() {
+        if (isFinishing || isDestroyed) return
+        if (!leaveDeletedProfile()) render()
+    }
+
+    // También corre al abrir la app: el borrado pudo haber llegado con la app cerrada
+    // (SyncWorker), y entonces el sync de la pantalla ya no lo ve como un cambio.
+    private fun leaveDeletedProfile(): Boolean {
+        val cur = Store.currentProfileId(this)
+        if (cur == Config.DEFAULT_PROFILE || !ProfileStore.isDeleted(this, cur)) return false
+        pickerDialog?.dismiss()
+        selectProfile(Config.DEFAULT_PROFILE)
+        return true
     }
 
     private fun exportCsv(filtered: Boolean) {

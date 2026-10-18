@@ -71,6 +71,7 @@
          (las vacías quedan GONE), así no queda fondo vacío por pocas actividades. -->
 
     <LinearLayout
+        android:baselineAligned="false"
         android:id="@+id/w_row1"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -130,6 +131,7 @@
     </LinearLayout>
 
     <LinearLayout
+        android:baselineAligned="false"
         android:id="@+id/w_row2"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -189,6 +191,7 @@
     </LinearLayout>
 
     <LinearLayout
+        android:baselineAligned="false"
         android:id="@+id/w_row3"
         android:layout_width="match_parent"
         android:layout_height="0dp"

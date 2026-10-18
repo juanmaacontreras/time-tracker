@@ -42,6 +42,7 @@ object Store {
     private fun dataKey(profileId: String): String =
         if (profileId == Config.DEFAULT_PROFILE || profileId.isEmpty()) "data" else "data_$profileId"
 
+    @Synchronized
     fun clearProfileData(ctx: Context, profileId: String) {
         prefs(ctx).edit().remove(dataKey(profileId)).apply()
         if (cachedProfile == profileId) { cachedRoot = null; cachedProfile = null }
@@ -63,7 +64,7 @@ object Store {
     @Synchronized
     fun root(ctx: Context): JSONObject {
         val pid = currentProfileId(ctx)
-        if (cachedRoot != null && cachedProfile == pid) return cachedRoot!!
+        cachedRoot?.let { if (cachedProfile == pid) return it }
         val raw = prefs(ctx).getString(dataKey(pid), null)
         val obj = if (raw != null) JSONObject(raw) else JSONObject()
         if (!obj.has("activities")) obj.put("activities", JSONArray())
@@ -74,11 +75,13 @@ object Store {
         if (!obj.has("runPaused")) obj.put("runPaused", false)
         if (!obj.has("runPausedAt")) obj.put("runPausedAt", 0L)
         if (!obj.has("runPausedAccum")) obj.put("runPausedAccum", 0L)
-        if (!obj.has("categories")) migrateCategoriesFromTypes(ctx, obj)
-        collapseDuplicateIds(ctx, obj)
-        repairCorruptCategoryNames(ctx, obj)
-        dedupeCategoriesByName(ctx, obj)
+        // Limpiezas idempotentes: solo escriben si de verdad cambiaron algo, así dos
+        // cargas seguidas nunca generan escrituras (ni sync) de la nada.
+        var changed = false
+        if (!obj.has("categories")) { migrateCategoriesFromTypes(obj); changed = true }
+        changed = dedupeCategoriesByName(obj) || changed
         cachedRoot = obj; cachedProfile = pid
+        if (changed) write(ctx, obj)
         return obj
     }
 
@@ -118,7 +121,7 @@ object Store {
     // id. El color de cada categoría nueva es el de su primera actividad (mismo criterio
     // que ya usaba categoryColors() en MainActivity), y quedan con updatedAt=0L para que
     // cualquier edición real posterior (acá o en otro dispositivo) siempre les gane en el merge.
-    private fun migrateCategoriesFromTypes(ctx: Context, obj: JSONObject) {
+    private fun migrateCategoriesFromTypes(obj: JSONObject) {
         val activities = obj.getJSONArray("activities")
         val byName = LinkedHashMap<String, JSONObject>()
         for (i in 0 until activities.length()) {
@@ -139,68 +142,15 @@ object Store {
         val arr = JSONArray()
         for (cat in byName.values) arr.put(cat)
         obj.put("categories", arr)
-        write(ctx, obj)
-    }
-
-    // Reparación defensiva: si alguna categoría ya sincronizada quedó con el nombre
-    // igual a un id (el bug de arriba, ya sincronizado entre dispositivos antes de este
-    // fix), la corrige in-situ en vez de mostrar el UUID crudo en toda la UI. updatedAt
-    // se actualiza para que la reparación se propague al resto de los dispositivos.
-    private fun repairCorruptCategoryNames(ctx: Context, obj: JSONObject) {
-        val arr = obj.getJSONArray("categories")
-        var changed = false
-        for (i in 0 until arr.length()) {
-            val c = arr.getJSONObject(i)
-            if (looksLikeId(c.optString("name", ""))) {
-                c.put("name", "General").put("updatedAt", now())
-                changed = true
-            }
-        }
-        if (changed) write(ctx, obj)
-    }
-
-    // Resguardo adicional: si el array de categorías tiene DOS entradas con el mismo
-    // id (posible tras una secuencia de merges de distintos dispositivos, cada uno con
-    // su propia vista parcial del historial), se colapsan en una sola — se prefiere la
-    // viva sobre la borrada, y a igual estado la de updatedAt más reciente. Sin esto,
-    // dedupeCategoriesByName (que asume un id = una sola entrada) puede comportarse
-    // de forma inconsistente.
-    private fun collapseDuplicateIds(ctx: Context, obj: JSONObject) {
-        val arr = obj.getJSONArray("categories")
-        val byId = LinkedHashMap<String, JSONObject>()
-        var changed = false
-        for (i in 0 until arr.length()) {
-            val c = arr.getJSONObject(i)
-            val id = c.optString("id", "")
-            val existing = byId[id]
-            if (existing == null) {
-                byId[id] = c
-            } else {
-                val existingAlive = !existing.optBoolean("deleted", false)
-                val cAlive = !c.optBoolean("deleted", false)
-                val winner = when {
-                    cAlive != existingAlive -> if (cAlive) c else existing
-                    c.optLong("updatedAt", 0L) > existing.optLong("updatedAt", 0L) -> c
-                    else -> existing
-                }
-                byId[id] = winner
-                changed = true
-            }
-        }
-        if (changed) {
-            val newArr = JSONArray()
-            for (c in byId.values) newArr.put(c)
-            obj.put("categories", newArr)
-            write(ctx, obj)
-        }
     }
 
     // Limpieza de las categorías duplicadas que ya se crearon ANTES de este fix (ids
     // random distintos para el mismo nombre). Agrupa por nombre normalizado, conserva
     // una sola por grupo — con el id que ya tenía, sin reescribirlo —, reapunta las
-    // actividades de las otras hacia ella y marca esas otras como borradas. Corre en
-    // cada root(): una vez consolidado no encuentra duplicados y no escribe nada.
-    private fun dedupeCategoriesByName(ctx: Context, obj: JSONObject) {
+    // actividades de las otras hacia ella y marca esas otras como borradas. Corre al
+    // cargar y después de cada merge: una vez consolidado no encuentra nada y devuelve
+    // false. Devuelve true si cambió algo.
+    private fun dedupeCategoriesByName(obj: JSONObject): Boolean {
         val cats = obj.getJSONArray("categories")
         // OJO: agrupamos TAMBIÉN las ya borradas. Una actividad puede seguir apuntando
         // al id de una categoría que quedó marcada "deleted" en una limpieza anterior
@@ -220,8 +170,15 @@ object Store {
             // Preferimos una viva con ícono ya elegido a mano. Si TODAS están borradas,
             // se consolida igual (para que el remap de actividades funcione) pero queda
             // borrada: nunca se resucita una categoría que el usuario borró a propósito.
-            val keep = alive.firstOrNull { it.optString("icon", "").isNotEmpty() }
-                ?: alive.firstOrNull() ?: group[0]
+            //
+            // Dentro de cada opción, gana el id menor: la elección tiene que ser la MISMA
+            // en todos los dispositivos. Antes se tomaba "la primera de la lista local",
+            // que en cada dispositivo podía ser otra: si dos creaban "Libro" a la vez,
+            // cada uno borraba la del otro, al sincronizar ganaban los dos borrados y la
+            // categoría desaparecía.
+            val pool = alive.filter { it.optString("icon", "").isNotEmpty() }
+                .ifEmpty { alive }.ifEmpty { group }
+            val keep = pool.minByOrNull { it.getString("id") } ?: continue
             // El id de la que se conserva NO se reescribe nunca. Antes se le asignaba un
             // "id canónico" derivado del nombre, y como la tabla de remapeo es común a
             // todos los grupos, el id viejo de un grupo podía coincidir con el id canónico
@@ -248,7 +205,7 @@ object Store {
                 if (newId != null) { a.put("type", newId).put("updatedAt", now()); changed = true }
             }
         }
-        if (changed) write(ctx, obj)
+        return changed
     }
 
     // ---------- categories ----------
@@ -537,17 +494,6 @@ object Store {
 
     // ---------- sessions ----------
     @Synchronized
-    fun addSession(ctx: Context, actId: String, start: Long, end: Long) {
-        val obj = root(ctx)
-        obj.getJSONArray("sessions").put(
-            JSONObject().put("id", uid()).put("actId", actId)
-                .put("start", start).put("end", end)
-                .put("updatedAt", now()).put("deleted", false)
-        )
-        write(ctx, obj)
-    }
-
-    @Synchronized
     fun deleteSession(ctx: Context, id: String) {
         val obj = root(ctx)
         val ss = obj.getJSONArray("sessions")
@@ -575,90 +521,56 @@ object Store {
         return list
     }
 
-    @Synchronized
-    fun recentSessions(ctx: Context, limit: Int): List<JSONObject> {
-        val ss = root(ctx).getJSONArray("sessions")
-        val list = ArrayList<JSONObject>()
-        for (i in 0 until ss.length()) {
-            val s = ss.getJSONObject(i)
-            if (!s.optBoolean("deleted", false)) list.add(s)
-        }
-        list.sortByDescending { it.getLong("start") }
-        return if (list.size > limit) list.subList(0, limit) else list
+    // ---------- stats ----------
+    // Tramo [inicio, fin) de la sesión en curso tal como va a quedar guardada al pararla:
+    // arranca en runStart y dura el tiempo real corrido (las pausas no cuentan, ver
+    // stopInternal). Contarla con el mismo criterio que las sesiones guardadas hace que
+    // un período sume lo mismo antes y después de parar el cronómetro — antes se restaban
+    // TODAS las pausas aunque la ventana cortara la sesión, y un día podía sumar de menos.
+    private fun runningSpan(ctx: Context): LongArray? {
+        val start = runningStart(ctx)
+        if (runningActId(ctx).isEmpty() || start <= 0L) return null
+        return longArrayOf(start, start + runningElapsedMs(ctx))
     }
 
-    // ---------- stats ----------
-    // "to" por defecto es infinito (todo lo transcurrido desde "from" hasta ahora),
-    // que es el comportamiento de siempre. Se puede acotar para navegar a períodos
-    // pasados sin arrastrar tiempo posterior a ese período.
-    @Synchronized
-    fun secsFor(ctx: Context, actId: String, from: Long, to: Long = Long.MAX_VALUE): Long {
-        var t = 0L
+    // Milisegundos por actividad dentro de [from, to), en UNA sola pasada por las sesiones.
+    // Antes cada actividad recorría el historial completo por su cuenta (y los widgets lo
+    // hacían dentro del comparador del sort): con meses de historial era lo más caro de
+    // cada redibujado.
+    private fun msByActivity(ctx: Context, from: Long, to: Long): HashMap<String, Long> {
+        val out = HashMap<String, Long>()
+        fun add(actId: String, start: Long, end: Long) {
+            val ms = minOf(end, to) - maxOf(start, from)
+            if (ms > 0) out[actId] = (out[actId] ?: 0L) + ms
+        }
         val ss = root(ctx).getJSONArray("sessions")
         for (i in 0 until ss.length()) {
             val s = ss.getJSONObject(i)
             if (s.optBoolean("deleted", false)) continue
-            if (s.getString("actId") != actId) continue
-            val a = maxOf(s.getLong("start"), from)
-            val b = minOf(s.getLong("end"), to)
-            if (b > a) t += (b - a)
+            add(s.getString("actId"), s.getLong("start"), s.getLong("end"))
         }
-        if (runningActId(ctx) == actId) {
-            val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
-            val a = maxOf(runningStart(ctx), from)
-            val b = minOf(end, to)
-            val c = (b - a) - runningPausedAccum(ctx)
-            if (c > 0) t += c
-        }
-        return t / 1000
+        runningSpan(ctx)?.let { add(runningActId(ctx), it[0], it[1]) }
+        return out
     }
+
+    /** Segundos por actividad dentro de [from, to). Sin "to": hasta ahora. */
+    @Synchronized
+    fun secsByActivity(ctx: Context, from: Long, to: Long = Long.MAX_VALUE): Map<String, Long> =
+        msByActivity(ctx, from, to).mapValues { it.value / 1000 }
+
+    @Synchronized
+    fun secsFor(ctx: Context, actId: String, from: Long, to: Long = Long.MAX_VALUE): Long =
+        (msByActivity(ctx, from, to)[actId] ?: 0L) / 1000
 
     fun startOfToday(): Long = midnight(Calendar.getInstance())
-
-    fun startOfWeek(): Long {
-        val c = Calendar.getInstance()
-        val dow = c.get(Calendar.DAY_OF_WEEK)
-        val back = if (dow == Calendar.SUNDAY) 6 else dow - Calendar.MONDAY
-        c.add(Calendar.DAY_OF_MONTH, -back)
-        return midnight(c)
-    }
-
-    fun startOfMonth(): Long {
-        val c = Calendar.getInstance()
-        c.set(Calendar.DAY_OF_MONTH, 1)
-        return midnight(c)
-    }
 
     // Total dentro de la ventana [from, to), en segundos. Si actIds no es null,
     // solo suma las actividades incluidas en ese set.
     @Synchronized
-    fun totalBetween(ctx: Context, from: Long, to: Long, actIds: Set<String>? = null): Long {
-        var t = 0L
-        val ss = root(ctx).getJSONArray("sessions")
-        for (i in 0 until ss.length()) {
-            val s = ss.getJSONObject(i)
-            if (s.optBoolean("deleted", false)) continue
-            if (actIds != null && s.getString("actId") !in actIds) continue
-            val a = maxOf(s.getLong("start"), from)
-            val b = minOf(s.getLong("end"), to)
-            if (b > a) t += (b - a)
-        }
-        val runId = runningActId(ctx)
-        if (runId.isNotEmpty() && (actIds == null || runId in actIds)) {
-            val end = if (runningPaused(ctx)) runningPausedAt(ctx) else now()
-            val a = maxOf(runningStart(ctx), from)
-            val b = minOf(end, to)
-            if (b > a) t += (b - a - runningPausedAccum(ctx)).coerceAtLeast(0L)
-        }
-        return t / 1000
-    }
-
-    fun periodStart(period: String): Long = when (period) {
-        "day" -> startOfToday()
-        "week" -> startOfWeek()
-        "month" -> startOfMonth()
-        else -> 0L
-    }
+    fun totalBetween(ctx: Context, from: Long, to: Long, actIds: Set<String>? = null): Long =
+        msByActivity(ctx, from, to).entries
+            .filter { actIds == null || it.key in actIds }
+            .sumOf { it.value } / 1000
 
     // Rango [from, to) de un período con offset respecto del actual: 0 = el actual,
     // -1 = el anterior, -2 = dos atrás, etc. Es la base de la navegación "◀ ▶" del Resumen.
@@ -729,14 +641,21 @@ object Store {
             list.add(s)
         }
         list.sortBy { it.getLong("start") }
+        val acts = HashMap<String, JSONObject>()
+        val arr = root(ctx).getJSONArray("activities")
+        for (i in 0 until arr.length()) arr.getJSONObject(i).let { acts[it.getString("id")] = it }
+        // Comillas internas duplicadas (regla de CSV): un nombre con " ya no corre columnas.
+        fun q(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         for (s in list) {
-            val a = activityById(ctx, s.getString("actId"))
+            val a = acts[s.getString("actId")]
             val name = a?.getString("name") ?: "?"
             val type = if (a != null) categoryForActivity(ctx, a).optString("name", "") else ""
             val min = (s.getLong("end") - s.getLong("start")) / 60000.0
-            sb.append("\"$name\",\"$type\",\"${fmt.format(s.getLong("start"))}\",")
-            sb.append("\"${fmt.format(s.getLong("end"))}\",${String.format(Locale.US, "%.1f", min)}\n")
+            sb.append(q(name)).append(',').append(q(type)).append(',')
+                .append(q(fmt.format(s.getLong("start")))).append(',')
+                .append(q(fmt.format(s.getLong("end")))).append(',')
+                .append(String.format(Locale.US, "%.1f", min)).append('\n')
         }
         return sb.toString()
     }
@@ -777,9 +696,10 @@ object Store {
     }
 
     // ---------- sync payload + merge ----------
-    @Synchronized
-    fun payload(ctx: Context): JSONObject {
-        val r = root(ctx)
+    // Copias profundas: el payload se serializa fuera del bloque sincronizado (en el hilo
+    // de red), y no debe compartir referencia con los arrays cacheados que otro hilo
+    // podría seguir mutando mientras tanto.
+    private fun payload(r: JSONObject): JSONObject {
         val run = JSONObject()
             .put("actId", r.optString("runActId", ""))
             .put("start", r.optLong("runStart", 0L))
@@ -787,9 +707,6 @@ object Store {
             .put("pausedAt", r.optLong("runPausedAt", 0L))
             .put("pausedAccum", r.optLong("runPausedAccum", 0L))
             .put("changedAt", r.optLong("runChangedAt", 0L))
-        // Copias profundas: el payload se serializa fuera de este bloque sincronizado
-        // (en el hilo de red), y no debe compartir referencia con los arrays cacheados
-        // que otro hilo podría seguir mutando mientras tanto.
         return JSONObject()
             .put("activities", JSONArray(r.getJSONArray("activities").toString()))
             .put("sessions", JSONArray(r.getJSONArray("sessions").toString()))
@@ -797,65 +714,56 @@ object Store {
             .put("run", run)
     }
 
+    /**
+     * Fusiona el bucket remoto (null = todavía no existe) con el dataset de profileId.
+     *
+     * Devuelve null si el perfil activo ya no es profileId: el remoto se bajó para OTRO
+     * perfil, y fusionarlo acá mezclaría los datasets de dos personas — y la subida
+     * posterior llevaría la mezcla al bucket equivocado, contaminando los dos para
+     * siempre (la fusión nunca borra). El chequeo vive dentro del lock de Store, el mismo
+     * que toma setCurrentProfile, así que el perfil no puede cambiar entre el chequeo y
+     * la escritura.
+     */
     @Synchronized
-    fun merge(ctx: Context, remote: JSONObject) {
+    fun merge(ctx: Context, profileId: String, remote: JSONObject?): MergeResult? {
+        if (currentProfileId(ctx) != profileId) return null
         val obj = root(ctx)
-        mergeList(obj.getJSONArray("activities"), remote.optJSONArray("activities"))
-        mergeList(obj.getJSONArray("sessions"), remote.optJSONArray("sessions"))
-        mergeList(obj.getJSONArray("categories"), remote.optJSONArray("categories"))
-        // root() solo corre la limpieza de categorías la primera vez que arma el objeto
-        // en memoria (cachedRoot); un merge posterior puede traer duplicados nuevos de
-        // otro dispositivo sobre ese mismo objeto ya cacheado, así que hay que repetirla acá.
-        collapseDuplicateIds(ctx, obj)
-        repairCorruptCategoryNames(ctx, obj)
-        dedupeCategoriesByName(ctx, obj)
-        // El estado "corriendo" cruza entre dispositivos: gana el cambio mas nuevo.
+        val acts = obj.getJSONArray("activities")
+        val sessions = obj.getJSONArray("sessions")
+        val cats = obj.getJSONArray("categories")
+        var changed = Merge.list(acts, remote?.optJSONArray("activities"))
+        changed = Merge.list(sessions, remote?.optJSONArray("sessions")) || changed
+        // Un merge puede traer categorías con un nombre que ya existía acá (creadas en
+        // otro dispositivo): misma limpieza que al cargar.
+        if (Merge.list(cats, remote?.optJSONArray("categories"))) {
+            dedupeCategoriesByName(obj)
+            changed = true
+        }
+        // El estado "corriendo" cruza entre dispositivos: gana el cambio más nuevo.
         // El bloque run se reemplaza entero, nunca campo por campo.
-        val rr = remote.optJSONObject("run")
-        if (rr != null) {
-            val remoteChanged = rr.optLong("changedAt", 0L)
-            if (remoteChanged > obj.optLong("runChangedAt", 0L)) {
-                obj.put("runActId", rr.optString("actId", ""))
-                obj.put("runStart", rr.optLong("start", 0L))
-                obj.put("runPaused", rr.optBoolean("paused", false))
-                obj.put("runPausedAt", rr.optLong("pausedAt", 0L))
-                obj.put("runPausedAccum", rr.optLong("pausedAccum", 0L))
-                obj.put("runChangedAt", remoteChanged)
-            }
+        val rr = remote?.optJSONObject("run")
+        val remoteRunAt = rr?.optLong("changedAt", 0L) ?: 0L
+        if (rr != null && remoteRunAt > obj.optLong("runChangedAt", 0L)) {
+            obj.put("runActId", rr.optString("actId", ""))
+            obj.put("runStart", rr.optLong("start", 0L))
+            obj.put("runPaused", rr.optBoolean("paused", false))
+            obj.put("runPausedAt", rr.optLong("pausedAt", 0L))
+            obj.put("runPausedAccum", rr.optLong("pausedAccum", 0L))
+            obj.put("runChangedAt", remoteRunAt)
+            changed = true
         }
-        write(ctx, obj)
-    }
-
-    private fun mergeList(local: JSONArray, remote: JSONArray?) {
-        if (remote == null) return
-        val index = HashMap<String, Int>()
-        for (i in 0 until local.length()) index[local.getJSONObject(i).getString("id")] = i
-        for (i in 0 until remote.length()) {
-            val r = remote.getJSONObject(i)
-            val id = r.optString("id", "")
-            if (id.isEmpty()) continue
-            val at = index[id]
-            if (at == null) {
-                local.put(r)
-                index[id] = local.length() - 1
-            } else {
-                val l = local.getJSONObject(at)
-                if (r.optLong("updatedAt", 0) > l.optLong("updatedAt", 0)) local.put(at, r)
-            }
-        }
+        // Solo se escribe (y sube Store.revision, que hace redibujar la UI) si algo
+        // cambió de verdad: antes cada sync escribía igual, y la pantalla abierta, la
+        // notificación y los widgets se reconstruían en cada ciclo sin motivo.
+        if (changed) write(ctx, obj)
+        val behind = Merge.behind(remote?.optJSONArray("activities"), acts) ||
+            Merge.behind(remote?.optJSONArray("sessions"), sessions) ||
+            Merge.behind(remote?.optJSONArray("categories"), cats) ||
+            obj.optLong("runChangedAt", 0L) > remoteRunAt
+        return MergeResult(changed, if (behind) payload(obj) else null)
     }
 
     // ---------- formatting helpers ----------
-    fun human(sec: Long): String {
-        val h = sec / 3600
-        val m = (sec % 3600) / 60
-        return when {
-            h > 0 -> "${h}h ${m.toString().padStart(2, '0')}m"
-            m > 0 -> "${m}m"
-            else -> "${sec}s"
-        }
-    }
-
     // Valor exacto siempre: H:MM:SS si hay horas, si no M:SS.
     fun exact(sec: Long): String {
         val h = sec / 3600

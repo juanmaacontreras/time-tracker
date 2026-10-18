@@ -132,20 +132,16 @@ object ProfileStore {
     }
 
     @Synchronized
-    fun merge(ctx: Context, remote: JSONObject) {
+    fun merge(ctx: Context, remote: JSONObject?): MergeResult {
         val obj = index(ctx)
         val local = obj.getJSONArray("profiles")
-        val rem = remote.optJSONArray("profiles") ?: JSONArray()
-        val idx = HashMap<String, Int>()
-        for (i in 0 until local.length()) idx[local.getJSONObject(i).optString("id")] = i
-        for (i in 0 until rem.length()) {
-            val r = rem.getJSONObject(i)
-            val id = r.optString("id", "")
-            if (id.isEmpty()) continue
-            val at = idx[id]
-            if (at == null) { local.put(r); idx[id] = local.length() - 1 }
-            else if (r.optLong("updatedAt", 0) > local.getJSONObject(at).optLong("updatedAt", 0)) local.put(at, r)
-        }
-        write(ctx, obj)
+        val rem = remote?.optJSONArray("profiles")
+        val changed = Merge.list(local, rem)
+        if (changed) write(ctx, obj)
+        return MergeResult(changed, if (Merge.behind(rem, local)) payload(ctx) else null)
     }
+
+    /** True si el perfil existe pero fue borrado (acá o en otro dispositivo). */
+    fun isDeleted(ctx: Context, id: String): Boolean =
+        profileById(ctx, id)?.optBoolean("deleted", false) == true
 }

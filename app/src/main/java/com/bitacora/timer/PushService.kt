@@ -33,11 +33,11 @@ class PushService : FirebaseMessagingService() {
         // matar el proceso, por eso este camino usa un timeout más corto que el normal
         // de 12s. Si igual no llega, no se pierde nada: el SyncWorker lo levanta más
         // tarde — el push es best-effort por diseño y nunca es la única vía.
-        if (Sync.pullMerge(ctx, PUSH_TIMEOUT_MS)) {
-            Notifs.update(ctx)
-            TimerWidget.refresh(ctx)
-            ResumenWidget.refresh(ctx)
-        }
+        //
+        // Solo se redibuja si llegó algo nuevo. El push también le llega al dispositivo
+        // que hizo la escritura (el servidor no sabe quién fue), y en ese caso no hay
+        // nada que cambiar.
+        if (Sync.syncProfile(ctx, PUSH_TIMEOUT_MS)) Surfaces.refresh(ctx)
     }
 
     companion object {

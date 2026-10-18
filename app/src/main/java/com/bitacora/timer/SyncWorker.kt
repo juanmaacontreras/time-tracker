@@ -4,25 +4,13 @@ import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 
-// Chequeo liviano en segundo plano (cada ~15 min): trae el estado compartido,
-// prende/apaga la notificacion y refresca el widget. Asi el celu "se entera"
-// de algo arrancado en otro dispositivo aunque la app este cerrada.
+// Red de seguridad en segundo plano (cada ~1 h, ver MainActivity.scheduleBackgroundSync):
+// sincroniza aunque la app esté cerrada. Baja lo que el push no haya traído y SUBE lo que
+// haya quedado pendiente — por ejemplo, una pausa desde el widget hecha sin señal, que
+// antes no llegaba a los demás dispositivos hasta volver a abrir la app.
 class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
-        try {
-            // Solo re-renderizar si el sync trajo cambios reales, igual que
-            // TimerWidget.ACTION_REFRESH: evita reconstruir el Chronometer del widget
-            // (con el riesgo de un frame raro) cada ~15 min cuando no cambió nada.
-            val before = Store.payload(applicationContext).toString()
-            Sync.pullMerge(applicationContext)
-            if (Store.payload(applicationContext).toString() != before) {
-                Notifs.update(applicationContext)
-                TimerWidget.refresh(applicationContext)
-                ResumenWidget.refresh(applicationContext)
-            }
-        } catch (e: Exception) {
-            return Result.retry()
-        }
+        if (Sync.syncNow(applicationContext)) Surfaces.refresh(applicationContext)
         return Result.success()
     }
 }

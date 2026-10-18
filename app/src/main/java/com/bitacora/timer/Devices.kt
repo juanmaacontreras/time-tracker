@@ -21,7 +21,6 @@ object Devices {
     private const val PREFS = "bitacora_app"
     private const val KEY = "devicesIndex"
     private const val DEVICE_ID_KEY = "deviceId"
-    private const val TOKEN_KEY = "fcmToken"
 
     @Volatile private var cache: JSONObject? = null
 
@@ -41,8 +40,6 @@ object Devices {
         return id
     }
 
-    fun savedToken(ctx: Context): String = prefs(ctx).getString(TOKEN_KEY, "") ?: ""
-
     @Synchronized
     fun index(ctx: Context): JSONObject {
         cache?.let { return it }
@@ -60,63 +57,41 @@ object Devices {
     }
 
     /**
-     * Deja registrado este dispositivo con su token y el perfil activo actual.
-     * Devuelve true solo si algo cambió de verdad — así el arranque normal de la app
-     * no reescribe updatedAt ni dispara una subida cada vez.
+     * Fusiona el registro remoto y DESPUÉS deja registrado este dispositivo con su token
+     * y el perfil activo actual — en ese orden, ver Sync.syncDevices. Solo se toca
+     * updatedAt si algo cambió de verdad, así el arranque normal no genera subidas.
      */
     @Synchronized
-    fun registerLocal(ctx: Context, token: String): Boolean {
-        if (token.isEmpty()) return false
-        prefs(ctx).edit().putString(TOKEN_KEY, token).apply()
-        val id = deviceId(ctx)
-        val profileId = Store.currentProfileId(ctx)
+    fun mergeAndRegister(ctx: Context, remote: JSONObject?, token: String): MergeResult {
         val obj = index(ctx)
         val arr = obj.getJSONArray("devices")
+        val rem = remote?.optJSONArray("devices")
+        var changed = Merge.list(arr, rem, "deviceId")
+        if (token.isNotEmpty()) changed = registerLocal(ctx, arr, token) || changed
+        if (changed) write(ctx, obj)
+        val upload = if (Merge.behind(rem, arr, "deviceId"))
+            JSONObject().put("devices", JSONArray(arr.toString())) else null
+        return MergeResult(changed, upload)
+    }
+
+    private fun registerLocal(ctx: Context, arr: JSONArray, token: String): Boolean {
+        val id = deviceId(ctx)
+        val profileId = Store.currentProfileId(ctx)
         for (i in 0 until arr.length()) {
             val d = arr.getJSONObject(i)
-            if (d.optString("deviceId") == id) {
-                if (d.optString("token") == token &&
-                    d.optString("profileId") == profileId &&
-                    !d.optBoolean("deleted", false)
-                ) return false
-                d.put("token", token).put("profileId", profileId)
-                    .put("deleted", false).put("updatedAt", Store.now())
-                write(ctx, obj)
-                return true
-            }
+            if (d.optString("deviceId") != id) continue
+            if (d.optString("token") == token && d.optString("profileId") == profileId &&
+                !d.optBoolean("deleted", false)
+            ) return false
+            d.put("token", token).put("profileId", profileId)
+                .put("deleted", false).put("updatedAt", Store.now())
+            return true
         }
         arr.put(
             JSONObject()
                 .put("deviceId", id).put("token", token).put("profileId", profileId)
                 .put("updatedAt", Store.now()).put("deleted", false)
         )
-        write(ctx, obj)
         return true
-    }
-
-    // ---- sync ----
-    @Synchronized
-    fun payload(ctx: Context): JSONObject =
-        JSONObject().put("devices", JSONArray(index(ctx).getJSONArray("devices").toString()))
-
-    @Synchronized
-    fun merge(ctx: Context, remote: JSONObject) {
-        val obj = index(ctx)
-        val local = obj.getJSONArray("devices")
-        val rem = remote.optJSONArray("devices") ?: JSONArray()
-        val idx = HashMap<String, Int>()
-        for (i in 0 until local.length()) idx[local.getJSONObject(i).optString("deviceId")] = i
-        for (i in 0 until rem.length()) {
-            val r = rem.getJSONObject(i)
-            val id = r.optString("deviceId", "")
-            if (id.isEmpty()) continue
-            val at = idx[id]
-            if (at == null) {
-                local.put(r); idx[id] = local.length() - 1
-            } else if (r.optLong("updatedAt", 0) > local.getJSONObject(at).optLong("updatedAt", 0)) {
-                local.put(at, r)
-            }
-        }
-        write(ctx, obj)
     }
 }

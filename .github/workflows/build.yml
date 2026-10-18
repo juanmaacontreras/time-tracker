@@ -43,7 +43,11 @@ jobs:
       - name: Preparar APK
         run: cp app/build/outputs/apk/debug/app-debug.apk bitacora.apk
 
+      # Solo main publica: un Release es lo que la app ofrece instalar en todos los
+      # teléfonos, así que una rama de trabajo nunca debe generarlo. En las demás ramas
+      # el build igual corre (sirve de chequeo) y la APK queda como artifact.
       - name: Publicar Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.vcode }}

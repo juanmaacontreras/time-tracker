@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'tests/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -34,6 +35,11 @@ jobs:
       # El service worker se publica con un número de versión real. Es lo que hace que
       # el navegador detecte que cambió y le ofrezca actualizar al usuario. Se usa la
       # misma cuenta de commits que el versionCode de la APK, así los números coinciden.
+      # Los mismos casos que corre la app (tests/fixtures): si la web deja de fusionar
+      # igual que la app, no se publica.
+      - name: Tests compartidos de sync
+        run: node tests/web.test.js
+
       - name: Inyectar versión en el service worker
         run: |
           VER=$(git rev-list --count HEAD)

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'app/**'
+      - 'tests/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle/**'
@@ -41,8 +42,13 @@ jobs:
         id: ver
         run: echo "vcode=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon -Pvcode=${{ steps.ver.outputs.vcode }} -Pvname=${{ steps.ver.outputs.vcode }}
+      - name: Tests compartidos de sync (web)
+        run: node tests/web.test.js
+
+      # testDebugUnitTest primero: si la lógica de sync deja de coincidir con los casos
+      # compartidos con la web (tests/fixtures), no se publica nada.
+      - name: Tests + build debug APK
+        run: gradle testDebugUnitTest assembleDebug --no-daemon -Pvcode=${{ steps.ver.outputs.vcode }} -Pvname=${{ steps.ver.outputs.vcode }}
 
       - name: Preparar APK
         run: cp app/build/outputs/apk/debug/app-debug.apk bitacora.apk

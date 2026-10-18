@@ -1,0 +1,139 @@
+{
+  "_about": "Casos compartidos entre la app (app/src/test/.../SharedFixturesTest.kt) y la web (tests/web.test.js). Los dos lados corren estos mismos casos contra su propio código: si alguno da distinto, la sincronización entre ellos se rompería. Para agregar un caso, agregarlo acá y correr los dos tests. En 'expect', cada entidad lista solo los campos a verificar; 'counts' verifica cuántas entradas hay en total (vivas y borradas).",
+
+  "categoryIds": [
+    { "name": "General", "id": "cat-24b9216b" },
+    { "name": "Materia", "id": "cat-5263aa4c" },
+    { "name": "Libro", "id": "cat-43a5df0f" },
+    { "name": "  libro ", "id": "cat-43a5df0f" },
+    { "name": "Programación", "id": "cat-af7c61b2" },
+    { "name": "Música", "id": "cat-f702a791" }
+  ],
+
+  "merge": [
+    {
+      "name": "el remoto trae una actividad nueva",
+      "local": { "activities": [{ "id": "a1", "name": "Leer", "updatedAt": 10 }] },
+      "remote": { "activities": [{ "id": "a1", "name": "Leer", "updatedAt": 10 }, { "id": "a2", "name": "Correr", "updatedAt": 20 }] },
+      "expect": { "changed": true, "behind": false, "counts": { "activities": 2 }, "activities": { "a2": { "name": "Correr" } } }
+    },
+    {
+      "name": "lo local es más nuevo: no cambia nada acá, pero hay que subir",
+      "local": { "activities": [{ "id": "a1", "name": "Nuevo", "updatedAt": 30 }] },
+      "remote": { "activities": [{ "id": "a1", "name": "Viejo", "updatedAt": 10 }] },
+      "expect": { "changed": false, "behind": true, "activities": { "a1": { "name": "Nuevo" } } }
+    },
+    {
+      "name": "lo remoto es más nuevo y gana",
+      "local": { "activities": [{ "id": "a1", "name": "Viejo", "updatedAt": 10 }] },
+      "remote": { "activities": [{ "id": "a1", "name": "Nuevo", "updatedAt": 30 }] },
+      "expect": { "changed": true, "behind": false, "activities": { "a1": { "name": "Nuevo" } } }
+    },
+    {
+      "name": "empate de updatedAt: se queda lo local y no se sube",
+      "local": { "activities": [{ "id": "a1", "name": "Local", "updatedAt": 10 }] },
+      "remote": { "activities": [{ "id": "a1", "name": "Remoto", "updatedAt": 10 }] },
+      "expect": { "changed": false, "behind": false, "activities": { "a1": { "name": "Local" } } }
+    },
+    {
+      "name": "el bucket remoto no existe y hay datos locales: hay que subir",
+      "local": { "activities": [{ "id": "a1", "name": "Leer", "updatedAt": 10 }] },
+      "remote": null,
+      "expect": { "changed": false, "behind": true }
+    },
+    {
+      "name": "el bucket remoto no existe y no hay nada local: no se sube un dataset vacío",
+      "local": {},
+      "remote": null,
+      "expect": { "changed": false, "behind": false }
+    },
+    {
+      "name": "sesión nueva remota",
+      "local": { "sessions": [{ "id": "s1", "actId": "a1", "start": 0, "end": 1000, "updatedAt": 5 }] },
+      "remote": { "sessions": [{ "id": "s1", "actId": "a1", "start": 0, "end": 1000, "updatedAt": 5 }, { "id": "s2", "actId": "a1", "start": 2000, "end": 3000, "updatedAt": 6 }] },
+      "expect": { "changed": true, "behind": false, "counts": { "sessions": 2 } }
+    },
+    {
+      "name": "cronómetro: gana el cambio remoto más nuevo, entero",
+      "local": { "runActId": "", "runChangedAt": 10 },
+      "remote": { "run": { "actId": "a1", "start": 100, "paused": true, "pausedAt": 150, "pausedAccum": 7, "changedAt": 50 } },
+      "expect": { "changed": true, "behind": false, "run": { "runActId": "a1", "runStart": 100, "runPaused": true, "runPausedAt": 150, "runPausedAccum": 7, "runChangedAt": 50 } }
+    },
+    {
+      "name": "cronómetro: el local más nuevo se conserva y hay que subirlo",
+      "local": { "runActId": "a1", "runStart": 100, "runChangedAt": 60 },
+      "remote": { "run": { "actId": "", "start": 0, "changedAt": 50 } },
+      "expect": { "changed": false, "behind": true, "run": { "runActId": "a1", "runChangedAt": 60 } }
+    },
+    {
+      "name": "misma categoría creada en dos dispositivos: los dos conservan la de id menor",
+      "local": {
+        "categories": [{ "id": "zz", "name": "Libro", "icon": "", "updatedAt": 5 }],
+        "activities": [{ "id": "a1", "name": "Novela", "type": "zz", "updatedAt": 5 }]
+      },
+      "remote": {
+        "categories": [{ "id": "aa", "name": "libro", "icon": "", "updatedAt": 5 }],
+        "activities": [{ "id": "a2", "name": "Ensayo", "type": "aa", "updatedAt": 5 }]
+      },
+      "expect": {
+        "changed": true, "behind": true,
+        "categories": { "aa": { "deleted": false }, "zz": { "deleted": true } },
+        "activities": { "a1": { "type": "aa" }, "a2": { "type": "aa" } }
+      }
+    },
+    {
+      "name": "misma categoría en dos dispositivos: gana la que tiene ícono aunque su id sea mayor",
+      "local": {
+        "categories": [{ "id": "zz", "name": "Libro", "icon": "book", "updatedAt": 5 }]
+      },
+      "remote": {
+        "categories": [{ "id": "aa", "name": "libro", "icon": "", "updatedAt": 5 }],
+        "activities": [{ "id": "a2", "name": "Ensayo", "type": "aa", "updatedAt": 5 }]
+      },
+      "expect": {
+        "changed": true, "behind": true,
+        "categories": { "zz": { "deleted": false }, "aa": { "deleted": true } },
+        "activities": { "a2": { "type": "zz" } }
+      }
+    },
+    {
+      "name": "categoría borrada en los dos lados: se consolida pero nunca resucita",
+      "local": { "categories": [{ "id": "zz", "name": "Libro", "icon": "", "deleted": true, "updatedAt": 5 }] },
+      "remote": { "categories": [{ "id": "aa", "name": "libro", "icon": "", "deleted": true, "updatedAt": 5 }] },
+      "expect": {
+        "changed": true, "behind": true, "counts": { "categories": 2 },
+        "categories": { "aa": { "deleted": true }, "zz": { "deleted": true } }
+      }
+    }
+  ],
+
+  "stats": [
+    {
+      "name": "la ventana corta una sesión guardada",
+      "now": 1000000, "from": 50000, "to": 200000,
+      "data": { "sessions": [{ "id": "s1", "actId": "a1", "start": 0, "end": 100000, "updatedAt": 1 }] },
+      "expect": { "a1": 50 }
+    },
+    {
+      "name": "las sesiones borradas no cuentan",
+      "now": 1000000, "from": 0, "to": null,
+      "data": { "sessions": [
+        { "id": "s1", "actId": "a1", "start": 0, "end": 60000, "updatedAt": 1 },
+        { "id": "s2", "actId": "a1", "start": 100000, "end": 200000, "updatedAt": 1, "deleted": true }
+      ] },
+      "expect": { "a1": 60 }
+    },
+    {
+      "name": "sesión en curso pausada: se cuenta como quedará guardada, sin restar pausas de fuera de la ventana",
+      "now": 1000000, "from": 500000, "to": null,
+      "data": { "runActId": "a1", "runStart": 400000, "runPaused": true, "runPausedAt": 900000, "runPausedAccum": 300000 },
+      "expect": { "a1": 100 }
+    },
+    {
+      "name": "sesión en curso sin pausa suma hasta ahora",
+      "now": 1000000, "from": 0, "to": null,
+      "data": { "runActId": "a1", "runStart": 900000, "sessions": [{ "id": "s1", "actId": "a2", "start": 0, "end": 30000, "updatedAt": 1 }] },
+      "expect": { "a1": 100, "a2": 30 }
+    }
+  ]
+}

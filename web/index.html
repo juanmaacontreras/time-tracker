@@ -905,9 +905,11 @@ const syncIndex = () => syncBucket(INDEX_KEY, r => ProfileStore.merge(r));
 // encadena uno más al terminar, en vez de perderlo y esperar al próximo ciclo de 10 s
 // para que el cambio salga. Los pedidos sin cambio local (ciclo, foco) sí se descartan.
 let syncAgain = false;
+let lastSyncAt = 0;
 async function sync(afterLocalChange = false) {
   if (syncing) { if (afterLocalChange) syncAgain = true; return; }
-  syncing = true; syncAgain = false; setSync("sync");
+  syncing = true; syncAgain = false; lastSyncAt = Date.now(); setSync("sync");
+  Live.watch([INDEX_KEY, bucketKey(Store.currentProfileId())]);
   try {
     const indexChanged = await syncIndex();
     // El perfil se fija UNA vez, antes de bajar: si el usuario cambia de perfil mientras
@@ -923,6 +925,76 @@ async function sync(afterLocalChange = false) {
     if (syncAgain) sync(true);
   }
 }
+
+/* ====================== LIVE (Supabase Realtime) ======================
+   Conexión abierta con el servidor: avisa apenas cambia el bucket del perfil activo (o
+   el índice de perfiles), y entonces se corre sync(). Es el equivalente web del push
+   de la app: un "timbre" sin datos — el aviso trae la fila entera, pero se ignora y se
+   va a buscar por el camino normal, que ya sabe fusionar y descartar lo de otro perfil.
+
+   Cliente mínimo del protocolo Phoenix (vsn 2.0.0: cada mensaje es un array
+   [join_ref, ref, topic, event, payload]) en vez de supabase-js: son ~200 KB para usar
+   una sola función. Requiere que la tabla esté en la publicación de Realtime (ver
+   supabase/realtime.sql); si no lo está, el servidor contesta con un "system" de error,
+   Live.ok queda en false y el ciclo de sondeo sigue a 10 s como siempre. */
+const Live = {
+  ok: false,
+  _ws: null, _keys: "", _ref: 0, _topic: "", _hb: null, _retry: 0, _debounce: null,
+  watch(keys) {
+    const k = keys.join("|");
+    if (k === this._keys && this._ws) return;
+    this._keys = k;
+    if (this._ws && this._ws.readyState === WebSocket.OPEN) this._join(); else this._connect();
+  },
+  _send(joinRef, topic, event, payload) {
+    if (!this._ws || this._ws.readyState !== WebSocket.OPEN) return;
+    this._ws.send(JSON.stringify([joinRef, String(++this._ref), topic, event, payload]));
+  },
+  _connect() {
+    if (typeof WebSocket === "undefined") return;
+    if (this._ws) { this._ws.onclose = null; this._ws.close(); }
+    const url = CFG.url.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey=" +
+      encodeURIComponent(CFG.key) + "&vsn=2.0.0";
+    const ws = new WebSocket(url);
+    this._ws = ws;
+    ws.onopen = () => {
+      this._retry = 0;
+      this._join();
+      clearInterval(this._hb);
+      this._hb = setInterval(() => this._send(null, "phoenix", "heartbeat", {}), 25000);
+    };
+    ws.onmessage = (e) => {
+      let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+      const [, , topic, event, payload] = m;
+      if (topic !== this._topic) return;
+      if (event === "phx_reply" && payload && payload.status !== "ok") this.ok = false;
+      else if (event === "system" && payload) this.ok = payload.status === "ok";
+      else if (event === "postgres_changes") {
+        this.ok = true;
+        clearTimeout(this._debounce);
+        this._debounce = setTimeout(() => sync(), 150);
+      }
+    };
+    ws.onclose = () => {
+      this.ok = false;
+      clearInterval(this._hb);
+      // Reintento con espera creciente (1 s, 2 s, 4 s... hasta 60 s).
+      const wait = Math.min(60000, 1000 * 2 ** this._retry++);
+      setTimeout(() => { if (this._ws === ws) this._connect(); }, wait);
+    };
+  },
+  _join() {
+    if (this._topic) this._send(null, this._topic, "phx_leave", {});
+    this.ok = false;
+    this._topic = "realtime:bitacora-" + (++this._ref);
+    const changes = this._keys.split("|").map(k =>
+      ({ event: "*", schema: "public", table: "buckets", filter: "user_key=eq." + k }));
+    this._send(String(this._ref), this._topic, "phx_join", {
+      config: { broadcast: { self: false }, presence: { key: "", enabled: false },
+        postgres_changes: changes, private: false }
+    });
+  }
+};
 
 /* ====================== HELPERS DE FECHA / FORMATO ====================== */
 function midnight(d) { d.setHours(0, 0, 0, 0); return d.getTime(); }
@@ -1758,17 +1830,19 @@ setInterval(() => {
 }, 1000);
 
 /* Sync loop + eventos.
-   OJO: acá el intervalo NO se puede alargar como en la app. La app tiene push y se
-   entera en segundos por esa vía, pero la web NO recibe push (necesitaría un service
-   worker; ver CLAUDE.md), así que este ciclo es su única forma de enterarse de algo
-   hecho en otro dispositivo. Se probó subirlo a 60s y el efecto fue que la web tardaba
-   hasta un minuto en reflejar cambios del celular.
+   Con Live conectado los cambios llegan al instante y el sondeo queda como respaldo
+   (60 s). Sin Live (Realtime apagado en la tabla, sin WebSocket o conexión caída) el
+   sondeo es la única forma de enterarse y vuelve a 10 s. OJO: ese 10 s no se puede
+   alargar — ya se probó a 60 s sin un canal en vivo y la web tardaba hasta un minuto
+   en reflejar cambios del celular. Se evalúa cada 10 s, así al caerse Live el ritmo
+   rápido vuelve solo.
 
-   Sondear seguido acá es barato: son GET, y leer no dispara el trigger de Postgres, así
-   que no despierta a ningún otro dispositivo. Lo que había que evitar eran las
-   ESCRITURAS innecesarias, y de eso ya se encarga syncBucket: solo sube si el remoto
-   quedó atrás (isBehind). */
-setInterval(sync, 10000);
+   Sondear es barato: son GET, y leer no dispara el trigger de Postgres. Lo que había
+   que evitar eran las ESCRITURAS innecesarias, y de eso se encarga syncBucket: solo
+   sube si el remoto quedó atrás (isBehind). */
+setInterval(() => {
+  if (Date.now() - lastSyncAt >= (Live.ok ? 60000 : 10000) - 500) sync();
+}, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
 window.addEventListener("focus", () => sync());
 // Otra pestaña (o la ventana instalada) escribió en localStorage: el cache en memoria de

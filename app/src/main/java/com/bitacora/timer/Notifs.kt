@@ -5,13 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
+import android.os.Build
 import android.os.SystemClock
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import org.json.JSONObject
 
 object Notifs {
     private const val CHANNEL = "bitacora_timer"
@@ -21,40 +21,6 @@ object Notifs {
         val ch = NotificationChannel(CHANNEL, "Cronómetro", NotificationManager.IMPORTANCE_LOW)
         ch.setShowBadge(false)
         ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
-    }
-
-    // Blanco o tinta oscura según qué tan claro sea el color de fondo (swatch de la
-    // categoría, que es arbitrario) — mismo criterio que el mockup HTML.
-    private fun contrastOn(bgColor: Int): Int {
-        val r = Color.red(bgColor); val g = Color.green(bgColor); val b = Color.blue(bgColor)
-        val yiq = (r * 299 + g * 587 + b * 114) / 1000.0
-        return if (yiq >= 150) Color.parseColor("#1B1D24") else Color.WHITE
-    }
-
-    // Arma el swatch de identidad (ícono de categoría, o inicial si no tiene) y el
-    // anillo de estado — común a la vista chica y la grande. El anillo reemplaza al
-    // pulso animado del mockup: RemoteViews no puede arrancar una animación en un
-    // proceso remoto, así que "corriendo" se marca con este borde estático.
-    private fun bindSwatch(views: RemoteViews, cat: JSONObject, running: Boolean, liveColor: Int) {
-        val bgColor = Color.parseColor(cat.optString("color", "#2F4B8F"))
-        views.setInt(R.id.n_swatch_bg, "setColorFilter", bgColor)
-        views.setInt(R.id.n_swatch_ring, "setColorFilter", liveColor)
-        views.setViewVisibility(R.id.n_swatch_ring, if (running) android.view.View.VISIBLE else android.view.View.GONE)
-
-        val fg = contrastOn(bgColor)
-        val iconRes = CategoryIcons.resOf(cat.optString("icon", ""))
-        if (iconRes != null) {
-            views.setImageViewResource(R.id.n_swatch_icon, iconRes)
-            views.setInt(R.id.n_swatch_icon, "setColorFilter", fg)
-            views.setViewVisibility(R.id.n_swatch_icon, android.view.View.VISIBLE)
-            views.setViewVisibility(R.id.n_swatch_letter, android.view.View.GONE)
-        } else {
-            val name = cat.optString("name", "General")
-            views.setTextViewText(R.id.n_swatch_letter, if (name.isNotEmpty()) name.substring(0, 1).uppercase() else "?")
-            views.setTextColor(R.id.n_swatch_letter, fg)
-            views.setViewVisibility(R.id.n_swatch_letter, android.view.View.VISIBLE)
-            views.setViewVisibility(R.id.n_swatch_icon, android.view.View.GONE)
-        }
     }
 
     // Muestra u oculta la notificacion segun el estado actual (corriendo o no).
@@ -69,6 +35,7 @@ object Notifs {
         val a = Store.activityById(ctx, runId)
         val name = a?.optString("name") ?: "Cronómetro"
         val cat = if (a != null) Store.categoryForActivity(ctx, a) else null
+        val catName = cat?.optString("name", "General") ?: "General"
 
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
@@ -85,47 +52,58 @@ object Notifs {
         val running = !paused
         val elapsed = Store.runningElapsedMs(ctx)
         val base = SystemClock.elapsedRealtime() - elapsed
-        val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
-        val pauseLabel = if (paused) "Seguir" else "Pausar"
-        val liveColor = ContextCompat.getColor(ctx, R.color.live)
-        val mutedColor = ContextCompat.getColor(ctx, R.color.muted)
+        val stateColor = ContextCompat.getColor(ctx, if (paused) R.color.pausedColor else R.color.live)
+        // Sobre el acento lleno va onAccent, no blanco fijo: en oscuro el acento es un
+        // celeste claro y el blanco encima casi no se leía.
+        val onAccent = ContextCompat.getColor(ctx, R.color.onAccent)
+        val inkSoft = ContextCompat.getColor(ctx, R.color.inkSoft)
+        val actColor = RemoteUi.colorOf(a)
 
-        fun bindCommon(views: RemoteViews) {
+        // pauseBg/pauseBgPaused: círculos en la colapsada, píldoras en la expandida.
+        fun bindCommon(views: RemoteViews, swatchDp: Int, pauseBg: Int, pauseBgPaused: Int) {
+            RemoteUi.bindSwatch(ctx, views, a, cat, swatchDp)
             views.setTextViewText(R.id.n_name, name)
-            views.setTextViewText(R.id.n_cat, cat?.optString("name", "General") ?: "General")
+            views.setTextColor(R.id.n_eyebrow, stateColor)
             views.setChronometer(R.id.n_chrono, base, null, running)
-
-            views.setImageViewResource(R.id.n_pause_icon, pauseIcon)
-            views.setInt(R.id.n_stop_icon, "setColorFilter", mutedColor)
+            views.setImageViewResource(R.id.n_pause_icon, if (paused) R.drawable.ic_play else R.drawable.ic_pause)
+            views.setInt(R.id.n_pause_icon, "setColorFilter", onAccent)
+            views.setInt(R.id.n_stop_icon, "setColorFilter", inkSoft)
+            // Pausado, el botón invita a seguir con el anillo "live" (sustituto estático del pulso).
+            views.setInt(R.id.n_pause, "setBackgroundResource", if (paused) pauseBgPaused else pauseBg)
+            views.setContentDescription(R.id.n_pause, if (paused) "Seguir" else "Pausar")
             views.setOnClickPendingIntent(R.id.n_pause, pausePi)
             views.setOnClickPendingIntent(R.id.n_stop, stopPi)
         }
 
         val big = RemoteViews(ctx.packageName, R.layout.notif)
-        bindCommon(big)
-        // El swatch de identidad solo existe en la vista expandida (ver notif_small.xml:
-        // a ese ancho, el nombre necesita el espacio más que el color/ícono).
-        if (cat != null) bindSwatch(big, cat, running, liveColor)
-        big.setTextViewText(R.id.n_eyebrow, if (paused) "Pausado" else "Cronometrando")
-        big.setTextColor(R.id.n_eyebrow, if (paused) mutedColor else liveColor)
-        big.setTextViewText(R.id.n_pause_label, pauseLabel)
-        big.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.pill_primary_invite else R.drawable.pill_primary)
-        big.setInt(R.id.n_stop, "setBackgroundResource", R.drawable.pill_ghost)
+        bindCommon(big, 40, R.drawable.pill_primary, R.drawable.pill_primary_invite)
+        big.setTextViewText(R.id.n_pause_label, if (paused) "Seguir" else "Pausar")
+        big.setTextViewText(R.id.n_eyebrow, (if (paused) "Pausado" else "Cronometrando") + " · " + catName)
+        big.setInt(R.id.n_swatch_ring, "setColorFilter", stateColor)
+        big.setViewVisibility(R.id.n_swatch_ring, View.VISIBLE)
 
         val small = RemoteViews(ctx.packageName, R.layout.notif_small)
-        bindCommon(small)
-        small.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
-        small.setInt(R.id.n_stop, "setBackgroundResource", R.drawable.circle_ghost)
+        bindCommon(small, 34, R.drawable.circle_primary, R.drawable.circle_primary_invite)
+        small.setTextViewText(R.id.n_eyebrow, if (paused) "Pausado" else catName)
+        // Desde Android 12 el sistema dibuja su propio círculo con el ícono a la
+        // izquierda de la vista colapsada (y lo tiñe con setColor, abajo): el swatch
+        // propio quedaría duplicado y le robaría al nombre el poco ancho que hay.
+        small.setViewVisibility(R.id.n_swatch, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) View.GONE else View.VISIBLE)
 
-        // Sin .setStyle(DecoratedCustomViewStyle()): esa era justamente la que le pedía
-        // al sistema dibujar la fila de ícono + nombre de la app + hora arriba de
-        // nuestra vista. Sin ningún Style, Android usa las vistas custom tal cual, de
-        // punta a punta, sin agregar nada propio (setContentTitle/Text quedan solo
-        // como respaldo para accesibilidad/reloj, no se ven en la notificación en sí).
+        // Sin .setStyle(): con DecoratedCustomViewStyle el sistema agrega siempre la fila
+        // de ícono + nombre de la app. Ojo que desde Android 12 (targetSdk >= 31) el
+        // sistema igual envuelve las vistas custom en su plantilla: en la colapsada pone
+        // su ícono y la flecha de expandir, y en AOSP la expandida lleva el encabezado
+        // completo; algunas capas de fabricante lo omiten. Las vistas están pensadas
+        // para entrar en los dos casos (ver notif.xml).
         val builder = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif)
+            // Tiñe el círculo del ícono que dibuja el sistema: la identidad de la
+            // actividad también en la vista colapsada.
+            .setColor(actColor)
             .setContentTitle(name)
             .setContentText(if (paused) "Pausado" else "Cronometrando…")
+            .setShowWhen(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openPi)

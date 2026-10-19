@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Anillo de estado "corriendo" sobre el swatch: sin relleno, solo borde, teñido al
-     color "live" en runtime. No es una animación real: RemoteViews no puede arrancar
-     un AnimationDrawable en un proceso remoto, así que el estado se marca con este
-     anillo estático en vez del pulso que sí funciona en el mockup HTML. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#00000000" />
-    <corners android:radius="13dp" />
-    <stroke android:width="2dp" android:color="#FFFFFF" />
-</shape>
+<!-- Anillo de estado "corriendo" alrededor del swatch de la notificación: solo borde,
+     teñido al color "live" en runtime. Va en un marco de 48dp con el swatch de 40dp
+     centrado, así el borde queda por fuera y a la vista (antes medía lo mismo que el
+     swatch, que se dibujaba encima y lo tapaba entero). Estático: RemoteViews no puede
+     arrancar una animación en un proceso remoto. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M15,1h18a14,14 0,0 1,14 14v18a14,14 0,0 1,-14 14h-18a14,14 0,0 1,-14 -14v-18a14,14 0,0 1,14 -14z" />
+</vector>

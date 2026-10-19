@@ -196,7 +196,8 @@ private fun MainActivity.bigTime(sec: Long): TextView {
 }
 
 // Duración legible para las líneas de texto: "1 h 10 m", "25 m", "40 s".
-private fun spaced(sec: Long): String {
+// "56 h 05 m": el formato del total del Resumen (app y widget).
+internal fun spaced(sec: Long): String {
     val h = sec / 3600
     val m = (sec % 3600) / 60
     return when {
@@ -209,21 +210,27 @@ private fun spaced(sec: Long): String {
 // Contra el período anterior. Si el actual está en curso, contra el MISMO tramo del
 // anterior (lunes a hoy a esta hora vs. lunes a ese día a esta hora): si no, la
 // comparación siempre da "menos" hasta que termine. Subir es verde; bajar es apagado,
-// nunca rojo: no es un error.
-private fun MainActivity.comparisonLine(total: Long, from: Long, actIds: Set<String>): View? {
-    val (pf, pt) = Store.periodRange(statsPeriod, statsOffset - 1)
-    val live = statsOffset == 0
+// nunca rojo: no es un error. Devuelve el texto y el signo (1 sube, -1 baja, 0 igual),
+// o null si no hay nada que comparar. La usan el Resumen y el widget Resumen.
+internal fun comparison(ctx: Context, period: String, offset: Int, from: Long, total: Long, actIds: Set<String>?): Pair<String, Int>? {
+    val (pf, pt) = Store.periodRange(period, offset - 1)
+    val live = offset == 0
     val prevTo = if (live) minOf(pt, pf + (Store.now() - from)) else pt
-    val prev = Store.totalBetween(this, pf, prevTo, actIds)
+    val prev = Store.totalBetween(ctx, pf, prevTo, actIds)
     if (total == 0L && prev == 0L) return null
-    val labels = PREV_LABEL[statsPeriod] ?: return null
+    val labels = PREV_LABEL[period] ?: return null
     val text = if (live) labels.first else labels.second
     val diff = total - prev
-    val t = when {
-        Math.abs(diff) < 60 -> label("= Igual que " + text.removePrefix("vs. "), 13.5f, col(R.color.muted), bold = true)
-        diff > 0 -> label("▲ ${spaced(diff)} $text", 13.5f, col(R.color.up), bold = true)
-        else -> label("▼ ${spaced(-diff)} $text", 13.5f, col(R.color.muted), bold = true)
+    return when {
+        Math.abs(diff) < 60 -> ("= Igual que " + text.removePrefix("vs. ")) to 0
+        diff > 0 -> "▲ ${spaced(diff)} $text" to 1
+        else -> "▼ ${spaced(-diff)} $text" to -1
     }
+}
+
+private fun MainActivity.comparisonLine(total: Long, from: Long, actIds: Set<String>): View? {
+    val (text, sign) = comparison(this, statsPeriod, statsOffset, from, total, actIds) ?: return null
+    val t = label(text, 13.5f, col(if (sign > 0) R.color.up else R.color.muted), bold = true)
     t.setPadding(0, dp(6), 0, 0)
     return t
 }

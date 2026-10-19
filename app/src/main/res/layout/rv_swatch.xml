@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Swatch de identidad para RemoteViews (notificación y widgets): ícono de la categoría
+     (o la inicial) sobre el color de la actividad. El tamaño lo pone el <include>; el
+     relleno del ícono y el tamaño de la letra los ajusta RemoteUi.bindSwatch en
+     proporción, así sirve igual a 22dp que a 44dp. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="40dp"
+    android:layout_height="40dp">
+
+    <ImageView
+        android:id="@+id/sw_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/swatch_shape" />
+
+    <ImageView
+        android:id="@+id/sw_icon"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/sw_letter"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:visibility="gone" />
+</FrameLayout>

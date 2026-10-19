@@ -1,38 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vista expandida de la notificación: swatch de identidad (ícono de categoría o
-     inicial), cronómetro grande y botones propios (no .addAction()) para poder
-     dibujarlos como píldoras en vez de la fila de texto estándar de Android. -->
+<!-- Vista expandida de la notificación, estilo reproductor: swatch de identidad con el
+     anillo de estado, qué corre y de qué categoría, el cronómetro grande y abajo dos
+     píldoras con texto (Pausar lleno + Parar tonal; elegidas por el usuario frente a
+     botones redondos solo con ícono). Apilado (y no todo en una fila) porque desde
+     Android 12 el sistema le pone su encabezado y sangría: quedan ~270dp de ancho, y en
+     una sola fila el nombre se partía letra a letra. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingLeft="14dp"
-    android:paddingRight="14dp"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
     android:paddingTop="10dp"
     android:paddingBottom="14dp">
-
-    <TextView
-        android:id="@+id/n_eyebrow"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textAppearance="@style/TextAppearance.Compat.Notification"
-        android:textSize="11sp"
-        android:letterSpacing="0.08"
-        android:textAllCaps="true"
-        android:textStyle="bold"
-        android:maxLines="1"
-        android:text="Cronometrando" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="8dp">
+        android:gravity="center_vertical">
 
         <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp">
+            android:layout_width="48dp"
+            android:layout_height="48dp">
 
             <ImageView
                 android:id="@+id/n_swatch_ring"
@@ -41,27 +31,11 @@
                 android:src="@drawable/swatch_ring"
                 android:visibility="gone" />
 
-            <ImageView
-                android:id="@+id/n_swatch_bg"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:src="@drawable/swatch_shape" />
-
-            <ImageView
-                android:id="@+id/n_swatch_icon"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_gravity="center"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/n_swatch_letter"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textStyle="bold"
-                android:textSize="16sp"
-                android:text="L" />
+            <include
+                layout="@layout/rv_swatch"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center" />
         </FrameLayout>
 
         <LinearLayout
@@ -72,55 +46,58 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/n_eyebrow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10.5sp"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:text="Cronometrando · Categoría" />
+
+            <TextView
                 android:id="@+id/n_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
                 android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-                android:textSize="15.5sp"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:maxLines="2"
                 android:ellipsize="end"
                 android:text="Actividad" />
-
-            <TextView
-                android:id="@+id/n_cat"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Compat.Notification"
-                android:textSize="11sp"
-                android:letterSpacing="0.05"
-                android:textAllCaps="true"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:layout_marginTop="1dp"
-                android:text="Categoría" />
         </LinearLayout>
-
-        <Chronometer
-            android:id="@+id/n_chrono"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-            android:textSize="33sp"
-            android:fontFamily="monospace"
-            android:layout_marginStart="8dp"
-            android:text="0:00" />
     </LinearLayout>
+
+    <!-- Dígitos tabulares, nunca monoespaciada (regla del sistema de diseño). -->
+    <Chronometer
+        android:id="@+id/n_chrono"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+        android:textSize="34sp"
+        android:fontFeatureSettings="tnum"
+        android:letterSpacing="-0.02"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="0:00" />
 
     <LinearLayout
         android:baselineAligned="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="14dp">
+        android:layout_marginTop="12dp">
 
         <LinearLayout
             android:id="@+id/n_pause"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:layout_marginEnd="12dp"
+            android:layout_marginEnd="10dp"
             android:orientation="horizontal"
             android:gravity="center"
             android:background="@drawable/pill_primary"
@@ -138,20 +115,20 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:textColor="@color/white"
+                android:textColor="@color/onAccent"
                 android:textStyle="bold"
-                android:textSize="13.5sp"
+                android:textSize="14sp"
                 android:text="Pausar" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/n_stop"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="44dp"
             android:layout_weight="1"
             android:orientation="horizontal"
             android:gravity="center"
-            android:background="@drawable/pill_ghost"
+            android:background="@drawable/pill_tonal"
             android:clickable="true"
             android:focusable="true">
 
@@ -165,9 +142,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:textColor="@color/muted"
+                android:textColor="@color/inkSoft"
                 android:textStyle="bold"
-                android:textSize="13.5sp"
+                android:textSize="14sp"
                 android:text="Parar" />
         </LinearLayout>
     </LinearLayout>

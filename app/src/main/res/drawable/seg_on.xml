@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Opción activa del control segmentado: "levantada" sobre la pista. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/raised" />
+    <corners android:radius="11dp" />
+</shape>

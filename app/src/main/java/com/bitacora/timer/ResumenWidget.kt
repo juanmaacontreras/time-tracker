@@ -70,84 +70,82 @@ class ResumenWidget : AppWidgetProvider() {
             )
         }
 
-        // Cuántas filas entran enteras (con su barra) en el alto actual del widget.
-        // Medidas del layout: padding 14+14, encabezado ~44, chips ~36, cada fila ~36
-        // (texto + margen + barra) y la línea de "+N más" ~18 si hace falta.
-        private fun rowsThatFit(mgr: AppWidgetManager, id: Int, count: Int): Int {
-            // En vertical el alto real es el máximo informado; sin datos, el mínimo del widget.
-            val h = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
-                .let { if (it > 0) it else 200 }
-            val free = h - 28 - 44 - 36
-            if (count <= free / 36) return count
-            return ((free - 18) / 36).coerceAtLeast(1)
+        private val TITLES = mapOf("day" to "Hoy", "week" to "Esta semana", "month" to "Este mes")
+        private const val ROW_DP = 37     // widget_resumen_row.xml: margen 10 + texto y barra
+        private const val HEAD_DP = 84    // título + total + comparación (con sus márgenes)
+        private const val MORE_DP = 19
+
+        // Cuántas filas entran enteras en el alto actual del widget.
+        private fun rowsThatFit(hDp: Int, count: Int): Int {
+            val free = hDp - 28 - HEAD_DP
+            if (count <= free / ROW_DP) return count
+            return ((free - MORE_DP) / ROW_DP).coerceAtLeast(1)
         }
 
-        private fun styleChip(ctx: Context, views: RemoteViews, id: Int, active: Boolean) {
-            views.setInt(id, "setBackgroundResource", if (active) R.drawable.chip_on else R.drawable.chip)
-            views.setTextColor(
-                id,
-                if (active) ContextCompat.getColor(ctx, R.color.paper)
-                else ContextCompat.getColor(ctx, R.color.inkSoft)
-            )
+        // Control segmentado como el del Resumen: la opción activa "levantada".
+        private fun styleSeg(ctx: Context, views: RemoteViews, id: Int, active: Boolean) {
+            if (active) views.setInt(id, "setBackgroundResource", R.drawable.seg_on)
+            else views.setInt(id, "setBackgroundColor", Color.TRANSPARENT)
+            views.setTextColor(id, ContextCompat.getColor(ctx, if (active) R.color.ink else R.color.muted))
         }
 
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
-            val views = RemoteViews(context.packageName, R.layout.widget_resumen)
+            val pkg = context.packageName
+            val views = RemoteViews(pkg, R.layout.widget_resumen)
             val period = getPeriod(context)
             val (from, to) = Store.periodRange(period, 0)
             val secs = Store.secsByActivity(context, from, to)
 
             // Incluye archivadas, como el Resumen de la app: su tiempo del período cuenta.
-            val per = Store.activities(context, includeArchived = true)
+            val all = Store.activities(context, includeArchived = true)
+            val per = all
                 .map { it to (secs[it.getString("id")] ?: 0L) }
                 .filter { it.second > 0 }
                 .sortedByDescending { it.second }
             val total = per.sumOf { it.second }
 
-            views.setTextViewText(R.id.w2_total, Store.human(total))
+            views.setTextViewText(R.id.w2_title, TITLES[period] ?: "")
+            views.setTextViewText(R.id.w2_total, spaced(total))
+            // La misma comparación que el Resumen ("▲ 1 h 10 m vs. ayer a esta hora").
+            val cmp = comparison(context, period, 0, from, total, all.map { it.getString("id") }.toSet())
+            if (cmp != null) {
+                views.setTextViewText(R.id.w2_cmp, cmp.first)
+                views.setTextColor(R.id.w2_cmp, ContextCompat.getColor(context, if (cmp.second > 0) R.color.up else R.color.muted))
+                views.setViewVisibility(R.id.w2_cmp, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.w2_cmp, View.GONE)
+            }
 
-            styleChip(context, views, R.id.w2_day, period == "day")
-            styleChip(context, views, R.id.w2_week, period == "week")
-            styleChip(context, views, R.id.w2_month, period == "month")
+            styleSeg(context, views, R.id.w2_day, period == "day")
+            styleSeg(context, views, R.id.w2_week, period == "week")
+            styleSeg(context, views, R.id.w2_month, period == "month")
             views.setOnClickPendingIntent(R.id.w2_day, pi(context, ACTION_PERIOD, "day", 10))
             views.setOnClickPendingIntent(R.id.w2_week, pi(context, ACTION_PERIOD, "week", 11))
             views.setOnClickPendingIntent(R.id.w2_month, pi(context, ACTION_PERIOD, "month", 12))
             // Tocar el fondo (fuera de los botones) abre la app; el refresco ya ocurre solo
             // (sync periódico + al cambiar de período).
-            val openIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            val openPi = PendingIntent.getActivity(
-                context, 13, openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.w2_root, openPi)
+            views.setOnClickPendingIntent(android.R.id.background, RemoteUi.openApp(context, 13))
 
-            val rowBox = intArrayOf(R.id.w2_row0, R.id.w2_row1, R.id.w2_row2, R.id.w2_row3, R.id.w2_row4, R.id.w2_row5)
-            val rowN = intArrayOf(R.id.w2_n0, R.id.w2_n1, R.id.w2_n2, R.id.w2_n3, R.id.w2_n4, R.id.w2_n5)
-            val rowT = intArrayOf(R.id.w2_t0, R.id.w2_t1, R.id.w2_t2, R.id.w2_t3, R.id.w2_t4, R.id.w2_t5)
-            val rowP = intArrayOf(R.id.w2_p0, R.id.w2_p1, R.id.w2_p2, R.id.w2_p3, R.id.w2_p4, R.id.w2_p5)
             // La barra es la parte del total (igual que el Resumen), no relativa a la mayor.
             val safeTotal = total.coerceAtLeast(1L)
-            val shown = minOf(rowBox.size, rowsThatFit(mgr, id, per.size))
-
-            for (i in rowBox.indices) {
-                if (i < minOf(per.size, shown)) {
-                    val a = per[i].first
-                    val sec = per[i].second
-                    views.setViewVisibility(rowBox[i], View.VISIBLE)
-                    views.setTextViewText(rowN[i], a.getString("name"))
-                    views.setTextViewText(rowT[i], Store.human(sec))
-                    views.setProgressBar(rowP[i], 100, ((sec * 100) / safeTotal).toInt(), false)
-                    // Tint dinámico por color de actividad (setColorStateList existe desde API 31).
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val c = Color.parseColor(a.optString("color", "#2F4B8F"))
-                        views.setColorStateList(rowP[i], "setProgressTintList", ColorStateList.valueOf(c))
-                    }
-                } else {
-                    views.setViewVisibility(rowBox[i], View.GONE)
+            val (_, hDp) = RemoteUi.sizeDp(context, mgr, id, 250, 200)
+            val shown = minOf(per.size, rowsThatFit(hDp, per.size))
+            views.removeAllViews(R.id.w2_list)
+            for ((a, sec) in per.take(shown)) {
+                val row = RemoteViews(pkg, R.layout.widget_resumen_row)
+                RemoteUi.bindSwatch(context, row, a, Store.categoryForActivity(context, a), 24)
+                row.setTextViewText(R.id.w2_name, a.getString("name"))
+                row.setTextViewText(R.id.w2_time, spaced(sec))
+                row.setProgressBar(R.id.w2_bar, 100, ((sec * 100) / safeTotal).toInt().coerceAtLeast(2), false)
+                // Tinte por color de actividad (setColorStateList existe desde API 31;
+                // antes queda el indigo de w_bar.xml).
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    row.setColorStateList(R.id.w2_bar, "setProgressTintList", ColorStateList.valueOf(RemoteUi.colorOf(a)))
                 }
+                views.addView(R.id.w2_list, row)
             }
-            // Indicador "+N más" si hay más actividades con tiempo que las filas visibles.
-            val extra = per.size - minOf(per.size, shown)
+            // "+N más" si hay más actividades con tiempo que las filas visibles.
+            val extra = per.size - shown
             if (extra > 0) {
                 views.setTextViewText(R.id.w2_more, "+$extra más")
                 views.setViewVisibility(R.id.w2_more, View.VISIBLE)

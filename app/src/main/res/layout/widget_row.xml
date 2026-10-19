@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una fila de la grilla del widget. Los márgenes negativos compensan el aire de 3dp
+     que cada chip deja a sus costados, así la grilla queda alineada con la tarjeta. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_rowbox"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:minHeight="40dp"
+    android:layout_marginLeft="-3dp"
+    android:layout_marginRight="-3dp"
+    android:orientation="horizontal" />

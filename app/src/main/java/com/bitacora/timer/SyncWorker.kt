@@ -11,6 +11,7 @@ import androidx.work.WorkerParameters
 class SyncWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
         if (Sync.syncNow(applicationContext)) Surfaces.refresh(applicationContext)
+        else Surfaces.refreshIfNewDay(applicationContext)
         return Result.success()
     }
 }

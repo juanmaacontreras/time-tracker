@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chip de actividad del widget: swatch de identidad + nombre. El estado (corriendo /
+     pausado) lo marca el fondo del chip. El marco exterior deja 3dp de aire alrededor. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_cell"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:padding="3dp">
+
+    <LinearLayout
+        android:id="@+id/w_chip"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/chip"
+        android:paddingStart="7dp"
+        android:paddingEnd="8dp">
+
+        <include
+            android:id="@+id/w_chip_sw"
+            layout="@layout/rv_swatch"
+            android:layout_width="24dp"
+            android:layout_height="24dp" />
+
+        <TextView
+            android:id="@+id/w_chip_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/ink"
+            android:textSize="12.5sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="—" />
+    </LinearLayout>
+</FrameLayout>

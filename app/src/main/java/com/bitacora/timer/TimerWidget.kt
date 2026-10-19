@@ -6,11 +6,13 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 
 class TimerWidget : AppWidgetProvider() {
 
@@ -19,8 +21,8 @@ class TimerWidget : AppWidgetProvider() {
         syncInBackground(context)
     }
 
-    // El usuario agrandó/achicó el widget: re-renderizar para mostrar 6 o 9 actividades
-    // según el espacio disponible.
+    // El usuario agrandó/achicó el widget: re-renderizar con las filas y columnas que
+    // entren en el tamaño nuevo.
     override fun onAppWidgetOptionsChanged(
         context: Context, mgr: AppWidgetManager, appWidgetId: Int, newOptions: Bundle
     ) {
@@ -73,134 +75,132 @@ class TimerWidget : AppWidgetProvider() {
         const val ACTION_PAUSE = "com.bitacora.timer.PAUSE"
         const val ACTION_REFRESH = "com.bitacora.timer.REFRESH"
 
+        private const val ROW_DP = 40      // alto mínimo de una fila de chips (widget_row.xml)
+        private const val MAX_ROWS = 4
+
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
-            val views = RemoteViews(context.packageName, R.layout.widget)
+            val pkg = context.packageName
+            val views = RemoteViews(pkg, R.layout.widget)
+            val (wDp, hDp) = RemoteUi.sizeDp(context, mgr, id, 250, 110)
             val runId = Store.runningActId(context)
-            // Ordenadas por tiempo acumulado hoy (descendente); mostramos las 6 primeras.
+            val paused = Store.runningPaused(context)
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            fun broadcast(action: String, req: Int, extra: String? = null): PendingIntent {
+                val i = Intent(context, TimerWidget::class.java).apply {
+                    this.action = action
+                    if (extra != null) putExtra("actId", extra)
+                }
+                return PendingIntent.getBroadcast(context, req, i, flags)
+            }
+            // Ordenadas por tiempo acumulado hoy (descendente): lo que más se usa, arriba.
             val today = Store.secsByActivity(context, Store.startOfToday())
             val acts = Store.activities(context).sortedByDescending { today[it.getString("id")] ?: 0L }
 
-            val paused = Store.runningPaused(context)
+            // Tocar el fondo abre la app, igual que en el widget Resumen. (Antes lo
+            // "actualizaba", pero con push y sync de fondo eso ya no hace falta.)
+            views.setOnClickPendingIntent(android.R.id.background, RemoteUi.openApp(context, 200))
+
+            val heroDp: Int
             if (runId.isNotEmpty()) {
+                heroDp = if (paused) 78 else 64
                 val a = Store.activityById(context, runId)
-                val name = (a?.optString("name") ?: "").uppercase()
-                val elapsed = Store.runningElapsedMs(context)
-                views.setTextViewText(R.id.w_status, if (paused) "PAUSADO · $name" else name)
+                val cat = a?.let { Store.categoryForActivity(context, it) }
+                views.setViewVisibility(R.id.w_run, View.VISIBLE)
+                views.setViewVisibility(R.id.w_idle, View.GONE)
+                RemoteUi.bindSwatch(context, views, a, cat, 44)
+                views.setTextViewText(R.id.w_name, a?.optString("name") ?: "")
+                // Fondo teñido con el color de la actividad, como la tarjeta de la app
+                // (blend al ~16% en claro, algo más en oscuro para que se note).
+                views.setInt(R.id.w_run_tint, "setColorFilter", RemoteUi.colorOf(a))
+                views.setInt(R.id.w_run_tint, "setImageAlpha", if (RemoteUi.isNight(context)) 72 else 40)
+
                 // Al pausar, el cronómetro se congela (started = false) con el tiempo real corrido.
+                val elapsed = Store.runningElapsedMs(context)
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, !paused)
+                views.setTextColor(R.id.w_chrono, ContextCompat.getColor(context, if (paused) R.color.inkSoft else R.color.ink))
+                // Angosto, "1:23:45" no entra junto al swatch y los dos botones: el swatch
+                // se va (el fondo teñido ya dice qué corre) y el cronómetro se achica.
+                val narrow = wDp < 290
+                views.setViewVisibility(R.id.w_run_sw, if (narrow) View.GONE else View.VISIBLE)
+                views.setTextViewTextSize(R.id.w_chrono, TypedValue.COMPLEX_UNIT_SP, if (narrow) 23f else 26f)
+                views.setViewVisibility(R.id.w_paused, if (paused) View.VISIBLE else View.GONE)
 
-                // Tocar una actividad (arriba) siempre para si ya está corriendo; pausar es
-                // solo con este botón dedicado, igual que en la app.
-                views.setTextViewText(R.id.w_pause, if (paused) "Seguir" else "Pausar")
-                views.setViewVisibility(R.id.w_pause, View.VISIBLE)
-                val pauseIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_PAUSE }
-                val pausePi = PendingIntent.getBroadcast(
-                    context, 202, pauseIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.w_pause, pausePi)
-
-                views.setViewVisibility(R.id.w_stop, View.VISIBLE)
-                val stopIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_STOP }
-                val stopPi = PendingIntent.getBroadcast(
-                    context, 201, stopIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.w_stop, stopPi)
+                // Tocar una actividad siempre la para si ya está corriendo; pausar es solo
+                // con este botón dedicado, igual que en la app.
+                views.setImageViewResource(R.id.w_pause_icon, if (paused) R.drawable.ic_play else R.drawable.ic_pause)
+                views.setInt(R.id.w_pause_icon, "setColorFilter", ContextCompat.getColor(context, R.color.onAccent))
+                views.setInt(R.id.w_stop_icon, "setColorFilter", ContextCompat.getColor(context, R.color.inkSoft))
+                views.setInt(R.id.w_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
+                views.setContentDescription(R.id.w_pause, if (paused) "Seguir" else "Pausar")
+                views.setOnClickPendingIntent(R.id.w_pause, broadcast(ACTION_PAUSE, 202))
+                views.setOnClickPendingIntent(R.id.w_stop, broadcast(ACTION_STOP, 201))
             } else {
-                views.setTextViewText(R.id.w_status, "EN REPOSO · tocá para actualizar")
-                // Las DOS cosas, y en este orden. Son para dos problemas distintos:
-                //
-                // 1) setChronometer(started = false) es lo único que realmente DETIENE
-                //    el Chronometer. w_chrono es un Chronometer, no un TextView: si
-                //    quedó corriendo, escribirle texto no lo frena y al segundo
-                //    siguiente pisa lo que se le puso (era el bug de "paro el timer
-                //    desde la app y el widget sigue contando"). base = ahora lo deja
-                //    además en 00:00.
-                // 2) setTextViewText fija el texto para el caso en que el host
-                //    reaplique un estado viejo (por ejemplo tras reiniciar el celu) y
-                //    aparezca el tiempo corrido de una sesión ya terminada.
+                heroDp = 46
+                views.setViewVisibility(R.id.w_run, View.GONE)
+                views.setViewVisibility(R.id.w_idle, View.VISIBLE)
+                // Las DOS cosas, aunque w_run esté oculto: setChronometer(started = false)
+                // es lo único que realmente DETIENE el Chronometer (escribirle texto no lo
+                // frena y al segundo siguiente lo pisa), y el texto fijo cubre el caso en
+                // que el host reaplique un estado viejo (por ejemplo tras reiniciar el celu).
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime(), null, false)
-                views.setTextViewText(R.id.w_chrono, "00:00")
-                views.setViewVisibility(R.id.w_pause, View.GONE)
-                views.setViewVisibility(R.id.w_stop, View.GONE)
-            }
+                views.setTextViewText(R.id.w_chrono, "0:00")
 
-            // Tocar el cuerpo del widget (fuera de los botones) lo actualiza.
-            val refreshIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_REFRESH }
-            val refreshPi = PendingIntent.getBroadcast(
-                context, 200, refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.w_root, refreshPi)
-
-            val allSlotIds = intArrayOf(
-                R.id.w_slot0, R.id.w_slot1, R.id.w_slot2, R.id.w_slot3, R.id.w_slot4,
-                R.id.w_slot5, R.id.w_slot6, R.id.w_slot7, R.id.w_slot8
-            )
-            val allIconIds = intArrayOf(
-                R.id.w_icon0, R.id.w_icon1, R.id.w_icon2, R.id.w_icon3, R.id.w_icon4,
-                R.id.w_icon5, R.id.w_icon6, R.id.w_icon7, R.id.w_icon8
-            )
-            val allNameIds = intArrayOf(
-                R.id.w_name0, R.id.w_name1, R.id.w_name2, R.id.w_name3, R.id.w_name4,
-                R.id.w_name5, R.id.w_name6, R.id.w_name7, R.id.w_name8
-            )
-
-            // 4x2 (default, ~110dp de alto) permite hasta 6; al expandir a 4x3 (~180dp)
-            // permite hasta 9.
-            val opts = mgr.getAppWidgetOptions(id)
-            val heightDp = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-            val numSlots = if (heightDp >= 150) 9 else 6
-
-            // Solo se arman tantas filas como hagan falta para las actividades reales
-            // (nunca más de las que el tamaño actual permite). Cada fila visible tiene
-            // height=0dp + weight=1 en el XML, así que se reparten TODO el alto sobrante
-            // entre sí — ni una fila vacía queda ocupando espacio ni los botones quedan cortos.
-            val visibleActs = minOf(acts.size, numSlots)
-            val rowsNeeded = if (visibleActs == 0) 0 else (visibleActs + 2) / 3
-            views.setViewVisibility(R.id.w_row1, if (rowsNeeded >= 1) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.w_row2, if (rowsNeeded >= 2) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.w_row3, if (rowsNeeded >= 3) View.VISIBLE else View.GONE)
-
-            for (i in allSlotIds.indices) {
-                if (i >= numSlots) {
-                    views.setViewVisibility(allSlotIds[i], View.GONE)
-                    continue
-                }
-                if (i < acts.size) {
-                    val act = acts[i]
-                    val aid = act.getString("id")
-                    val running = aid == runId
-                    // El punto siempre muestra el color propio de la actividad (identidad).
-                    // El estado (corriendo/pausado) lo dice el borde del chip, no un \u00EDcono.
-                    views.setInt(allIconIds[i], "setColorFilter", Color.parseColor(act.optString("color", "#2F4B8F")))
-                    val chipRes = when {
-                        running && paused -> R.drawable.chip_paused
-                        running -> R.drawable.chip_running
-                        else -> R.drawable.chip
-                    }
-                    views.setInt(allSlotIds[i], "setBackgroundResource", chipRes)
-                    views.setTextViewText(allNameIds[i], act.getString("name"))
-                    views.setViewVisibility(allSlotIds[i], View.VISIBLE)
-                    val intent = Intent(context, TimerWidget::class.java).apply {
-                        action = ACTION_TOGGLE
-                        putExtra("actId", aid)
-                    }
-                    val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    val pi = PendingIntent.getBroadcast(context, 100 + i, intent, flags)
-                    views.setOnClickPendingIntent(allSlotIds[i], pi)
+                views.setTextViewText(R.id.w_today, spaced(today.values.sum()))
+                val ends = Store.lastEndByActivity(context)
+                val last = Store.activities(context, includeArchived = true)
+                    .mapNotNull { a -> ends[a.getString("id")]?.let { a to it } }
+                    .maxByOrNull { it.second }
+                if (last != null) {
+                    views.setTextViewText(R.id.w_last_text, last.first.optString("name") + " · " + RemoteUi.whenText(last.second))
+                    views.setViewVisibility(R.id.w_last, View.VISIBLE)
                 } else {
-                    views.setViewVisibility(allSlotIds[i], View.GONE)
+                    views.setViewVisibility(R.id.w_last, View.GONE)
                 }
             }
-            // Indicador "+N m\u00E1s" si hay actividades fuera de las visibles.
-            val extra = acts.size - numSlots
-            if (extra > 0) {
-                views.setTextViewText(R.id.w_more, "+$extra m\u00E1s")
-                views.setViewVisibility(R.id.w_more, View.VISIBLE)
-            } else {
-                views.setViewVisibility(R.id.w_more, View.GONE)
+
+            // Grilla: tantas filas como entren en el alto que queda (hasta MAX_ROWS), todas
+            // del mismo alto. Si sobran actividades, la última casilla es "+N más" y abre la app.
+            views.removeAllViews(R.id.w_grid)
+            views.setViewVisibility(R.id.w_hint, if (acts.isEmpty()) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.w_grid, if (acts.isEmpty()) View.GONE else View.VISIBLE)
+            val cols = if (wDp >= 260) 3 else 2
+            val rows = ((hDp - 24 - heroDp - 5) / ROW_DP).coerceIn(0, MAX_ROWS)
+            val slots = rows * cols
+            val overflow = acts.size > slots
+            val shown = if (overflow) (slots - 1).coerceAtLeast(0) else acts.size
+            if (acts.isNotEmpty()) for (r in 0 until rows) {
+                val row = RemoteViews(pkg, R.layout.widget_row)
+                for (c in 0 until cols) {
+                    val i = r * cols + c
+                    val chip = RemoteViews(pkg, R.layout.widget_chip)
+                    when {
+                        i < shown -> {
+                            val act = acts[i]
+                            val aid = act.getString("id")
+                            RemoteUi.bindSwatch(context, chip, act, Store.categoryForActivity(context, act), 24)
+                            chip.setTextViewText(R.id.w_chip_name, act.getString("name"))
+                            // El estado (corriendo / pausado) lo dice el fondo del chip.
+                            chip.setInt(R.id.w_chip, "setBackgroundResource", when {
+                                aid != runId -> R.drawable.chip
+                                paused -> R.drawable.chip_paused
+                                else -> R.drawable.chip_running
+                            })
+                            chip.setOnClickPendingIntent(R.id.w_chip, broadcast(ACTION_TOGGLE, 100 + i, aid))
+                        }
+                        i == shown && overflow -> {
+                            chip.setViewVisibility(R.id.w_chip_sw, View.GONE)
+                            chip.setTextViewText(R.id.w_chip_name, "+${acts.size - shown} más")
+                            chip.setTextColor(R.id.w_chip_name, ContextCompat.getColor(context, R.color.muted))
+                            chip.setInt(R.id.w_chip_name, "setGravity", Gravity.CENTER)
+                            chip.setOnClickPendingIntent(R.id.w_chip, RemoteUi.openApp(context, 199))
+                        }
+                        // Casilla vacía: invisible pero ocupando su lugar, así la última fila
+                        // no estira sus chips a todo el ancho.
+                        else -> chip.setViewVisibility(R.id.w_chip, View.INVISIBLE)
+                    }
+                    row.addView(R.id.w_rowbox, chip)
+                }
+                views.addView(R.id.w_grid, row)
             }
             mgr.updateAppWidget(id, views)
         }

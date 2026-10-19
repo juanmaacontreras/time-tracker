@@ -1,17 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vista colapsada: nombre/categoría + cronómetro + un par de botones chicos (solo
-     ícono), para poder pausar/parar sin necesidad de expandir. Sin swatch de color acá
-     (a diferencia de la expandida): a este ancho, el nombre necesita el espacio más que
-     la identidad visual — el swatch sigue estando en la vista expandida. -->
+<!-- Vista colapsada (la que más se ve): swatch, qué corre, cronómetro y los dos botones
+     redondos de 36dp, separados para no parar por error al querer pausar. Desde Android
+     12 el sistema ya pone a la izquierda su círculo con el ícono, teñido con el color de
+     la actividad (setColor): ahí el swatch propio sobra y Notifs lo oculta. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingLeft="12dp"
-    android:paddingRight="12dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="12dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <include
+        android:id="@+id/n_swatch"
+        layout="@layout/rv_swatch"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_marginEnd="10dp" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -24,71 +31,69 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-            android:textSize="13.5sp"
+            android:textSize="14sp"
+            android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end"
             android:text="Actividad" />
 
         <TextView
-            android:id="@+id/n_cat"
+            android:id="@+id/n_eyebrow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.Compat.Notification"
             android:textSize="10sp"
-            android:letterSpacing="0.05"
+            android:letterSpacing="0.06"
             android:textAllCaps="true"
+            android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end"
-            android:text="Categoría" />
+            android:text="Cronometrando" />
     </LinearLayout>
 
     <Chronometer
         android:id="@+id/n_chrono"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-        android:textSize="19sp"
-        android:fontFamily="monospace"
-        android:layout_marginStart="6dp"
+        android:textSize="18sp"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1"
         android:text="0:00" />
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginStart="6dp">
+    <FrameLayout
+        android:id="@+id/n_pause"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="10dp"
+        android:background="@drawable/circle_primary"
+        android:contentDescription="Pausar"
+        android:clickable="true"
+        android:focusable="true">
 
-        <FrameLayout
-            android:id="@+id/n_pause"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:background="@drawable/circle_primary"
-            android:clickable="true"
-            android:focusable="true">
+        <ImageView
+            android:id="@+id/n_pause_icon"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_pause" />
+    </FrameLayout>
 
-            <ImageView
-                android:id="@+id/n_pause_icon"
-                android:layout_width="13dp"
-                android:layout_height="13dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_pause" />
-        </FrameLayout>
+    <FrameLayout
+        android:id="@+id/n_stop"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/circle_tonal"
+        android:contentDescription="Parar"
+        android:clickable="true"
+        android:focusable="true">
 
-        <FrameLayout
-            android:id="@+id/n_stop"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/circle_ghost"
-            android:clickable="true"
-            android:focusable="true">
-
-            <ImageView
-                android:id="@+id/n_stop_icon"
-                android:layout_width="11dp"
-                android:layout_height="11dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_stop" />
-        </FrameLayout>
-    </LinearLayout>
+        <ImageView
+            android:id="@+id/n_stop_icon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_stop" />
+    </FrameLayout>
 </LinearLayout>

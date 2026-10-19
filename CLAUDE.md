@@ -51,6 +51,8 @@ app/src/main/java/com/bitacora/timer/
   SyncWorker.kt     — WorkManager, corre cada ~1 h en background aunque la app esté cerrada (red de seguridad del push).
   TimerWidget.kt / ResumenWidget.kt — widgets de home screen.
   Notifs.kt         — notificación persistente (vista custom, swatch de categoría + cronómetro grande).
+  RemoteUi.kt       — kit de la notificación y los widgets (swatch `rv_swatch.xml`, contraste, tamaño
+                      real del widget, abrir la app). El Ui.kt de las RemoteViews.
   Devices.kt        — registro de tokens FCM por dispositivo, con el perfil que cada uno tiene activo.
   PushService.kt    — recibe el push silencioso y refresca notificación + widgets.
   Live.kt           — Supabase Realtime (OkHttp WebSocket) entre onResume y onPause: con la app
@@ -344,6 +346,14 @@ Confirmado funcionando en dispositivo real:
   vuelve a hoy, ←/→ en la web. Metas diarias: descartadas por el usuario, no proponer.
 - ✅ Categorías como entidad, con ícono y color propios, desplegable de selección y
   alta/edición/borrado (app + web). Migración desde los `type` de texto libre.
+- ⏳ **Notificación y widgets pulidos (octubre de 2026)**, verificado con capturas en claro y
+  oscuro, sin confirmar en dispositivo: swatch de identidad (ícono de la categoría sobre el
+  color de la actividad) en la notificación, los chips del widget y las filas del Resumen;
+  widget del cronómetro con la tarjeta de lo que corre teñida con el color de la actividad y,
+  en reposo, "Hoy" + la última actividad; widget Resumen con el título del período, total en
+  "5 h 20 m", la misma comparación que la app (`comparison()` en ResumenTab.kt) y control
+  segmentado; tocar el fondo de cualquiera de los dos abre la app; vistas previas en el
+  selector (`drawable-nodpi/widget_preview_*.png`, salen de las capturas de Robolectric).
 - ✅ Notificación rediseñada estilo reproductor: swatch de identidad, cronómetro
   grande, botones propios (no `.addAction()`) presentes también sin expandir, y sin
   la fila de ícono/nombre de la app (se sacó `DecoratedCustomViewStyle`).
@@ -355,6 +365,28 @@ Confirmado funcionando en dispositivo real:
   exportar). Vuelca el dataset crudo de cada perfil guardado localmente más el índice.
   Existe porque el CSV solo exporta sesiones de un período y no sirve para reconstruir
   el estado — y porque las limpiezas automáticas ya corrompieron datos dos veces.
+
+- **Desde Android 12 (targetSdk ≥ 31) el sistema envuelve SIEMPRE las vistas custom de la
+  notificación**, aunque no se use `DecoratedCustomViewStyle`: en la colapsada pone su círculo
+  con el ícono y la flecha de expandir; en AOSP la expandida lleva además el encabezado
+  completo y la sangría, y quedan ~270dp de ancho. Por eso `notif.xml` va apilado (en una sola
+  fila el nombre se partía letra a letra) y la colapsada oculta su swatch en API ≥ 31: lo
+  reemplaza el círculo del sistema, teñido con el color de la actividad vía `setColor`.
+  Para ver lo que dibuja SystemUI en Robolectric: `Notification.Builder.recoverBuilder(ctx,
+  n).createContentView()` / `createBigContentView()`.
+- **El anillo de "corriendo" de la notificación no se veía nunca**: medía lo mismo que el
+  swatch, que se dibujaba encima y lo tapaba. Ahora el marco es de 48dp con el swatch de 40.
+- **Sobre el acento lleno va `onAccent`, nunca blanco fijo**: en oscuro el acento es celeste
+  claro (#81A1C1) y el blanco encima no se leía.
+- **En RemoteViews no hay `android:tint` (lint lo rechaza) ni mezcla de colores**: los íconos
+  se tiñen con `setColorFilter` desde el código, y el fondo teñido de la tarjeta del widget es
+  una forma blanca con `setColorFilter` + `setImageAlpha`.
+- **Las esquinas del swatch son un vector, no un `<shape>`**: un `<shape>` tiene radio fijo en
+  dp y no escala con el tamaño del `<include>`; el vector mantiene el 31% del lado.
+- **Los widgets no se redibujan solos con el paso del tiempo.** Muestran "hoy" y, pasada la
+  medianoche, seguían con lo de ayer: `SyncWorker` llama a `Surfaces.refreshIfNewDay()` cuando
+  el sync no trajo nada. Por lo mismo, nada de "hace 2 h" en un widget: horas absolutas
+  (`RemoteUi.whenText`).
 
 ## Pendiente / sin confirmar
 

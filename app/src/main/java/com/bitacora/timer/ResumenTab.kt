@@ -2,13 +2,10 @@ package com.bitacora.timer
 
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.FileProvider
@@ -46,24 +43,29 @@ internal fun MainActivity.renderResumen() {
         .sortedByDescending { it.second }
     val total = perAct.sumOf { it.second }
 
-    val totalLabel = if (statsCategory == "all") "TOTAL"
-        else "TOTAL · ${(allCats.find { it.getString("id") == statsCategory }?.optString("name", "") ?: "").uppercase()}"
-    resumenView.addView(sectionLabel(totalLabel))
-    val big = TextView(this)
-    big.text = Store.exact(total)
-    big.textSize = 30f
-    big.typeface = Typeface.MONOSPACE
-    big.setTextColor(col(R.color.ink))
-    resumenView.addView(big)
+    // Tarjeta del total + gráfico.
+    val card = cardBox(radiusDp = 22)
+    card.setPadding(dp(18), dp(18), dp(18), dp(12))
+    card.layoutParams = lp(top = 14)
+    val catName = allCats.find { it.getString("id") == statsCategory }?.optString("name", "") ?: ""
+    card.addView(label(if (statsCategory == "all") "Total" else "Total · $catName", 13f, col(R.color.muted), bold = true))
+    val big = label(Store.exact(total), 44f, col(R.color.ink), tnum = true)
+    big.letterSpacing = -0.03f
+    big.includeFontPadding = false
+    big.setPadding(0, dp(4), 0, 0)
+    card.addView(big)
+    resumenView.addView(card)
 
     if (perAct.isEmpty()) {
-        val e = TextView(this)
-        e.text = "Sin registros en este período."
-        e.setTextColor(col(R.color.muted))
-        e.setPadding(0, dp(24), 0, 0)
-        resumenView.addView(e)
+        val e = label("Sin registros en este período.", 14f, col(R.color.muted))
+        e.gravity = Gravity.CENTER
+        e.setPadding(0, dp(22), 0, dp(10))
+        card.addView(e)
         return
     }
+    val sub = label(if (perAct.size == 1) "en 1 actividad" else "en ${perAct.size} actividades", 13f, col(R.color.inkSoft))
+    sub.setPadding(0, dp(4), 0, 0)
+    card.addView(sub)
 
     val actIds = acts.map { it.getString("id") }.toSet()
     val catColorsAll = categoryColors(allActs)
@@ -72,49 +74,64 @@ internal fun MainActivity.renderResumen() {
     // un filtro de categoría activo, apilar una sola categoría no aporta nada: cae a
     // "por actividad" como día.
     if (statsPeriod == "week" && statsCategory == "all") {
-        resumenView.addView(sectionLabel("POR DÍA · CATEGORÍA"))
         // Orden fijo de categorías (por total de la semana) para que el mismo color
         // quede siempre en la misma posición dentro de cada barra apilada.
         val catOrder = categorySums(allActs, secs).entries.sortedByDescending { it.value }.map { it.key }
         val stacks = weekCategoryStacks(allActs, from, catOrder)
-        resumenView.addView(buildStackedBarChart(stacks, catColorsAll))
+        card.addView(buildChart(stacks.map { (lbl, segs) -> Bar(lbl, segs.map { (c, t) -> t to (catColorsAll[c] ?: col(R.color.indigo)) }) },
+            showValues = true, labelStep = 1, todayIdx = todayIndex(from, 7)))
     } else if (statsPeriod == "day" || statsPeriod == "week") {
-        resumenView.addView(sectionLabel("POR ACTIVIDAD"))
-        val bars = perAct.take(8).map {
-            Triple(it.first.getString("name"), it.second, Color.parseColor(it.first.optString("color", "#2F4B8F")))
-        }
-        resumenView.addView(buildBarChart(bars, true, 1))
+        val bars = perAct.take(8).map { Bar(it.first.getString("name"), listOf(it.second to parseColor(it.first.optString("color")))) }
+        card.addView(buildChart(bars, showValues = true, labelStep = 1, todayIdx = -1))
     } else {
-        resumenView.addView(sectionLabel("POR DÍA"))
-        val bars = monthBars(actIds, from, if (statsOffset == 0) java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) else Store.daysInMonth(from))
-        resumenView.addView(buildBarChart(bars, false, 5))
+        val days = if (statsOffset == 0) java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH) else Store.daysInMonth(from)
+        card.addView(buildChart(monthBars(actIds, from, days), showValues = false, labelStep = 5, todayIdx = todayIndex(from, days)))
     }
-    for ((a, sec) in perAct) {
-        resumenView.addView(statRow(a.getString("name"), Color.parseColor(a.optString("color", "#2F4B8F")), sec, total))
+
+    resumenView.addView(sectionHeader("Por actividad"))
+    val list = cardBox(radiusDp = 18)
+    list.setPadding(dp(16), dp(4), dp(16), dp(4))
+    for ((i, pair) in perAct.withIndex()) {
+        list.addView(statRow(pair.first.getString("name"), parseColor(pair.first.optString("color")), pair.second, total, first = i == 0))
     }
+    resumenView.addView(list)
 
     if (statsCategory == "all") {
         val cats = categorySums(allActs, secs)
         if (cats.isNotEmpty()) {
             // Colapsable: por defecto expandida si hay pocas categorías.
             val expanded = catExpanded ?: (cats.size <= 3)
-            val header = sectionLabel("POR CATEGORÍA  " + if (expanded) "▾" else "▸") as TextView
-            header.isClickable = true
+            val header = sectionHeader("Por categoría")
+            val chev = iconView(R.drawable.ic_chevron_down, col(R.color.inkSoft), 16)
+            chev.rotation = if (expanded) 0f else -90f
+            header.addView(chev, 1)
+            (header.getChildAt(0).layoutParams as LinearLayout.LayoutParams).apply { width = WRAP; weight = 0f; rightMargin = dp(4) }
             header.setOnClickListener { catExpanded = !expanded; renderResumen() }
             resumenView.addView(header)
             if (expanded) {
-                for ((c, sec) in cats.entries.sortedByDescending { it.value }) {
-                    val label = Store.categoryById(this, c)?.optString("name", "") ?: "General"
+                val cl = cardBox(radiusDp = 18)
+                cl.setPadding(dp(16), dp(4), dp(16), dp(4))
+                for ((i, entry) in cats.entries.sortedByDescending { it.value }.withIndex()) {
+                    val c = entry.key
+                    val name = Store.categoryById(this, c)?.optString("name", "") ?: "General"
                     // Mismo color que en el gráfico apilado: sirve de leyenda.
-                    val row = statRow(label, catColorsAll[c] ?: col(R.color.indigo), sec, total)
+                    val row = statRow(name, catColorsAll[c] ?: col(R.color.indigo), entry.value, total, first = i == 0)
                     row.setOnClickListener { statsCategory = c; renderResumen() }
-                    resumenView.addView(row)
+                    cl.addView(row)
                 }
+                resumenView.addView(cl)
             }
         }
     }
 
-    resumenView.addView(buildCsvButton())
+    resumenView.addView(buildExportButton())
+}
+
+// Posición de "hoy" dentro de un período que arranca en from (para resaltar su barra),
+// o -1 si hoy no cae ahí.
+private fun todayIndex(from: Long, count: Int): Int {
+    val i = Math.round((Store.startOfToday() - from).toDouble() / DAY_MS).toInt()
+    return if (i in 0 until count) i else -1
 }
 
 // Color de cada categoría (propiedad propia de la categoría ahora, no de la primera
@@ -125,96 +142,54 @@ internal fun MainActivity.categoryColors(acts: List<JSONObject>): LinkedHashMap<
     for (a in acts) {
         val cat = Store.categoryForActivity(this, a)
         val id = cat.getString("id")
-        if (id !in map) map[id] = Color.parseColor(cat.optString("color", "#2F4B8F"))
+        if (id !in map) map[id] = parseColor(cat.optString("color"))
     }
     return map
 }
 
 internal fun MainActivity.buildCategorySelector(cats: List<JSONObject>): View {
-    val wrap = LinearLayout(this)
-    wrap.orientation = LinearLayout.HORIZONTAL
-    wrap.setPadding(0, dp(10), 0, 0)
-
     val scroll = android.widget.HorizontalScrollView(this)
     scroll.isHorizontalScrollBarEnabled = false
+    scroll.layoutParams = lp(top = 12)
     val row = LinearLayout(this)
     row.orientation = LinearLayout.HORIZONTAL
 
-    fun chip(label: String, value: String, dotColor: Int?): View {
+    fun chip(text: String, value: String, dotColor: Int?): View {
+        val active = value == statsCategory
         val c = LinearLayout(this)
         c.orientation = LinearLayout.HORIZONTAL
         c.gravity = Gravity.CENTER_VERTICAL
-        c.setPadding(dp(12), dp(7), dp(12), dp(7))
-        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        lp.rightMargin = dp(6)
-        c.layoutParams = lp
-        val active = value == statsCategory
-        val d = GradientDrawable()
-        d.cornerRadius = dp(16).toFloat()
-        if (active) {
-            d.setColor(col(R.color.ink))
-        } else {
-            d.setColor(col(R.color.card))
-            d.setStroke(dp(1), col(R.color.line))
-        }
-        c.background = d
-
+        c.setPadding(dp(13), dp(8), dp(13), dp(8))
+        c.layoutParams = lp(w = WRAP, right = 8)
+        c.background = rounded(if (active) col(R.color.ink) else col(R.color.card), 18)
         if (dotColor != null) {
             val dot = View(this)
-            val dotBg = GradientDrawable()
-            dotBg.shape = GradientDrawable.OVAL
-            dotBg.setColor(dotColor)
-            dot.background = dotBg
-            val dlp = LinearLayout.LayoutParams(dp(8), dp(8)); dlp.rightMargin = dp(6)
-            dot.layoutParams = dlp
+            dot.background = oval(dotColor)
+            dot.layoutParams = lp(w = dp(8), h = dp(8), right = 7)
             c.addView(dot)
         }
-
-        val t = TextView(this)
-        t.text = label
-        t.textSize = 12f
-        t.setTextColor(if (active) col(R.color.paper) else col(R.color.inkSoft))
-        c.addView(t)
-
+        c.addView(label(text, 13f, if (active) col(R.color.paper) else col(R.color.inkSoft), bold = true))
         c.setOnClickListener { statsCategory = value; renderResumen() }
         return c
     }
 
     row.addView(chip("Todo", "all", null))
-    for (c in cats) {
-        row.addView(chip(c.optString("name", "General"), c.getString("id"), Color.parseColor(c.optString("color", "#2F4B8F"))))
-    }
+    for (c in cats) row.addView(chip(c.optString("name", "General"), c.getString("id"), parseColor(c.optString("color"))))
     scroll.addView(row)
-    wrap.addView(scroll)
-    return wrap
+    return scroll
 }
 
 internal fun MainActivity.buildPeriodSelector(): View {
     val seg = LinearLayout(this)
     seg.orientation = LinearLayout.HORIZONTAL
-    seg.setPadding(dp(3), dp(3), dp(3), dp(3))
-    val segBg = GradientDrawable()
-    segBg.cornerRadius = dp(12).toFloat()
-    segBg.setColor(col(R.color.card))
-    segBg.setStroke(dp(1), col(R.color.line))
-    seg.background = segBg
-    val periods = listOf("day" to "Día", "week" to "Semana", "month" to "Mes")
-    for ((p, lbl) in periods) {
-        val b = TextView(this)
-        b.text = lbl
+    seg.setPadding(dp(4), dp(4), dp(4), dp(4))
+    seg.background = rounded(col(R.color.surface2), 14)
+    for ((p, text) in listOf("day" to "Día", "week" to "Semana", "month" to "Mes")) {
+        val b = label(text, 14f, col(R.color.inkSoft), bold = true)
         b.gravity = Gravity.CENTER
-        b.textSize = 13f
         b.setPadding(dp(6), dp(9), dp(6), dp(9))
-        b.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        if (p == statsPeriod) {
-            val d = GradientDrawable()
-            d.cornerRadius = dp(8).toFloat()
-            d.setColor(col(R.color.ink))
-            b.background = d
-            b.setTextColor(col(R.color.paper))
-        } else {
-            b.setTextColor(col(R.color.inkSoft))
-        }
+        b.layoutParams = lp(w = 0, weight = 1f)
+        paintSegment(b, p == statsPeriod)
         b.setOnClickListener { statsPeriod = p; statsOffset = 0; renderResumen() }
         seg.addView(b)
     }
@@ -242,39 +217,30 @@ internal fun MainActivity.periodLabel(period: String, offset: Int, from: Long, t
     }
 }
 
-internal fun MainActivity.buildOffsetNav(label: String): View {
+internal fun MainActivity.buildOffsetNav(text: String): View {
     val row = LinearLayout(this)
     row.orientation = LinearLayout.HORIZONTAL
     row.gravity = Gravity.CENTER_VERTICAL
-    val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    lp.topMargin = dp(10)
-    row.layoutParams = lp
+    row.layoutParams = lp(top = 12)
 
-    fun arrow(symbol: String, enabled: Boolean, onClick: () -> Unit): View {
-        val t = TextView(this)
-        t.text = symbol
-        t.textSize = 16f
-        t.gravity = Gravity.CENTER
-        t.minWidth = dp(36)
-        t.minHeight = dp(36)
-        t.setTextColor(if (enabled) col(R.color.indigo) else col(R.color.line))
-        if (enabled) t.setOnClickListener { onClick() }
-        return t
+    fun arrow(res: Int, enabled: Boolean, onClick: () -> Unit): View {
+        val b = android.widget.FrameLayout(this)
+        b.layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+        if (enabled) b.background = oval(col(R.color.card))
+        val ic = iconView(res, if (enabled) col(R.color.ink) else col(R.color.line), 20)
+        ic.layoutParams = android.widget.FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER)
+        b.addView(ic)
+        if (enabled) b.setOnClickListener { onClick() }
+        return b
     }
 
-    row.addView(arrow("◀", true) { statsOffset -= 1; renderResumen() })
-
-    val t = TextView(this)
-    t.text = label
-    t.textSize = 13f
+    row.addView(arrow(R.drawable.ic_chevron_left, true) { statsOffset -= 1; renderResumen() })
+    val t = label(text, 15f, col(R.color.ink), bold = true)
     t.gravity = Gravity.CENTER
-    t.setTypeface(t.typeface, Typeface.BOLD)
-    t.setTextColor(col(R.color.ink))
-    t.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    t.layoutParams = lp(w = 0, weight = 1f)
     row.addView(t)
-
     // No se puede navegar a "el futuro": el offset máximo es 0 (el período actual).
-    row.addView(arrow("▶", statsOffset < 0) { statsOffset += 1; renderResumen() })
+    row.addView(arrow(R.drawable.ic_chevron_right, statsOffset < 0) { statsOffset += 1; renderResumen() })
     return row
 }
 
@@ -291,12 +257,18 @@ internal fun MainActivity.categorySums(acts: List<JSONObject>, secs: Map<String,
     return sums
 }
 
+// Una barra del gráfico: etiqueta + segmentos (segundos, color). Una barra simple tiene
+// un solo segmento; la vista Semana apila uno por categoría.
+internal class Bar(val label: String, val segs: List<Pair<Long, Int>>) {
+    val total: Long get() = segs.sumOf { it.first }
+}
+
 // dayCount: días a recorrer (parcial hasta hoy si es el mes actual, completo si es un mes pasado).
-internal fun MainActivity.monthBars(actIds: Set<String>, monthStart: Long, dayCount: Int): List<Triple<String, Long, Int>> {
+internal fun MainActivity.monthBars(actIds: Set<String>, monthStart: Long, dayCount: Int): List<Bar> {
     val c = col(R.color.indigo)
     return (0 until dayCount).map { i ->
         val ds = monthStart + i * DAY_MS
-        Triple("${i + 1}", Store.totalBetween(this, ds, ds + DAY_MS, actIds), c)
+        Bar("${i + 1}", listOf(Store.totalBetween(this, ds, ds + DAY_MS, actIds) to c))
     }
 }
 
@@ -314,272 +286,172 @@ internal fun MainActivity.weekCategoryStacks(
     }
 }
 
-// Gráfico de barras apiladas: una columna por día, cada una dividida en segmentos de
-// color según la categoría (mismo color que el selector y la lista de categorías).
-internal fun MainActivity.buildStackedBarChart(
-    days: List<Pair<String, List<Pair<String, Long>>>>, catColors: Map<String, Int>
-): View {
-    val chartH = dp(150)
+// Gráfico de barras: cada barra crece desde abajo sobre una "pista" tenue de altura
+// completa (así se ve la forma del período aunque haya días vacíos), con las puntas
+// redondeadas. La barra de hoy lleva la etiqueta resaltada.
+internal fun MainActivity.buildChart(bars: List<Bar>, showValues: Boolean, labelStep: Int, todayIdx: Int): View {
+    val chartH = dp(130)
+    val dense = bars.size > 12
+    val radius = if (dense) 4 else 8
     val wrap = LinearLayout(this)
     wrap.orientation = LinearLayout.HORIZONTAL
     wrap.gravity = Gravity.BOTTOM
-    val wlp = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    )
-    wlp.topMargin = dp(6); wlp.bottomMargin = dp(4)
-    wrap.layoutParams = wlp
+    wrap.layoutParams = lp(top = 18)
 
-    val totals = days.map { d -> d.second.sumOf { it.second } }
-    val max = (totals.maxOrNull() ?: 1L).coerceAtLeast(1L)
-
-    for ((idx, day) in days.withIndex()) {
-        val (label, segs) = day
-        val total = totals[idx]
-
-        val dayCol = LinearLayout(this)
-        dayCol.orientation = LinearLayout.VERTICAL
-        dayCol.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-        dayCol.setPadding(dp(2), 0, dp(2), 0)
-        dayCol.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-
-        val v = TextView(this)
-        v.text = if (total > 0) Store.exact(total) else ""
-        v.textSize = 9f
-        v.setTextColor(col(R.color.inkSoft))
-        v.gravity = Gravity.CENTER
-        v.maxLines = 1
-        dayCol.addView(v)
-
-        val barH = Math.max(dp(3), (total.toDouble() / max * chartH).toInt())
-        val stack = LinearLayout(this)
-        stack.orientation = LinearLayout.VERTICAL
-        val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, barH)
-        slp.topMargin = dp(3); slp.leftMargin = dp(1); slp.rightMargin = dp(1)
-        stack.layoutParams = slp
-        // Los segmentos son Views planos sin radio propio; el redondeo de las puntas
-        // superiores lo da el fondo de este contenedor + clipToOutline (recorta los
-        // hijos al contorno redondeado, como el overflow:hidden del espejo web).
-        val stackBg = GradientDrawable()
-        val r = dp(4).toFloat()
-        stackBg.cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
-        stack.background = stackBg
-        stack.clipToOutline = true
-        for ((c, secs) in segs) {
-            val segH = Math.max(dp(1), (secs.toDouble() / total * barH).toInt())
-            val seg = View(this)
-            seg.setBackgroundColor(catColors[c] ?: col(R.color.indigo))
-            seg.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, segH)
-            stack.addView(seg)
-        }
-        dayCol.addView(stack)
-
-        val n = TextView(this)
-        n.text = label
-        n.textSize = 9f
-        n.setTextColor(col(R.color.muted))
-        n.gravity = Gravity.CENTER
-        n.maxLines = 1
-        n.setPadding(0, dp(4), 0, 0)
-        dayCol.addView(n)
-
-        wrap.addView(dayCol)
-    }
-
-    val outer = LinearLayout(this)
-    outer.orientation = LinearLayout.VERTICAL
-    val olp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    olp.bottomMargin = dp(14)
-    outer.layoutParams = olp
-    outer.addView(wrap)
-    val baseline = View(this)
-    baseline.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
-    baseline.setBackgroundColor(col(R.color.line))
-    outer.addView(baseline)
-    return outer
-}
-
-internal fun MainActivity.buildBarChart(bars: List<Triple<String, Long, Int>>, showValues: Boolean, labelStep: Int): View {
-    val chartH = dp(150)
-    val wrap = LinearLayout(this)
-    wrap.orientation = LinearLayout.HORIZONTAL
-    wrap.gravity = Gravity.BOTTOM
-    val wlp = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    )
-    wlp.topMargin = dp(6); wlp.bottomMargin = dp(4)
-    wrap.layoutParams = wlp
-
-    val max = (bars.maxOfOrNull { it.second } ?: 1L).coerceAtLeast(1L)
+    val max = (bars.maxOfOrNull { it.total } ?: 1L).coerceAtLeast(1L)
     for ((idx, b) in bars.withIndex()) {
-        val label = b.first
-        val secs = b.second
-        val colorInt = b.third
-
-        val col = LinearLayout(this)
-        col.orientation = LinearLayout.VERTICAL
-        col.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-        col.setPadding(dp(2), 0, dp(2), 0)
-        col.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val colView = LinearLayout(this)
+        colView.orientation = LinearLayout.VERTICAL
+        colView.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+        val gap = if (dense) 1 else 3
+        colView.layoutParams = lp(w = 0, weight = 1f, left = gap, right = gap)
 
         if (showValues) {
-            val v = TextView(this)
-            v.text = if (secs > 0) Store.exact(secs) else ""
-            v.textSize = 9f
-            v.setTextColor(col(R.color.inkSoft))
+            val v = label(if (b.total > 0) Store.human(b.total) else "", 10f, col(R.color.inkSoft), bold = true, tnum = true, single = true)
             v.gravity = Gravity.CENTER
-            v.maxLines = 1
-            col.addView(v)
+            v.setPadding(0, 0, 0, dp(4))
+            colView.addView(v)
         }
 
-        val barH = Math.max(dp(3), (secs.toDouble() / max * chartH).toInt())
-        val bar = View(this)
-        val barBg = GradientDrawable()
-        barBg.cornerRadius = dp(4).toFloat()
-        barBg.setColor(colorInt)
-        bar.background = barBg
-        val blp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, barH)
-        blp.topMargin = dp(3)
-        blp.leftMargin = dp(1); blp.rightMargin = dp(1)
-        bar.layoutParams = blp
-        col.addView(bar)
+        // Pista (altura completa) con la barra apoyada abajo; clipToOutline recorta los
+        // segmentos al contorno redondeado, como el overflow:hidden del espejo web.
+        val track = LinearLayout(this)
+        track.orientation = LinearLayout.VERTICAL
+        track.gravity = Gravity.BOTTOM
+        track.background = rounded(col(R.color.grid), radius)
+        track.clipToOutline = true
+        track.layoutParams = lp(h = chartH)
+        if (b.total > 0) {
+            val barH = Math.max(dp(4), (b.total.toDouble() / max * chartH).toInt())
+            val stack = LinearLayout(this)
+            stack.orientation = LinearLayout.VERTICAL
+            // Fondo del color de la tarjeta: los 2dp entre segmentos se ven como separador.
+            stack.background = rounded(col(R.color.card), radius)
+            stack.clipToOutline = true
+            stack.layoutParams = lp(h = barH)
+            for ((i, seg) in b.segs.withIndex()) {
+                val segView = View(this)
+                segView.setBackgroundColor(seg.second)
+                val h = Math.max(dp(1), (seg.first.toDouble() / b.total * barH).toInt())
+                segView.layoutParams = lp(h = h, top = if (i > 0) 2 else 0)
+                stack.addView(segView)
+            }
+            track.addView(stack)
+        }
+        colView.addView(track)
 
-        val n = TextView(this)
-        n.text = if (idx % labelStep == 0) label else ""
-        n.textSize = 9f
-        n.setTextColor(col(R.color.muted))
+        val isToday = idx == todayIdx
+        val n = label(if (idx % labelStep == 0 || isToday) b.label else "", 11f,
+            if (isToday) col(R.color.ink) else col(R.color.muted), bold = isToday, single = true)
         n.gravity = Gravity.CENTER
-        n.maxLines = 1
-        n.ellipsize = TextUtils.TruncateAt.END
-        n.setPadding(0, dp(4), 0, 0)
-        col.addView(n)
-
-        wrap.addView(col)
+        n.setPadding(0, dp(6), 0, 0)
+        colView.addView(n)
+        wrap.addView(colView)
     }
-
-    // Contenedor vertical: barras + línea de base sutil para anclarlas.
-    val outer = LinearLayout(this)
-    outer.orientation = LinearLayout.VERTICAL
-    val olp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    olp.bottomMargin = dp(14)
-    outer.layoutParams = olp
-    outer.addView(wrap)
-    val baseline = View(this)
-    val bllp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
-    baseline.layoutParams = bllp
-    baseline.setBackgroundColor(col(R.color.line))
-    outer.addView(baseline)
-    return outer
+    return wrap
 }
 
-internal fun MainActivity.statRow(name: String, colorInt: Int, sec: Long, total: Long): View {
+// Fila de un desglose (dentro de una tarjeta-lista): punto, nombre, tiempo, porcentaje y
+// una barra fina de proporción.
+internal fun MainActivity.statRow(name: String, colorInt: Int, sec: Long, total: Long, first: Boolean): View {
     val box = LinearLayout(this)
     box.orientation = LinearLayout.VERTICAL
-    box.setPadding(dp(14), dp(12), dp(14), dp(12))
-    box.background = card()
-    val lp = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    )
-    lp.bottomMargin = dp(8)
-    box.layoutParams = lp
+    box.setPadding(0, dp(11), 0, dp(11))
+    if (!first) {
+        val sep = GradientDrawable()
+        sep.setColor(col(R.color.card))
+        box.background = android.graphics.drawable.LayerDrawable(arrayOf(
+            android.graphics.drawable.ColorDrawable(col(R.color.line)), sep
+        )).also { it.setLayerInset(1, 0, dp(1), 0, 0) }
+    }
 
     val top = LinearLayout(this)
     top.orientation = LinearLayout.HORIZONTAL
     top.gravity = Gravity.CENTER_VERTICAL
-
     val dot = View(this)
-    val dotBg = GradientDrawable()
-    dotBg.shape = GradientDrawable.OVAL
-    dotBg.setColor(colorInt)
-    dot.background = dotBg
-    val dlp = LinearLayout.LayoutParams(dp(10), dp(10)); dlp.rightMargin = dp(10)
-    dot.layoutParams = dlp
+    dot.background = oval(colorInt)
+    dot.layoutParams = lp(w = dp(10), h = dp(10), right = 10)
     top.addView(dot)
-
-    val nm = TextView(this)
-    nm.text = name
-    nm.textSize = 14f
-    nm.setTextColor(col(R.color.ink))
-    nm.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    val nm = label(name, 14.5f, col(R.color.ink), bold = true, single = true)
+    nm.layoutParams = lp(w = 0, weight = 1f, right = 8)
     top.addView(nm)
-
-    val vl = TextView(this)
+    top.addView(label(Store.exact(sec), 14f, col(R.color.ink), bold = true, tnum = true))
     val pct = if (total > 0) Math.round(sec * 100.0 / total).toInt() else 0
-    vl.text = "${Store.exact(sec)}  ·  $pct%"
-    vl.textSize = 13f
-    vl.typeface = Typeface.MONOSPACE
-    vl.setTextColor(col(R.color.inkSoft))
-    top.addView(vl)
+    val pv = label("$pct%", 12.5f, col(R.color.muted), tnum = true)
+    pv.gravity = Gravity.END
+    pv.layoutParams = lp(w = dp(42))
+    top.addView(pv)
     box.addView(top)
 
     val track = LinearLayout(this)
     track.orientation = LinearLayout.HORIZONTAL
-    val tlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
-    tlp.topMargin = dp(9)
-    track.layoutParams = tlp
-    val trackBg = GradientDrawable()
-    trackBg.cornerRadius = dp(5).toFloat()
-    trackBg.setColor(col(R.color.grid))
-    track.background = trackBg
-
+    track.layoutParams = lp(h = dp(6), top = 8)
+    track.background = rounded(col(R.color.grid), 3)
     val fill = View(this)
-    val fillBg = GradientDrawable()
-    fillBg.cornerRadius = dp(5).toFloat()
-    fillBg.setColor(colorInt)
-    fill.background = fillBg
+    fill.background = rounded(colorInt, 3)
     val rest = View(this)
-
     val safeTotal = total.coerceAtLeast(1L)
-    fill.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, sec.toFloat())
-    rest.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, (safeTotal - sec).coerceAtLeast(0L).toFloat())
+    fill.layoutParams = lp(w = 0, h = MATCH, weight = sec.toFloat())
+    rest.layoutParams = lp(w = 0, h = MATCH, weight = (safeTotal - sec).coerceAtLeast(0L).toFloat())
     track.weightSum = safeTotal.toFloat()
     track.addView(fill)
     track.addView(rest)
     box.addView(track)
-
     return box
 }
 
-internal fun MainActivity.buildCsvButton(): View {
-    val b = TextView(this)
-    b.text = "Exportar CSV"
-    b.textSize = 13f
+internal fun MainActivity.buildExportButton(): View {
+    val b = LinearLayout(this)
+    b.orientation = LinearLayout.HORIZONTAL
     b.gravity = Gravity.CENTER
-    b.setTypeface(b.typeface, Typeface.BOLD)
-    b.setTextColor(col(R.color.indigo))
     b.setPadding(dp(14), dp(14), dp(14), dp(14))
-    val d = GradientDrawable()
-    d.cornerRadius = dp(12).toFloat()
-    d.setColor(col(R.color.card))
-    d.setStroke(dp(1), col(R.color.line))
-    b.background = d
-    val lp = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-    )
-    lp.topMargin = dp(20)
-    b.layoutParams = lp
-    b.setOnClickListener {
-        val (rFrom, rTo) = Store.periodRange(statsPeriod, statsOffset)
-        val periodTxt = periodLabel(statsPeriod, statsOffset, rFrom, rTo)
-        val catName = Store.categoryById(this, statsCategory)?.optString("name", "") ?: statsCategory
-        val filterLabel = if (statsCategory == "all") periodTxt else "$periodTxt · $catName"
+    b.background = withRipple(rounded(col(R.color.card), 16), dp(16).toFloat())
+    b.layoutParams = lp(top = 18)
+    b.addView(iconView(R.drawable.ic_download, col(R.color.indigo), 18))
+    val t = label("Exportar", 14f, col(R.color.indigo), bold = true)
+    t.setPadding(dp(8), 0, 0, 0)
+    b.addView(t)
+    b.setOnClickListener { openExportDialog() }
+    return b
+}
+
+private fun MainActivity.openExportDialog() {
+    val (rFrom, rTo) = Store.periodRange(statsPeriod, statsOffset)
+    val periodTxt = periodLabel(statsPeriod, statsOffset, rFrom, rTo)
+    val catName = Store.categoryById(this, statsCategory)?.optString("name", "") ?: statsCategory
+    val filterLabel = if (statsCategory == "all") periodTxt else "$periodTxt · $catName"
+    val box = dialogBox()
+    var dlg: AlertDialog? = null
+    fun choice(iconRes: Int, title: String, sub: String, first: Boolean, action: () -> Unit) {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(dp(4), dp(14), dp(4), dp(14))
+        if (!first) {
+            val div = View(this)
+            div.setBackgroundColor(col(R.color.line))
+            div.layoutParams = lp(h = dp(1))
+            box.addView(div)
+        }
+        row.addView(iconView(iconRes, col(R.color.muted), 22))
+        val texts = LinearLayout(this)
+        texts.orientation = LinearLayout.VERTICAL
+        texts.layoutParams = lp(w = 0, weight = 1f, left = 14)
+        texts.addView(label(title, 15f, col(R.color.ink)))
+        texts.addView(label(sub, 12.5f, col(R.color.muted)))
+        row.addView(texts)
+        row.setOnClickListener { dlg?.dismiss(); action() }
+        box.addView(row)
+    }
+    choice(R.drawable.ic_table, "Historial completo", "Todas las sesiones, en CSV", true) { exportCsv(filtered = false) }
+    choice(R.drawable.ic_filter, "Solo lo filtrado", "$filterLabel, en CSV", false) { exportCsv(filtered = true) }
+    choice(R.drawable.ic_save, "Backup completo", "Todos los datos, en JSON", false) { exportBackup() }
+    dlg = showStyled(
         AlertDialog.Builder(this, R.style.AppDialog)
             .setTitle("Exportar")
-            .setItems(
-                arrayOf(
-                    "Historial completo (CSV)",
-                    "Solo lo filtrado (CSV) · $filterLabel",
-                    "Backup completo (JSON)"
-                )
-            ) { _, which ->
-                when (which) {
-                    0 -> exportCsv(filtered = false)
-                    1 -> exportCsv(filtered = true)
-                    else -> exportBackup()
-                }
-            }
-            .show()
-    }
-    return b
+            .setView(box)
+            .setNegativeButton("Cancelar", null)
+    )
 }
 
 internal fun MainActivity.exportCsv(filtered: Boolean) {

@@ -10,7 +10,7 @@
 <!-- Color de la barra de título de la ventana instalada (Chrome/Edge la pintan con
      esto). Arranca en el tono oscuro y se corrige por JS según el tema real ni bien
      carga la página — ver applyTitlebarColor más abajo. -->
-<meta name="theme-color" id="themeColorMeta" content="#0E1420" />
+<meta name="theme-color" id="themeColorMeta" content="#2E3440" />
 <!-- Sin fondo (canal alfa real): para la barra de título, la pestaña y la barra de
      tareas, donde un cuadrado sólido se ve como un bloque de color pegado al texto.
      El ícono CON fondo (manifest.json) se sigue usando para el ícono de la app
@@ -25,36 +25,59 @@
    y "Sync" abajo: los nombres de campo son un contrato fijo compartido.
    ========================================================================== */
 
-/* Paleta "papel/tinta". Mismos nombres que la app (colors.xml / values-night). */
+/* ===== Sistema de diseño =====================================================
+   Paleta Nord: claro = "Snow Storm", oscuro = "Polar Night"; acento = Frost,
+   pausado / borrar = Aurora (mismos nombres y valores que la app: colors.xml /
+   values-night).
+   Superficies sin bordes: la jerarquía la dan el tono (paper < card < surface2) y una
+   sombra mínima en claro. El acento (--indigo) y "corriendo" (--live) los cambia el
+   tema del perfil; --accentSoft / --liveSoft son sus versiones tenues para fondos. */
 :root {
-  --paper:#F4F6FA; --card:#FDFEFF; --panel:#F3F6FB;
-  --ink:#182742; --inkSoft:#4A5A78; --muted:#8592AB;
-  --line:#D3DBE8; --grid:#E1E7F0;
-  --indigo:#2F4B8F; --live:#1C74C9; --paused:#C9821E;
+  --paper:#ECEFF4; --card:#FAFBFC; --surface2:#E5E9F0;
+  --ink:#2E3440; --inkSoft:#4C566A; --muted:#7A869B;
+  --line:#D8DEE9; --grid:#E5E9F0;
+  --indigo:#5E81AC; --live:#3F86B0; --paused:#C2784F; --danger:#BF616A;
+  --shadow:0 1px 2px rgba(46,52,64,.05), 0 2px 8px rgba(46,52,64,.06);
+  --shadowUp:0 8px 30px rgba(46,52,64,.2);
+  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper:#0E1420; --card:#161E2C; --panel:#1B2433;
-    --ink:#EAF0FA; --inkSoft:#AAB6CC; --muted:#7E8CA6;
-    --line:#2A3648; --grid:#232F40;
-    --indigo:#7B96D4; --live:#62AEEA; --paused:#E0A03A;
+    --paper:#2E3440; --card:#3B4252; --surface2:#434C5E;
+    --ink:#ECEFF4; --inkSoft:#D8DEE9; --muted:#9AA4B6;
+    --line:#434C5E; --grid:#434C5E;
+    --indigo:#81A1C1; --live:#88C0D0; --paused:#EBCB8B; --danger:#BF616A;
+    --shadow:none; --shadowUp:0 8px 30px rgba(0,0,0,.35); --scrim:rgba(20,24,31,.6);
+    --raised:#4C566A; --onAccent:#2E3440;
   }
 }
 :root[data-theme="light"] {
-  --paper:#F4F6FA; --card:#FDFEFF; --panel:#F3F6FB;
-  --ink:#182742; --inkSoft:#4A5A78; --muted:#8592AB;
-  --line:#D3DBE8; --grid:#E1E7F0;
-  --indigo:#2F4B8F; --live:#1C74C9; --paused:#C9821E;
+  --paper:#ECEFF4; --card:#FAFBFC; --surface2:#E5E9F0;
+  --ink:#2E3440; --inkSoft:#4C566A; --muted:#7A869B;
+  --line:#D8DEE9; --grid:#E5E9F0;
+  --indigo:#5E81AC; --live:#3F86B0; --paused:#C2784F; --danger:#BF616A;
+  --shadow:0 1px 2px rgba(46,52,64,.05), 0 2px 8px rgba(46,52,64,.06);
+  --shadowUp:0 8px 30px rgba(46,52,64,.2);
+  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF;
 }
 :root[data-theme="dark"] {
-  --paper:#0E1420; --card:#161E2C; --panel:#1B2433;
-  --ink:#EAF0FA; --inkSoft:#AAB6CC; --muted:#7E8CA6;
-  --line:#2A3648; --grid:#232F40;
-  --indigo:#7B96D4; --live:#62AEEA; --paused:#E0A03A;
+  --paper:#2E3440; --card:#3B4252; --surface2:#434C5E;
+  --ink:#ECEFF4; --inkSoft:#D8DEE9; --muted:#9AA4B6;
+  --line:#434C5E; --grid:#434C5E;
+  --indigo:#81A1C1; --live:#88C0D0; --paused:#EBCB8B; --danger:#BF616A;
+  --shadow:none; --shadowUp:0 8px 30px rgba(0,0,0,.35); --scrim:rgba(20,24,31,.6);
+  --raised:#4C566A; --onAccent:#2E3440;
+}
+:root {
+  --accentSoft:color-mix(in srgb, var(--indigo) 13%, var(--card));
+  --liveSoft:color-mix(in srgb, var(--live) 12%, var(--card));
+  --pausedSoft:color-mix(in srgb, var(--paused) 13%, var(--card));
+  --r-lg:22px; --r-md:16px; --r-sm:12px;
 }
 
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html,body { margin:0; padding:0; }
+button { font:inherit; color:inherit; }
 
 /* Scrollbar acorde al tema en vez del gris nativo del navegador (Firefox + Chromium/Edge). */
 html { scrollbar-color: var(--line) var(--paper); scrollbar-width: thin; }
@@ -65,232 +88,335 @@ html { scrollbar-color: var(--line) var(--paper); scrollbar-width: thin; }
 
 body {
   background:var(--paper); color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  font-size:15px; line-height:1.35;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:15px; line-height:1.35; -webkit-font-smoothing:antialiased;
 }
-.mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+/* Números: tabulares (todos los dígitos del mismo ancho, así el cronómetro no "baila")
+   pero con la fuente del sistema, en vez de la monoespaciada de antes. */
+.num { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; letter-spacing:-.01em; }
+.ico { width:20px; height:20px; flex:none; display:block; }
 
 /* Columna centrada tipo teléfono. En pantalla ancha (desktop) se abre a dos paneles. */
-.wrap { max-width:520px; margin:0 auto; padding:18px 18px 60px; }
+.wrap { max-width:540px; margin:0 auto; padding:20px 16px 72px; }
 
 /* Angosto (celu/tablet): una sola columna con tabs; se muestra solo el panel activo.
    El modo ancho (dos paneles) está al final del CSS para ganar en orden de cascada. */
 .panes { display:block; }
 .pane-title { display:none; }
-.seg { margin-top:16px; }
 body[data-tab="timer"] #resumenView { display:none; }
 body[data-tab="resumen"] #timerView { display:none; }
 
 /* Header */
 .hd { display:flex; align-items:center; gap:8px; }
-.hd .title { font-size:26px; font-weight:800; letter-spacing:-.5px; }
-.hd .sub { font-size:10px; letter-spacing:.14em; color:var(--muted); margin-top:2px; }
+.hd .title { font-size:24px; font-weight:800; letter-spacing:-.6px; line-height:1.1; }
+.hd .sub { font-size:13px; color:var(--muted); margin-top:3px; }
+.hd .sub::first-letter { text-transform:uppercase; }
 .hd .spacer { flex:1; }
-.iconbtn {
-  border:1px solid var(--line); background:var(--card); color:var(--inkSoft);
-  border-radius:16px; padding:8px 12px; font-size:13px; cursor:pointer; font-weight:700;
-}
-.iconbtn:hover { border-color:var(--muted); }
-.dot-sync { width:8px; height:8px; border-radius:50%; background:var(--muted); transition:background .3s; }
+.iconbtn { width:40px; height:40px; border-radius:50%; border:none; background:var(--card);
+  box-shadow:var(--shadow); color:var(--inkSoft); display:flex; align-items:center;
+  justify-content:center; cursor:pointer; flex:none; }
+.iconbtn:hover { color:var(--ink); }
+.profbtn { display:flex; align-items:center; gap:8px; height:40px; padding:0 12px 0 4px;
+  border:none; border-radius:20px; background:var(--card); box-shadow:var(--shadow);
+  cursor:pointer; font-weight:700; font-size:14px; max-width:200px; }
+.profbtn .pname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.profbtn .ico { width:16px; height:16px; color:var(--muted); }
+.avatar { position:relative; width:32px; height:32px; border-radius:50%; flex:none;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  font-weight:800; font-size:14px; }
+/* Estado de la sincronización: puntito sobre el avatar del perfil. */
+.dot-sync { position:absolute; right:-1px; bottom:-1px; width:10px; height:10px; border-radius:50%;
+  background:var(--muted); border:2px solid var(--card); transition:background .3s; }
 .dot-sync.ok { background:#3E9B5B; }
 .dot-sync.sync { background:var(--paused); }
-.dot-sync.err { background:#B5432E; }
+.dot-sync.err { background:var(--danger); }
 
-/* Tabs */
-.tabs { display:flex; gap:0; background:var(--card); border:1px solid var(--line);
-  border-radius:12px; padding:3px; margin-top:14px; }
-.tab { flex:1; text-align:center; padding:10px; border-radius:8px; cursor:pointer;
-  color:var(--inkSoft); font-size:14px; user-select:none; }
-.tab.active { background:var(--ink); color:var(--paper); }
+/* Control segmentado (pestañas y período): pista tenue, opción activa "levantada". */
+.tabs, .seg { display:flex; background:var(--surface2); border-radius:14px; padding:4px; }
+.tabs { margin-top:18px; }
+.seg { margin-top:16px; }
+.tab, .seg .s { flex:1; text-align:center; padding:9px 6px; border-radius:10px; cursor:pointer;
+  color:var(--inkSoft); font-size:14px; font-weight:600; user-select:none; transition:background .15s,color .15s; }
+.tab.active, .seg .s.active { background:var(--raised); color:var(--ink); box-shadow:var(--shadow); }
 
-/* Banner */
-.banner { display:flex; align-items:center; gap:10px; background:var(--card);
-  border:1px solid var(--line); border-radius:16px; padding:16px; margin-top:16px; }
-.banner .lbl { font-size:10px; letter-spacing:.12em; color:var(--muted); }
-.banner .nm { font-size:15px; font-weight:700; }
-.banner .chrono { font-size:30px; margin-top:2px; }
-.banner .grow { flex:1; min-width:0; }
-.pill { border-radius:16px; border:1px solid var(--line); background:var(--card);
-  padding:10px 14px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
-.pill.stop { color:var(--live); }
+/* Tarjeta base */
+.card { background:var(--card); border-radius:var(--r-lg); box-shadow:var(--shadow); }
 
-/* Chip toggle (ver archivadas) */
-.chip { display:inline-flex; align-items:center; gap:6px; border-radius:16px;
-  border:1px solid var(--line); background:var(--card); color:var(--inkSoft);
-  padding:7px 12px; font-size:12px; cursor:pointer; user-select:none; }
-.chip.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
-.chip .cdot { width:8px; height:8px; border-radius:50%; }
+/* Hero: la sesión en curso, con el lenguaje de la notificación (swatch + cronómetro
+   grande + botón principal lleno). Se tiñe con el color de la actividad. */
+.hero { margin-top:16px; padding:18px; border-radius:24px; background:var(--card);
+  box-shadow:var(--shadow); position:relative; overflow:hidden; }
+.hero.on { background:color-mix(in srgb, var(--act) 11%, var(--card)); }
+.hero .top { display:flex; align-items:center; gap:12px; }
+.hero .eyebrow { font-size:11px; font-weight:800; letter-spacing:.12em; color:var(--muted); text-transform:uppercase;
+  display:flex; align-items:center; gap:6px; }
+.hero.on .eyebrow { color:var(--live); }
+.hero.on.paused .eyebrow { color:var(--paused); }
+.pulse { width:8px; height:8px; border-radius:50%; background:currentColor; }
+.hero.on:not(.paused) .pulse { animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.75); } }
+.hero .nm { font-size:17px; font-weight:800; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hero .cat { font-size:13px; color:var(--inkSoft); }
+.hero .meta { flex:1; min-width:0; }
+.hero .chrono { font-size:52px; font-weight:600; letter-spacing:-1.5px; line-height:1; margin:16px 0 2px; }
+.hero.paused .chrono { color:var(--inkSoft); }
+.hero .hint { font-size:13px; color:var(--muted); margin-top:6px; }
+.hero .actions { display:flex; gap:10px; margin-top:16px; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:46px;
+  padding:0 18px; border-radius:23px; border:none; cursor:pointer; font-weight:700; font-size:15px;
+  white-space:nowrap; flex:1; transition:filter .15s, transform .1s; }
+.btn:active { transform:scale(.98); }
+.btn .ico { width:18px; height:18px; }
+.btn.primary { background:var(--indigo); color:var(--onAccent); }
+.btn.primary:hover { filter:brightness(1.08); }
+.btn.tonal { background:color-mix(in srgb, var(--ink) 9%, transparent); color:var(--ink); }
+.btn.tonal:hover { background:color-mix(in srgb, var(--ink) 11%, transparent); }
+.btn.small { height:38px; font-size:14px; flex:none; }
 
-/* Activity rows */
-.rowc { margin-top:8px; }
-.row { display:flex; align-items:center; gap:0; background:var(--card);
-  border:1px solid var(--line); border-radius:12px; padding:12px 12px 12px 14px; cursor:pointer; }
-.row.running { border-width:2px; border-color:var(--live); }
-.row.paused  { border-width:2px; border-color:var(--paused); }
-.row.arch { opacity:.55; }
-.row .arrow { width:36px; text-align:center; color:var(--muted); font-size:16px;
-  cursor:pointer; user-select:none; padding:4px; }
-.row .adot { width:12px; height:12px; border-radius:50%; margin-right:12px; flex:none; }
+/* Swatch de identidad: cuadrado redondeado con el ícono de la categoría (o la inicial)
+   sobre el color de la actividad. Mismo elemento que la notificación de la app. */
+.swatch { --mixIcon:100%; width:42px; height:42px; border-radius:13px; flex:none; display:flex; align-items:center;
+  justify-content:center; font-weight:800; font-size:17px;
+  background:color-mix(in srgb, var(--c) 15%, transparent); color:color-mix(in srgb, var(--c) var(--mixIcon), #fff); }
+/* En oscuro los colores de actividad (apagados) se aclaran un poco para que el ícono se lea. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .swatch { --mixIcon:50%; } }
+:root[data-theme="dark"] .swatch { --mixIcon:50%; }
+.swatch .ico { width:22px; height:22px; }
+.swatch.solid { background:var(--c); color:#fff; }
+.swatch.big { width:48px; height:48px; border-radius:15px; }
+
+/* Encabezado de sección (Actividades / Archivadas / gráficos) */
+.sechd { display:flex; align-items:center; margin:22px 4px 10px; }
+.sechd .t { flex:1; font-size:13px; font-weight:700; color:var(--inkSoft); }
+.sechd .t.click { cursor:pointer; user-select:none; display:flex; align-items:center; gap:4px; }
+.sechd .t .ico { width:16px; height:16px; }
+.textbtn { border:none; background:none; color:var(--indigo); font-weight:700; font-size:13px;
+  cursor:pointer; padding:4px 2px; display:inline-flex; align-items:center; gap:4px; }
+.textbtn .ico { width:16px; height:16px; }
+
+/* Filas de actividad */
+.rowc { margin-top:8px; background:var(--card); border-radius:var(--r-md); box-shadow:var(--shadow);
+  overflow:hidden; transition:background .2s; }
+.rowc.running { background:var(--liveSoft); box-shadow:inset 0 0 0 2px var(--live); }
+.rowc.paused { background:var(--pausedSoft); box-shadow:inset 0 0 0 2px var(--paused); }
+.rowc.arch { opacity:.6; }
+.row { display:flex; align-items:center; gap:12px; padding:11px 8px 11px 12px; cursor:pointer; user-select:none; }
+.row:hover { background:color-mix(in srgb, var(--ink) 3%, transparent); }
 .row .mid { flex:1; min-width:0; }
-.row .type { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-.row .name { font-size:16px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.row .today { font-size:14px; margin-right:12px; }
-.row .glyph { width:18px; height:18px; flex:none; }
-.row .edit { color:var(--muted); font-size:14px; padding:4px 6px; margin-left:2px;
-  opacity:.0; cursor:pointer; transition:opacity .15s; }
-.row:hover .edit { opacity:.6; }
-.row .edit:hover { opacity:1; color:var(--indigo); }
-@media (hover:none){ .row .edit{ opacity:.5; } }
+.row .name { font-size:15.5px; font-weight:700; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical;
+  -webkit-line-clamp:2; line-clamp:2; overflow-wrap:anywhere; line-height:1.25; }
+.row .type { font-size:12.5px; color:var(--muted); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .today { font-size:15px; font-weight:600; flex:none; text-align:right; }
+.rowc.running .today { color:var(--live); }
+.rowc.paused .today { color:var(--paused); }
+.row .zero { color:var(--muted); font-weight:500; }
+.playbtn { width:36px; height:36px; border-radius:50%; flex:none; display:flex; align-items:center;
+  justify-content:center; background:var(--accentSoft); color:var(--indigo); }
+.playbtn .ico { width:18px; height:18px; }
+.rowc.running .playbtn { background:var(--live); color:var(--onAccent); }
+.rowc.paused .playbtn { background:var(--paused); color:var(--onAccent); }
+.expbtn { width:30px; height:36px; flex:none; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); border-radius:10px; }
+.expbtn:hover { color:var(--ink); background:color-mix(in srgb, var(--ink) 6%, transparent); }
+.expbtn .ico { width:18px; height:18px; transition:transform .2s; }
+.expbtn.open .ico { transform:rotate(180deg); }
 
-/* Sessions panel */
-.panel { background:var(--panel); border-radius:12px; padding:10px 14px; margin-top:4px; }
-.panel .ptitle { font-size:10px; letter-spacing:.1em; color:var(--muted); }
-.srow { display:flex; align-items:center; padding:8px 0; }
-.srow .slabel { flex:1; font-size:13px; }
-.srow .sdel { color:var(--live); font-weight:800; font-size:16px; padding:2px 8px; cursor:pointer;
-  min-width:32px; text-align:center; }
-.pempty { color:var(--muted); font-size:12px; padding-top:8px; }
+/* Entradas de hoy (desplegable dentro de la misma tarjeta de la fila) */
+.panel { padding:4px 14px 10px 66px; }
+.panel .ptitle { font-size:12px; font-weight:700; color:var(--muted); padding:6px 0 2px; }
+.srow { display:flex; align-items:center; padding:6px 0; border-top:1px solid var(--line); }
+.ptitle + .srow { border-top:none; }
+.srow .slabel { flex:1; font-size:14px; color:var(--inkSoft); }
+.srow .sdur { font-size:14px; font-weight:600; margin-right:4px; }
+.srow .sdel { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); cursor:pointer; }
+.srow .sdel:hover { color:var(--danger); background:color-mix(in srgb, var(--danger) 10%, transparent); }
+.srow .sdel .ico { width:16px; height:16px; }
+.pempty { color:var(--muted); font-size:13px; padding:6px 0 4px; }
 
-/* Add card */
-.addcard { border:2px solid var(--line); border-radius:12px; text-align:center;
-  color:var(--indigo); font-weight:700; padding:18px; margin-top:4px; cursor:pointer; }
-.addcard:hover { border-color:var(--muted); }
+/* Nueva actividad */
+.addcard { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:10px;
+  padding:15px; border-radius:var(--r-md); border:none; background:var(--accentSoft); color:var(--indigo);
+  font-weight:700; font-size:15px; cursor:pointer; }
+.addcard:hover { filter:brightness(.97); }
+.addcard .ico { width:18px; height:18px; }
 
-/* Section labels */
-.slabel-h { font-size:10px; letter-spacing:.14em; color:var(--muted); margin:22px 0 8px; }
-.slabel-h.click { cursor:pointer; user-select:none; }
+.emptyhint { color:var(--muted); text-align:center; padding:18px 0 6px; font-size:14px; }
 
-/* Resumen: period selector + offset nav */
-.seg { display:flex; background:var(--card); border:1px solid var(--line);
-  border-radius:12px; padding:3px; }
-.seg .s { flex:1; text-align:center; padding:9px 6px; border-radius:8px; cursor:pointer;
-  color:var(--inkSoft); font-size:13px; user-select:none; }
-.seg .s.active { background:var(--ink); color:var(--paper); }
-.nav { display:flex; align-items:center; margin-top:10px; }
-.nav .ar { width:40px; height:36px; display:flex; align-items:center; justify-content:center;
-  font-size:16px; cursor:pointer; color:var(--indigo); user-select:none; }
-.nav .ar.off { color:var(--line); cursor:default; }
-.nav .navlbl { flex:1; text-align:center; font-weight:700; font-size:13px; }
+/* Resumen: navegación de período */
+.nav { display:flex; align-items:center; margin-top:12px; gap:8px; }
+.nav .ar { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; color:var(--ink); background:var(--card); box-shadow:var(--shadow); user-select:none; }
+.nav .ar.off { color:var(--line); cursor:default; box-shadow:none; background:transparent; }
+.nav .navlbl { flex:1; text-align:center; font-weight:700; font-size:15px; }
 
-.total { font-size:30px; margin-top:2px; }
-.empty { color:var(--muted); padding-top:24px; }
+/* Filtro por categoría */
+.chip { display:inline-flex; align-items:center; gap:7px; border-radius:18px; flex:none;
+  background:var(--card); box-shadow:var(--shadow); color:var(--inkSoft);
+  padding:8px 13px; font-size:13px; font-weight:600; cursor:pointer; user-select:none; white-space:nowrap; }
+.chip.active { background:var(--ink); color:var(--paper); box-shadow:none; }
+.chip .cdot { width:8px; height:8px; border-radius:50%; }
+.catrow { display:flex; gap:8px; overflow-x:auto; padding:12px 2px 4px; margin:0 -2px; scrollbar-width:none; }
+.catrow::-webkit-scrollbar { display:none; }
 
-/* Bar chart */
-.chart { display:flex; align-items:flex-end; margin-top:6px; height:150px; }
+/* Total del período + gráfico, en una tarjeta */
+.statcard { margin-top:14px; padding:18px 18px 12px; }
+.statcard .lbl { font-size:13px; font-weight:700; color:var(--muted); }
+.total { font-size:44px; font-weight:600; letter-spacing:-1.2px; line-height:1.05; margin-top:4px; }
+.statcard .sub { font-size:13px; color:var(--inkSoft); margin-top:4px; }
+.empty { color:var(--muted); padding:22px 0 10px; text-align:center; }
+
+/* Gráfico de barras: barras con punta redondeada sobre una "pista" tenue, así se ve la
+   forma del período aunque haya días vacíos. */
+.chart { display:flex; align-items:flex-end; margin-top:18px; height:150px; gap:6px; }
+.chart.dense { gap:2px; }
 .chart .cbar { flex:1; display:flex; flex-direction:column; align-items:center;
-  justify-content:flex-end; padding:0 2px; height:100%; }
-.chart .cval { font-size:9px; color:var(--inkSoft); text-align:center; white-space:nowrap; }
-.chart .cfill { width:100%; border-radius:4px 4px 0 0; margin-top:3px; }
-/* Barra apilada por categoría (vista Semana): un contenedor de altura=% del total del
-   día, con segmentos flex proporcionales a cada categoría dentro. */
-.chart .cstack { width:100%; margin-top:3px; border-radius:4px 4px 0 0; overflow:hidden;
-  display:flex; flex-direction:column; }
+  justify-content:flex-end; height:100%; min-width:0; }
+.chart .cval { font-size:10px; color:var(--inkSoft); text-align:center; white-space:nowrap; margin-bottom:4px; font-weight:600; }
+.chart .ctrack { width:100%; flex:1; display:flex; flex-direction:column; justify-content:flex-end;
+  background:var(--grid); border-radius:8px; overflow:hidden; }
+.chart.dense .ctrack { border-radius:4px; }
+.chart .cfill { width:100%; border-radius:8px; min-height:4px; }
+.chart.dense .cfill { border-radius:4px; }
+.chart .cstack { width:100%; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
 .chart .cseg { width:100%; }
-.chart .clab { font-size:9px; color:var(--muted); margin-top:4px; overflow:hidden;
-  text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
-.baseline { height:1px; background:var(--line); margin-bottom:14px; }
+.chart .cseg + .cseg { border-top:2px solid var(--card); }
+.chart .clab { font-size:11px; color:var(--muted); margin-top:6px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; max-width:100%; height:14px; }
+.chart .clab.today { color:var(--ink); font-weight:800; }
 
-/* Stat rows */
-.stat { background:var(--card); border:1px solid var(--line); border-radius:12px;
-  padding:12px 14px; margin-top:8px; }
+/* Desglose (por actividad / por categoría): una tarjeta con filas, no una tarjeta por fila */
+.list { padding:6px 16px; margin-top:8px; }
+.stat { padding:11px 0; border-top:1px solid var(--line); }
+.stat:first-child { border-top:none; }
 .stat.click { cursor:pointer; }
 .stat .top { display:flex; align-items:center; gap:10px; }
 .stat .sdot { width:10px; height:10px; border-radius:50%; flex:none; }
-.stat .snm { flex:1; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.stat .sval { font-size:13px; color:var(--inkSoft); }
-.track { height:8px; background:var(--grid); border-radius:5px; margin-top:9px; overflow:hidden; }
-.track .fill { height:100%; border-radius:5px; }
+.stat .snm { flex:1; font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stat .sval { font-size:14px; font-weight:600; }
+.stat .spct { font-size:12.5px; color:var(--muted); width:38px; text-align:right; }
+.track { height:6px; background:var(--grid); border-radius:3px; margin-top:8px; overflow:hidden; }
+.track .fill { height:100%; border-radius:3px; }
 
-/* Category chips row */
-.catrow { display:flex; gap:6px; overflow-x:auto; padding-top:10px; scrollbar-width:none; }
-.catrow::-webkit-scrollbar { display:none; }
+.csvbtn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:18px; padding:14px;
+  background:var(--card); box-shadow:var(--shadow); border:none; border-radius:var(--r-md);
+  color:var(--indigo); font-weight:700; cursor:pointer; font-size:14px; }
+.csvbtn .ico { width:18px; height:18px; }
 
-/* CSV button */
-.csvbtn { display:block; width:100%; text-align:center; margin-top:20px; padding:14px;
-  background:var(--card); border:1px solid var(--line); border-radius:12px;
-  color:var(--indigo); font-weight:700; cursor:pointer; font-size:13px; }
-.csvbtn:hover { border-color:var(--muted); }
-
-/* Modal */
-.overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
-  align-items:center; justify-content:center; padding:18px; z-index:50; }
-.dialog { background:var(--card); border:1px solid var(--line); border-radius:16px;
-  padding:20px; width:100%; max-width:400px; max-height:90vh; overflow:auto; }
-.dialog h3 { margin:0 0 14px; font-size:18px; }
+/* Diálogos: centrados en pantalla ancha; en el celu, hoja que sube desde abajo. */
+.overlay { position:fixed; inset:0; background:var(--scrim); display:flex;
+  align-items:center; justify-content:center; padding:18px; z-index:50; animation:fade .15s ease-out; }
+.dialog { background:var(--card); border-radius:26px; box-shadow:var(--shadowUp);
+  padding:22px; width:100%; max-width:420px; max-height:90vh; overflow:auto; animation:pop .18s ease-out; }
+@keyframes fade { from { opacity:0; } }
+@keyframes pop { from { opacity:0; transform:translateY(8px) scale(.98); } }
+@media (max-width:600px) {
+  .overlay { align-items:flex-end; padding:0; }
+  .dialog { max-width:none; border-radius:26px 26px 0 0; padding:12px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height:88vh; animation:sheet .22s ease-out; }
+  .dialog::before { content:""; display:block; width:40px; height:4px; border-radius:2px;
+    background:var(--line); margin:0 auto 14px; }
+  @keyframes sheet { from { transform:translateY(40px); opacity:.4; } }
+}
+.dialog h3 { margin:0 0 16px; font-size:20px; font-weight:800; letter-spacing:-.3px; }
 .dialog p { color:var(--inkSoft); margin:0 0 16px; }
-.field { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px;
-  background:var(--paper); color:var(--ink); font-size:15px; margin-bottom:10px; }
-.field:focus { outline:none; border-color:var(--indigo); }
-.flabel { font-size:12px; color:var(--muted); margin:14px 0 6px; }
-.swatches { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.field { width:100%; padding:13px 14px; border:2px solid transparent; border-radius:14px;
+  background:var(--surface2); color:var(--ink); font:inherit; font-size:16px; margin-bottom:6px; }
+.field:focus { outline:none; border-color:var(--indigo); background:var(--card); }
+.field.bad { border-color:var(--danger); }
+.flabel { font-size:13px; font-weight:700; color:var(--inkSoft); margin:16px 0 8px; }
+.swatches { display:flex; gap:10px; overflow-x:auto; padding:3px 3px 4px; scrollbar-width:none; }
 .swatches::-webkit-scrollbar { display:none; }
-.sw { width:34px; height:34px; border-radius:8px; flex:none; cursor:pointer; border:3px solid transparent; }
-.sw.sel { border-color:var(--ink); }
-.linkbtn { display:block; background:none; border:none; padding:14px 0 4px; font-size:14px;
-  font-weight:700; color:var(--indigo); cursor:pointer; text-align:left; }
-/* Selector de categorías (dropdown) dentro del diálogo de actividad, y grilla de
-   íconos dentro del diálogo de categoría. Reusan el lenguaje visual de .chip/.sw. */
-.catpick { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.sw { width:32px; height:32px; border-radius:50%; flex:none; cursor:pointer;
+  box-shadow:0 0 0 0 var(--card), 0 0 0 0 var(--ink); transition:box-shadow .15s; }
+.sw.sel { box-shadow:0 0 0 3px var(--card), 0 0 0 5px var(--ink); }
+.linkbtn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; padding:16px 0 2px; font-size:14px;
+  font-weight:700; color:var(--inkSoft); cursor:pointer; text-align:left; }
+.linkbtn .ico { width:18px; height:18px; }
+/* Selector de categorías dentro del diálogo de actividad, y grilla de íconos dentro del
+   diálogo de categoría. */
+.catpick { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 4px; scrollbar-width:none; }
 .catpick::-webkit-scrollbar { display:none; }
-.catchip { display:inline-flex; align-items:center; gap:6px; border-radius:16px; flex:none;
-  padding:7px 12px; font-size:12px; border:1px solid var(--line); background:transparent;
+.catchip { display:inline-flex; align-items:center; gap:7px; border-radius:18px; flex:none;
+  padding:8px 13px; font-size:13.5px; font-weight:600; border:none; background:var(--surface2);
   color:var(--inkSoft); cursor:pointer; white-space:nowrap; }
-.catchip.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.catchip.active { background:var(--ink); color:var(--paper); }
 .catchip .cdot { width:8px; height:8px; border-radius:50%; flex:none; }
-.catchip .cicon { width:14px; height:14px; flex:none; }
-.catchip.addnew { border:1px solid var(--indigo); color:var(--indigo); font-weight:700; }
-.cathint { font-size:10.5px; color:var(--muted); margin-top:6px; }
-.iconpick { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.catchip .cicon { width:15px; height:15px; flex:none; }
+.catchip.addnew { background:var(--accentSoft); color:var(--indigo); }
+.cathint { font-size:12px; color:var(--muted); margin-top:8px; }
+.iconpick { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 4px; scrollbar-width:none; }
 .iconpick::-webkit-scrollbar { display:none; }
-.icb { width:38px; height:38px; border-radius:8px; flex:none; cursor:pointer; display:flex;
-  align-items:center; justify-content:center; border:1px solid var(--line); background:var(--card);
-  color:var(--ink); font-size:13px; }
-.icb.sel { border:2px solid var(--indigo); }
-.icb svg { width:19px; height:19px; }
-.dbtns { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
-.dbtn { padding:9px 16px; border-radius:10px; border:none; background:none; cursor:pointer;
-  font-size:14px; font-weight:700; color:var(--indigo); }
-.dbtn.ghost { color:var(--inkSoft); }
-.dbtn.danger { color:var(--live); }
-.dchoice { display:block; width:100%; text-align:left; padding:14px 4px; border:none;
-  background:none; border-bottom:1px solid var(--line); color:var(--ink); font-size:15px; cursor:pointer; }
-.dchoice:last-child { border-bottom:none; }
+.icb { width:42px; height:42px; border-radius:13px; flex:none; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; background:var(--surface2);
+  color:var(--ink); font-size:13px; font-weight:700; box-shadow:inset 0 0 0 2px transparent; }
+.icb.sel { box-shadow:inset 0 0 0 2px var(--indigo); background:var(--accentSoft); }
+.icb svg { width:20px; height:20px; }
+.dbtns { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:22px; }
+.dbtn { height:42px; padding:0 18px; border-radius:21px; border:none; cursor:pointer;
+  font-size:14.5px; font-weight:700; background:var(--indigo); color:var(--onAccent); }
+.dbtn.ghost { background:none; color:var(--inkSoft); }
+.dbtn.ghost:hover { background:color-mix(in srgb, var(--ink) 6%, transparent); }
+.dbtn.danger { background:var(--danger); color:#fff; }
+.dbtn.dangertext { background:none; color:var(--danger); padding:0 10px; }
+.dchoice { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:14px 6px; border:none;
+  background:none; border-top:1px solid var(--line); color:var(--ink); font-size:15px; cursor:pointer; border-radius:0; }
+.dchoice:first-of-type { border-top:none; }
 .dchoice:hover { color:var(--indigo); }
+.dchoice .ico { color:var(--muted); }
+.dchoice small { display:block; color:var(--muted); font-size:12.5px; margin-top:2px; }
+
+/* Filas de perfil (selector) */
+.prow { display:flex; align-items:center; gap:12px; padding:10px 8px 10px 10px; border-radius:16px;
+  cursor:pointer; margin-top:6px; background:var(--surface2); }
+.prow.cur { background:var(--accentSoft); box-shadow:inset 0 0 0 2px var(--indigo); }
+.prow .avatar { width:38px; height:38px; font-size:16px; }
+.prow .pn { flex:1; font-weight:700; font-size:15.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prow .pcheck { color:var(--indigo); }
+.prow .pedit { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  color:var(--muted); }
+.prow .pedit:hover { color:var(--ink); background:color-mix(in srgb, var(--ink) 7%, transparent); }
+.prow .ico { width:18px; height:18px; }
 
 .hidden { display:none !important; }
 
 /* Ancho (PC): dos paneles lado a lado, sin tabs. Va al final para ganar en la cascada. */
 @media (min-width:900px) {
-  .wrap { max-width:1140px; }
+  .wrap { max-width:1160px; padding-top:28px; }
   .tabs { display:none; }
-  .panes { display:flex; gap:22px; align-items:flex-start; margin-top:6px; }
+  .panes { display:flex; gap:28px; align-items:flex-start; margin-top:10px; }
   .pane { flex:1; min-width:0; }
-  .pane-title { display:block; font-size:12px; font-weight:800; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--muted); margin:14px 0 0; }
+  .pane-title { display:block; font-size:13px; font-weight:800; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--muted); margin:14px 4px 0; }
   body[data-tab="timer"] #resumenView,
   body[data-tab="resumen"] #timerView { display:block; }
+}
+/* Celu angosto: el perfil queda solo como avatar, para que la fecha entre en una línea. */
+@media (max-width:480px) {
+  .profbtn { padding:0 4px; }
+  .profbtn .pname { display:none; }
 }
 
 /* ===== Temas (paletas) por perfil: cambian solo el acento (indigo) y "corriendo"
    (live); los neutros no cambian. "azul" es el default (valores base). ===== */
-:root[data-palette="verde"]   { --indigo:#2E7D5B; --live:#1F9D57; }
-:root[data-palette="violeta"] { --indigo:#6A4C93; --live:#8A5CD0; }
-:root[data-palette="arcilla"] { --indigo:#A6552E; --live:#D06A34; }
-:root[data-palette="grafito"] { --indigo:#4A5A78; --live:#5B6BB5; }
+:root[data-palette="verde"]   { --indigo:#5F8A4E; --live:#6E9F5A; }
+:root[data-palette="violeta"] { --indigo:#8A6585; --live:#9C74A0; }
+:root[data-palette="arcilla"] { --indigo:#B4694F; --live:#C9784F; }
+:root[data-palette="grafito"] { --indigo:#4C566A; --live:#5E81AC; }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="verde"]   { --indigo:#6FBF9B; --live:#57C98A; }
-  :root[data-palette="violeta"] { --indigo:#A98FD6; --live:#B79BEA; }
-  :root[data-palette="arcilla"] { --indigo:#D69574; --live:#E8956A; }
-  :root[data-palette="grafito"] { --indigo:#AAB6CC; --live:#8AA0E0; }
+  :root[data-palette="verde"]   { --indigo:#A3BE8C; --live:#B4CF9C; }
+  :root[data-palette="violeta"] { --indigo:#B48EAD; --live:#C6A4C0; }
+  :root[data-palette="arcilla"] { --indigo:#D08770; --live:#E09A82; }
+  :root[data-palette="grafito"] { --indigo:#D8DEE9; --live:#88C0D0; }
 }
-:root[data-theme="light"][data-palette="verde"]   { --indigo:#2E7D5B; --live:#1F9D57; }
-:root[data-theme="light"][data-palette="violeta"] { --indigo:#6A4C93; --live:#8A5CD0; }
-:root[data-theme="light"][data-palette="arcilla"] { --indigo:#A6552E; --live:#D06A34; }
-:root[data-theme="light"][data-palette="grafito"] { --indigo:#4A5A78; --live:#5B6BB5; }
-:root[data-theme="dark"][data-palette="verde"]   { --indigo:#6FBF9B; --live:#57C98A; }
-:root[data-theme="dark"][data-palette="violeta"] { --indigo:#A98FD6; --live:#B79BEA; }
-:root[data-theme="dark"][data-palette="arcilla"] { --indigo:#D69574; --live:#E8956A; }
-:root[data-theme="dark"][data-palette="grafito"] { --indigo:#AAB6CC; --live:#8AA0E0; }
+:root[data-theme="light"][data-palette="verde"]   { --indigo:#5F8A4E; --live:#6E9F5A; }
+:root[data-theme="light"][data-palette="violeta"] { --indigo:#8A6585; --live:#9C74A0; }
+:root[data-theme="light"][data-palette="arcilla"] { --indigo:#B4694F; --live:#C9784F; }
+:root[data-theme="light"][data-palette="grafito"] { --indigo:#4C566A; --live:#5E81AC; }
+:root[data-theme="dark"][data-palette="verde"]   { --indigo:#A3BE8C; --live:#B4CF9C; }
+:root[data-theme="dark"][data-palette="violeta"] { --indigo:#B48EAD; --live:#C6A4C0; }
+:root[data-theme="dark"][data-palette="arcilla"] { --indigo:#D08770; --live:#E09A82; }
+:root[data-theme="dark"][data-palette="grafito"] { --indigo:#D8DEE9; --live:#88C0D0; }
 </style>
 </head>
 <body>
@@ -298,12 +424,14 @@ body[data-tab="resumen"] #timerView { display:none; }
   <div class="hd">
     <div>
       <div class="title">Bitácora</div>
-      <div class="sub">REGISTRO DE TIEMPO</div>
+      <div class="sub" id="todaySub"></div>
     </div>
     <div class="spacer"></div>
-    <div class="dot-sync" id="syncDot" title="Sincronización"></div>
-    <button class="iconbtn" id="profileBtn" title="Perfil"></button>
-    <button class="iconbtn" id="themeBtn" title="Tema claro/oscuro">◐</button>
+    <button class="profbtn" id="profileBtn" title="Perfiles">
+      <span class="avatar" id="profAvatar"><span id="profInitial"></span><span class="dot-sync" id="syncDot" title="Sincronización"></span></span>
+      <span class="pname" id="profName"></span>
+    </button>
+    <button class="iconbtn" id="themeBtn" title="Tema claro/oscuro"></button>
   </div>
 
   <div class="tabs">
@@ -344,11 +472,11 @@ const bucketKey = pid => (!pid || pid === "default") ? BASE : BASE + "::" + pid;
 /* 5 temas: cada uno cambia el acento (indigo) y el "corriendo" (live). Los neutros
    no cambian, igual que en la app. Aplicados por CSS vía data-palette. */
 const THEME_ORDER = ["azul", "verde", "violeta", "arcilla", "grafito"];
-const THEME_ACCENT = { azul:"#2F4B8F", verde:"#2E7D5B", violeta:"#6A4C93", arcilla:"#A6552E", grafito:"#4A5A78" };
+const THEME_ACCENT = { azul:"#5E81AC", verde:"#5F8A4E", violeta:"#8A6585", arcilla:"#B4694F", grafito:"#4C566A" };
 
 /* 14 colores de actividad — mismos que Store.COLORS en la app. */
-const COLORS = ["#2F4B8F","#B5432E","#2E7D5B","#8A5A2B","#6A4C93","#1F6F8B","#9C4368",
-  "#3E6B2F","#B08A1E","#4A5A78","#7A3E9C","#2B7A78","#A6552E","#5B6BB5"];
+const COLORS = ["#5E81AC","#BF616A","#6E9F5A","#D08770","#8A6585","#4C8A8A","#B48EAD",
+  "#C29B4A","#4C566A","#3E7A99","#A35D6A","#5F7F4A","#B4694F","#6F8FB4"];
 
 // Mismo set curado que CategoryIcons.kt del lado Android — mismas claves (contrato
 // compartido: el campo "icon" de una categoría tiene que significar lo mismo en los
@@ -1041,6 +1169,12 @@ function exact(sec) {
   const p = n => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
 }
+// Compacto para etiquetas chicas (gráficos, encabezado): "2h 05m", "45m", "30s".
+function human(sec) {
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+  if (hh > 0) return `${hh}h ${String(mm).padStart(2, "0")}m`;
+  return mm > 0 ? `${mm}m` : `${sec}s`;
+}
 function hhmm(ms) { const d = new Date(ms), p = n => String(n).padStart(2, "0"); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
 
 /* ====================== MINI HELPER DE DOM ====================== */
@@ -1060,14 +1194,50 @@ function h(tag, attrs, ...kids) {
   }
   return e;
 }
-function iconGlyph(kind, color) {
+// Íconos de interfaz: trazo redondeado sobre 24×24, en currentColor (toman el color del
+// texto que los rodea). Los de categoría son otro set (CATEGORY_ICON_PATHS, compartido
+// con la app).
+const UI_ICONS = {
+  play: '<path d="M8 5.8v12.4a.8.8 0 0 0 1.2.7l10-6.2a.8.8 0 0 0 0-1.4l-10-6.2a.8.8 0 0 0-1.2.7z" fill="currentColor" stroke="none"/>',
+  pause: '<rect x="6.5" y="5" width="3.8" height="14" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.7" y="5" width="3.8" height="14" rx="1.3" fill="currentColor" stroke="none"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" stroke="none"/>',
+  chevDown: '<path d="M6 9.5l6 6 6-6"/>',
+  chevLeft: '<path d="M14.5 6l-6 6 6 6"/>',
+  chevRight: '<path d="M9.5 6l6 6-6 6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  edit: '<path d="M4.5 19.5h4l10-10a2.1 2.1 0 0 0-4-4l-10 10z"/><path d="M13 7l4 4"/>',
+  x: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  download: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/>',
+  moon: '<path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v1.9M12 19.3v1.9M2.8 12h1.9M19.3 12h1.9M5.5 5.5l1.3 1.3M17.2 17.2l1.3 1.3M5.5 18.5l1.3-1.3M17.2 6.8l1.3-1.3"/>',
+  archive: '<rect x="3.5" y="4.5" width="17" height="4.5" rx="1.4"/><path d="M5 9v9a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18V9M10 13h4"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  table: '<rect x="4" y="4.5" width="16" height="15" rx="2"/><path d="M4 9.5h16M4 14.5h16M10 9.5v10"/>',
+  filter: '<path d="M5 6h14M8 12h8M10.5 18h3"/>',
+  save: '<path d="M6 4.5h9l3.5 3.5V19a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5z"/><path d="M8.5 4.5v4h6v-4M8.5 19.5v-5h7v5"/>'
+};
+function icon(name) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("class", "glyph");
-  const p = document.createElementNS(ns, "path");
-  p.setAttribute("fill", color);
-  p.setAttribute("d", kind === "stop" ? "M6 6h12v12H6z" : "M8 5v14l11-7z");
-  svg.appendChild(p); return svg;
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "ico");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.innerHTML = UI_ICONS[name];
+  return svg;
+}
+// Swatch de identidad: ícono de la categoría (o la inicial) sobre el color de la
+// actividad. Tenue en las filas; "solid" (fondo lleno) en la tarjeta de lo que corre.
+function swatchEl(color, iconKey, name, opts = {}) {
+  const el = h("div", { class: "swatch" + (opts.big ? " big" : "") + (opts.solid ? " solid" : ""),
+    style: `--c:${color}` });
+  const ic = iconKey ? categoryIconEl(iconKey, "currentColor") : null;
+  if (ic) { ic.setAttribute("class", "ico"); el.append(ic); }
+  else el.append((name || "?").trim().charAt(0).toUpperCase());
+  return el;
 }
 
 /* ====================== ESTADO DE UI ====================== */
@@ -1087,9 +1257,19 @@ function render() { applyProfileChrome(); renderTimer(); renderResumen(); update
 // Aplica el tema (paleta) y el nombre del perfil activo al chrome.
 function applyProfileChrome() {
   const pid = Store.currentProfileId();
-  document.documentElement.dataset.palette = ProfileStore.themeOf(pid);
-  const btn = document.getElementById("profileBtn");
-  if (btn) btn.textContent = ProfileStore.nameOf(pid) + " ▾";
+  const theme = ProfileStore.themeOf(pid);
+  const name = ProfileStore.nameOf(pid);
+  document.documentElement.dataset.palette = theme;
+  document.getElementById("profName").textContent = name;
+  document.getElementById("profInitial").textContent = name.trim().charAt(0).toUpperCase();
+  document.getElementById("profAvatar").style.background = THEME_ACCENT[theme] || THEME_ACCENT.azul;
+  updateTodaySub();
+}
+// Subtítulo del encabezado: la fecha de hoy y el total acumulado en el día.
+function updateTodaySub() {
+  const fecha = new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  const total = Store.totalBetween(startOfToday(), Number.MAX_SAFE_INTEGER);
+  document.getElementById("todaySub").textContent = total > 0 ? `${fecha} · ${human(total)} hoy` : fecha;
 }
 
 // Antes mostraba el cronómetro en vivo (▶ 17:02 · Bovédas de Acero) en el título de la
@@ -1117,54 +1297,56 @@ function renderTimer() {
   const byToday = withArch.slice().sort((x, y) => secsToday(y) - secsToday(x));
   const acts = byToday.filter(a => !a.archived);
 
-  const list = h("div", { class: "rowc", style: "margin-top:16px" });
-
+  const head = h("div", { class: "sechd" }, h("div", { class: "t" }, "Actividades"));
   if (hasArchived) {
-    const c = h("div", { class: "chip", style: "margin-bottom:10px",
-      onclick: () => { showArchived = !showArchived; renderTimer(); } },
-      (showArchived ? "▾ Ocultar archivadas" : "▸ Ver archivadas"));
-    list.append(c);
+    const b = h("button", { class: "textbtn", onclick: () => { showArchived = !showArchived; renderTimer(); } },
+      showArchived ? "Ocultar archivadas" : "Ver archivadas");
+    head.append(b);
   }
+  view.append(head);
 
-  for (const a of acts) list.append(buildRow(a, runId, secsToday(a)));
-  if (acts.length === 0 && !hasArchived) {
-    list.append(h("div", { style: "color:var(--muted);text-align:center;padding:10px 0 14px" },
-      "Todavía no tenés actividades. Creá la primera acá abajo."));
-  }
-  list.append(h("div", { class: "addcard", onclick: () => openActivitySheet(null) }, "+  Nueva actividad"));
+  for (const a of acts) view.append(buildRow(a, runId, secsToday(a)));
+  if (acts.length === 0 && !hasArchived)
+    view.append(h("div", { class: "emptyhint" }, "Todavía no tenés actividades. Creá la primera acá abajo."));
+  view.append(h("button", { class: "addcard", onclick: () => openActivitySheet(null) }, icon("plus"), "Nueva actividad"));
 
   if (showArchived) {
     const arch = byToday.filter(a => a.archived);
     if (arch.length) {
-      list.append(h("div", { class: "slabel-h" }, "ARCHIVADAS"));
-      for (const a of arch) list.append(buildRow(a, runId, secsToday(a)));
+      view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Archivadas")));
+      for (const a of arch) view.append(buildRow(a, runId, secsToday(a)));
     }
   }
-  view.append(list);
 }
 
+// Tarjeta de lo que está corriendo, con el lenguaje de la notificación de la app. Sin
+// nada corriendo muestra el total de hoy.
 function buildBanner() {
   const runId = Store.runningActId();
-  const b = h("div", { class: "banner" });
-  const mid = h("div", { class: "grow" });
-  if (runId) {
-    const a = Store.activityById(runId);
-    const paused = Store.runningPaused();
-    mid.append(h("div", { class: "lbl" }, paused ? "PAUSADO" : "GRABANDO"));
-    mid.append(h("div", { class: "nm" }, a ? a.name : "—"));
-    const chrono = h("div", { class: "chrono mono", id: "bannerChrono" }, exact(Math.floor(Store.runningElapsedMs() / 1000)));
-    mid.append(chrono);
-    b.append(mid);
-    b.append(h("div", { class: "pill", onclick: () => { Store.runningPaused() ? Store.resume() : Store.pause(); afterMutation(); } },
-      paused ? "Resumir" : "Pausar"));
-    b.append(h("div", { class: "pill stop", onclick: () => { Store.stop(); afterMutation(); } }, "Parar"));
-  } else {
-    mid.append(h("div", { class: "lbl" }, "EN REPOSO"));
-    mid.append(h("div", { class: "nm" }, "Nada corriendo"));
-    mid.append(h("div", { class: "chrono mono" }, "0:00"));
-    b.append(mid);
+  if (!runId) {
+    const total = Store.totalBetween(startOfToday(), Number.MAX_SAFE_INTEGER);
+    return h("div", { class: "hero" },
+      h("div", { class: "eyebrow" }, "Hoy"),
+      h("div", { class: "chrono num" }, exact(total)),
+      h("div", { class: "hint" }, "Tocá una actividad para empezar a cronometrar."));
   }
-  return b;
+  const a = Store.activityById(runId);
+  const paused = Store.runningPaused();
+  const color = (a && a.color) || "#2F4B8F";
+  const cat = a ? Store.categoryForActivity(a) : null;
+  const hero = h("div", { class: "hero on" + (paused ? " paused" : ""), style: `--act:${color}` });
+  hero.append(h("div", { class: "top" },
+    swatchEl(color, cat && cat.icon, a ? a.name : "", { big: true, solid: true }),
+    h("div", { class: "meta" },
+      h("div", { class: "eyebrow" }, h("span", { class: "pulse" }), paused ? "Pausado" : "Grabando"),
+      h("div", { class: "nm" }, a ? a.name : "—"),
+      cat ? h("div", { class: "cat" }, cat.name) : null)));
+  hero.append(h("div", { class: "chrono num", id: "bannerChrono" }, exact(Math.floor(Store.runningElapsedMs() / 1000))));
+  hero.append(h("div", { class: "actions" },
+    h("button", { class: "btn primary", onclick: () => { Store.runningPaused() ? Store.resume() : Store.pause(); afterMutation(); } },
+      icon(paused ? "play" : "pause"), paused ? "Seguir" : "Pausar"),
+    h("button", { class: "btn tonal", onclick: () => { Store.stop(); afterMutation(); } }, icon("stop"), "Parar")));
+  return hero;
 }
 
 function buildRow(act, runId, todaySecs) {
@@ -1172,36 +1354,26 @@ function buildRow(act, runId, todaySecs) {
   const paused = running && Store.runningPaused();
   const expanded = expandedIds.has(act.id);
   const archived = !!act.archived;
+  const cat = Store.categoryForActivity(act);
+  const color = act.color || "#2F4B8F";
 
-  const cont = h("div", { class: "rowc" });
-  const row = h("div", { class: "row" + (paused ? " paused" : running ? " running" : "") + (archived ? " arch" : "") });
+  const cont = h("div", { class: "rowc" + (paused ? " paused" : running ? " running" : "") + (archived ? " arch" : "") });
+  const row = h("div", { class: "row" });
+  row.append(swatchEl(color, cat.icon, act.name));
+  row.append(h("div", { class: "mid" },
+    h("div", { class: "name" }, act.name),
+    h("div", { class: "type" }, archived ? `${cat.name} · Archivada` : cat.name)));
 
-  // flecha desplegar sesiones
-  row.append(h("div", { class: "arrow", onclick: (e) => {
-    e.stopPropagation();
-    expanded ? expandedIds.delete(act.id) : expandedIds.add(act.id);
-    renderTimer();
-  } }, expanded ? "▾" : "▸"));
-
-  row.append(h("div", { class: "adot", style: "background:" + (act.color || "#2F4B8F") }));
-
-  const typeText = Store.categoryForActivity(act).name.toUpperCase();
-  const mid = h("div", { class: "mid" },
-    h("div", { class: "type" }, archived ? (typeText ? typeText + " · ARCHIVADA" : "ARCHIVADA") : typeText),
-    h("div", { class: "name" }, act.name));
-  row.append(mid);
-
-  const todayColor = paused ? "var(--paused)" : running ? "var(--live)" : "var(--ink)";
-  const todayEl = h("div", { class: "today mono", style: "color:" + todayColor },
-    exact(todaySecs));
+  const todayEl = h("div", { class: "today num" + (todaySecs || running ? "" : " zero") }, exact(todaySecs));
   todayEls[act.id] = todayEl;
   row.append(todayEl);
-
-  const glyphColor = paused ? "var(--paused)" : running ? "var(--live)" : "var(--indigo)";
-  row.append(iconGlyph(running ? "stop" : "play", glyphColor));
-
-  row.append(h("div", { class: "edit", title: "Editar",
-    onclick: (e) => { e.stopPropagation(); openActivitySheet(act); } }, "✎"));
+  row.append(h("div", { class: "playbtn", title: running ? "Parar" : "Empezar" }, icon(running ? "stop" : "play")));
+  row.append(h("div", { class: "expbtn" + (expanded ? " open" : ""), title: "Entradas de hoy",
+    onclick: (e) => {
+      e.stopPropagation();
+      expanded ? expandedIds.delete(act.id) : expandedIds.add(act.id);
+      renderTimer();
+    } }, icon("chevDown")));
 
   // click en la fila = arrancar/parar (o editar si está archivada)
   row.addEventListener("click", () => {
@@ -1227,7 +1399,7 @@ function attachLongPress(el, cb) {
 }
 
 function buildSessionsPanel(act) {
-  const panel = h("div", { class: "panel" }, h("div", { class: "ptitle" }, "ENTRADAS DE HOY"));
+  const panel = h("div", { class: "panel" }, h("div", { class: "ptitle" }, "Entradas de hoy"));
   const sessions = Store.sessionsForActivityToday(act.id);
   if (sessions.length === 0) {
     panel.append(h("div", { class: "pempty" }, "Sin entradas cerradas todavía."));
@@ -1236,11 +1408,12 @@ function buildSessionsPanel(act) {
   for (const s of sessions) {
     const secs = Math.floor((s.end - s.start) / 1000);
     panel.append(h("div", { class: "srow" },
-      h("div", { class: "slabel" }, `${hhmm(s.start)} - ${hhmm(s.end)}   ${exact(secs)}`),
+      h("div", { class: "slabel num" }, `${hhmm(s.start)} – ${hhmm(s.end)}`),
+      h("div", { class: "sdur num" }, exact(secs)),
       h("div", { class: "sdel", title: "Borrar",
         onclick: () => confirmDialog("Borrar entrada",
           `Se borra el registro de ${hhmm(s.start)} a ${hhmm(s.end)}. ¿Seguro?`,
-          "Borrar", true, () => { Store.deleteSession(s.id); afterMutation(); }) }, "✕")));
+          "Borrar", true, () => { Store.deleteSession(s.id); afterMutation(); }) }, icon("x"))));
   }
   return panel;
 }
@@ -1271,13 +1444,16 @@ function renderResumen() {
   const total = perAct.reduce((s, x) => s + x[1], 0);
 
   const statsCatName = statsCategory === "all" ? "" : (catMap.get(statsCategory)?.name || statsCategory);
-  view.append(h("div", { class: "slabel-h" }, statsCategory === "all" ? "TOTAL" : "TOTAL · " + statsCatName.toUpperCase()));
-  view.append(h("div", { class: "total mono" }, exact(total)));
+  const card = h("div", { class: "card statcard" },
+    h("div", { class: "lbl" }, statsCategory === "all" ? "Total" : "Total · " + statsCatName),
+    h("div", { class: "total num" }, exact(total)));
+  view.append(card);
 
   if (perAct.length === 0) {
-    view.append(h("div", { class: "empty" }, "Sin registros en este período."));
+    card.append(h("div", { class: "empty" }, "Sin registros en este período."));
     return;
   }
+  card.append(h("div", { class: "sub" }, perAct.length === 1 ? "en 1 actividad" : `en ${perAct.length} actividades`));
 
   const actIds = new Set(acts.map(a => a.id));
   const catColorsAll = categoryColors(allActs);
@@ -1286,39 +1462,51 @@ function renderResumen() {
   // un filtro de categoría activo, apilar una sola categoría no aporta nada: cae a
   // "por actividad" como día.
   if (statsPeriod === "week" && statsCategory === "all") {
-    view.append(h("div", { class: "slabel-h" }, "POR DÍA · CATEGORÍA"));
     // Orden fijo de categorías (por total de la semana) para que el mismo color quede
     // siempre en la misma posición dentro de cada barra apilada.
     const catOrder = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]).map(x => x[0]);
-    view.append(buildStackedBarChart(weekCategoryStacks(allActs, from, catOrder), catColorsAll));
+    card.append(buildStackedBarChart(weekCategoryStacks(allActs, from, catOrder), catColorsAll, todayIndex(from, 7)));
   } else if (statsPeriod === "day" || statsPeriod === "week") {
-    view.append(h("div", { class: "slabel-h" }, "POR ACTIVIDAD"));
     const bars = perAct.slice(0, 8).map(x => ({ label: x[0].name, secs: x[1], color: x[0].color || "#2F4B8F" }));
-    view.append(buildBarChart(bars, true, 1));
+    card.append(buildBarChart(bars, true, 1, -1));
   } else {
-    view.append(h("div", { class: "slabel-h" }, "POR DÍA"));
     const bars = monthBars(actIds, from, statsOffset === 0 ? new Date().getDate() : daysInMonth(from));
-    view.append(buildBarChart(bars, false, 5));
+    card.append(buildBarChart(bars, false, 5, todayIndex(from, bars.length)));
   }
 
-  for (const [a, sec] of perAct)
-    view.append(statRow(a.name, a.color || "#2F4B8F", sec, total, null));
+  view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Por actividad")));
+  const list = h("div", { class: "card list" });
+  for (const [a, sec] of perAct) list.append(statRow(a.name, a.color || "#2F4B8F", sec, total, null));
+  view.append(list);
 
   if (statsCategory === "all") {
     const entries = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]);
     if (entries.length) {
       const expanded = catExpanded == null ? entries.length <= 3 : catExpanded;
-      view.append(h("div", { class: "slabel-h click", onclick: () => { catExpanded = !expanded; renderResumen(); } },
-        "POR CATEGORÍA  " + (expanded ? "▾" : "▸")));
+      const chev = icon("chevDown");
+      if (!expanded) chev.style.transform = "rotate(-90deg)";
+      view.append(h("div", { class: "sechd" },
+        h("div", { class: "t click", onclick: () => { catExpanded = !expanded; renderResumen(); } }, "Por categoría", chev)));
       // Mismo color que en el gráfico apilado: sirve de leyenda.
-      if (expanded) for (const [c, sec] of entries) {
-        const label = (Store.categoryById(c) || {}).name || "General";
-        view.append(statRow(label, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+      if (expanded) {
+        const cl = h("div", { class: "card list" });
+        for (const [c, sec] of entries) {
+          const label = (Store.categoryById(c) || {}).name || "General";
+          cl.append(statRow(label, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
+        }
+        view.append(cl);
       }
     }
   }
 
-  view.append(h("button", { class: "csvbtn", onclick: onExportClick }, "Exportar CSV"));
+  view.append(h("button", { class: "csvbtn", onclick: onExportClick }, icon("download"), "Exportar"));
+}
+
+// Posición de "hoy" dentro de un período que arranca en from (para resaltar su barra),
+// o -1 si hoy no cae ahí.
+function todayIndex(from, count) {
+  const i = Math.round((startOfToday() - from) / DAY_MS);
+  return i >= 0 && i < count ? i : -1;
 }
 
 function buildPeriodSelector() {
@@ -1330,15 +1518,13 @@ function buildPeriodSelector() {
 }
 function buildOffsetNav(label) {
   const nav = h("div", { class: "nav" });
-  nav.append(h("div", { class: "ar", onclick: () => { statsOffset -= 1; renderResumen(); } }, "◀"));
+  nav.append(h("div", { class: "ar", title: "Anterior", onclick: () => { statsOffset -= 1; renderResumen(); } }, icon("chevLeft")));
   nav.append(h("div", { class: "navlbl" }, label));
   const canFwd = statsOffset < 0;
-  nav.append(h("div", { class: "ar" + (canFwd ? "" : " off"),
-    onclick: canFwd ? () => { statsOffset += 1; renderResumen(); } : null }, "▶"));
+  nav.append(h("div", { class: "ar" + (canFwd ? "" : " off"), title: "Siguiente",
+    onclick: canFwd ? () => { statsOffset += 1; renderResumen(); } : null }, icon("chevRight")));
   return nav;
 }
-// Color representativo de cada categoría (el de su primera actividad). Es la "leyenda"
-// consistente entre el selector, el gráfico apilado por categoría y la lista colapsable.
 // Color de cada categoría: propiedad propia de la categoría (ya no "la de su primera
 // actividad"). Es la "leyenda" consistente entre el selector, el gráfico apilado y la
 // lista colapsable.
@@ -1393,40 +1579,39 @@ function weekCategoryStacks(acts, weekStart, catOrder) {
 }
 // Barras apiladas: una columna por día, cada una dividida en segmentos de color según
 // la categoría (mismo color que el selector y la lista colapsable de categorías).
-function buildStackedBarChart(days, catColors) {
+function buildStackedBarChart(days, catColors, todayIdx) {
   const max = Math.max(1, ...days.map(d => d.total));
   const chart = h("div", { class: "chart" });
-  days.forEach(d => {
+  days.forEach((d, i) => {
     const col = h("div", { class: "cbar" });
-    col.append(h("div", { class: "cval" }, d.total > 0 ? exact(d.total) : ""));
-    const hpct = Math.max(2, (d.total / max) * 100);
-    const stack = h("div", { class: "cstack", style: `height:${hpct}%` });
-    for (const seg of d.segs)
-      stack.append(h("div", { class: "cseg", style: `flex-grow:${seg.secs};background:${catColors[seg.cat] || "var(--indigo)"}` }));
-    col.append(stack);
-    col.append(h("div", { class: "clab" }, d.label));
+    col.append(h("div", { class: "cval num" }, d.total > 0 ? human(d.total) : ""));
+    const track = h("div", { class: "ctrack" });
+    if (d.total > 0) {
+      const stack = h("div", { class: "cstack", style: `height:${Math.max(3, (d.total / max) * 100)}%` });
+      for (const seg of d.segs)
+        stack.append(h("div", { class: "cseg", style: `flex-grow:${seg.secs};background:${catColors[seg.cat] || "var(--indigo)"}` }));
+      track.append(stack);
+    }
+    col.append(track);
+    col.append(h("div", { class: "clab" + (i === todayIdx ? " today" : "") }, d.label));
     chart.append(col);
   });
-  const outer = h("div");
-  outer.append(chart);
-  outer.append(h("div", { class: "baseline" }));
-  return outer;
+  return chart;
 }
-function buildBarChart(bars, showValues, labelStep) {
+function buildBarChart(bars, showValues, labelStep, todayIdx) {
   const max = Math.max(1, ...bars.map(b => b.secs));
-  const chart = h("div", { class: "chart" });
+  const chart = h("div", { class: "chart" + (bars.length > 12 ? " dense" : "") });
   bars.forEach((b, idx) => {
     const col = h("div", { class: "cbar" });
-    if (showValues) col.append(h("div", { class: "cval" }, b.secs > 0 ? exact(b.secs) : ""));
-    const hpct = Math.max(2, (b.secs / max) * 100);
-    col.append(h("div", { class: "cfill", style: `height:${hpct}%;background:${b.color};min-height:3px` }));
-    col.append(h("div", { class: "clab" }, idx % labelStep === 0 ? b.label : ""));
+    if (showValues) col.append(h("div", { class: "cval num" }, b.secs > 0 ? human(b.secs) : ""));
+    const track = h("div", { class: "ctrack" });
+    if (b.secs > 0) track.append(h("div", { class: "cfill", style: `height:${Math.max(3, (b.secs / max) * 100)}%;background:${b.color}` }));
+    col.append(track);
+    const showLabel = idx % labelStep === 0 || idx === todayIdx;
+    col.append(h("div", { class: "clab" + (idx === todayIdx ? " today" : "") }, showLabel ? b.label : ""));
     chart.append(col);
   });
-  const outer = h("div");
-  outer.append(chart);
-  outer.append(h("div", { class: "baseline" }));
-  return outer;
+  return chart;
 }
 function statRow(name, color, sec, total, onClick) {
   const pct = total > 0 ? Math.round(sec * 100 / total) : 0;
@@ -1435,7 +1620,8 @@ function statRow(name, color, sec, total, onClick) {
   box.append(h("div", { class: "top" },
     h("div", { class: "sdot", style: "background:" + color }),
     h("div", { class: "snm" }, name),
-    h("div", { class: "sval mono" }, `${exact(sec)}  ·  ${pct}%`)));
+    h("div", { class: "sval num" }, exact(sec)),
+    h("div", { class: "spct num" }, pct + "%")));
   const track = h("div", { class: "track" });
   track.append(h("div", { class: "fill", style: `width:${total > 0 ? (sec / total * 100) : 0}%;background:${color}` }));
   box.append(track);
@@ -1489,7 +1675,7 @@ function openActivitySheet(existing) {
     catRow.append(add);
   }
   rebuildCatRow();
-  const catHint = h("div", { class: "cathint" }, "Mantené presionada (o click derecho) una categoría para editarla o borrarla");
+  const catHint = h("div", { class: "cathint" }, "Mantené presionada (o click derecho) una categoría para editarla.");
 
   let picked = existing ? existing.color : COLORS[Store.activities().length % COLORS.length];
   const swWrap = h("div", { class: "swatches" });
@@ -1511,12 +1697,12 @@ function openActivitySheet(existing) {
     d.append(h("button", { class: "linkbtn", onclick: () => {
       archived ? Store.unarchiveActivity(existing.id) : Store.archiveActivity(existing.id);
       closeModal(); afterMutation();
-    } }, archived ? "Desarchivar actividad" : "Archivar actividad"));
+    } }, icon("archive"), archived ? "Desarchivar actividad" : "Archivar actividad"));
   }
 
   const btns = h("div", { class: "dbtns" });
   if (existing) {
-    btns.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => {
+    btns.append(h("button", { class: "dbtn dangertext", style: "margin-right:auto", onclick: () => {
       confirmDialog(`Borrar "${existing.name}"`, "También se borran sus sesiones. ¿Seguro?",
         "Borrar", true, () => { Store.deleteActivity(existing.id); afterMutation(); });
     } }, "Borrar"));
@@ -1563,7 +1749,7 @@ function openCategorySheet(existing, onDone) {
     for (const key of CATEGORY_ICON_ORDER) {
       const btn = h("div", { class: "icb" + (pickedIcon === key ? " sel" : ""),
         onclick: () => { pickedIcon = key; rebuildIconRow(); } });
-      btn.append(categoryIconEl(key, "var(--ink)"));
+      btn.append(categoryIconEl(key, "currentColor"));
       iconRow.append(btn);
     }
   }
@@ -1586,7 +1772,7 @@ function openCategorySheet(existing, onDone) {
 
   const btns2 = h("div", { class: "dbtns" });
   if (existing) {
-    btns2.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => {
+    btns2.append(h("button", { class: "dbtn dangertext", style: "margin-right:auto", onclick: () => {
       if (!confirm(`Borrar categoría "${existing.name}"? Las actividades que la usan quedan sin categoría (General).`)) return;
       Store.deleteCategory(existing.id);
       // "" = sin categoría (cae al "General" virtual de categoryForActivity) en vez de
@@ -1616,11 +1802,13 @@ function onExportClick() {
   const periodTxt = periodLabel(statsPeriod, statsOffset, from, to);
   const catName = statsCategory === "all" ? "" : (Store.categoryById(statsCategory)?.name || statsCategory);
   const filterLbl = statsCategory === "all" ? periodTxt : `${periodTxt} · ${catName}`;
+  const choice = (ico, title, sub, fn) => h("button", { class: "dchoice", onclick: () => { closeModal(); fn(); } },
+    icon(ico), h("div", null, title, h("small", null, sub)));
   const d = h("div", { class: "dialog" },
     h("h3", null, "Exportar"),
-    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(false); } }, "Historial completo (CSV)"),
-    h("button", { class: "dchoice", onclick: () => { closeModal(); doExport(true); } }, `Solo lo filtrado (CSV) · ${filterLbl}`),
-    h("button", { class: "dchoice", onclick: () => { closeModal(); doBackup(); } }, "Backup completo (JSON)"),
+    choice("table", "Historial completo", "Todas las sesiones, en CSV", () => doExport(false)),
+    choice("filter", "Solo lo filtrado", `${filterLbl}, en CSV`, () => doExport(true)),
+    choice("save", "Backup completo", "Todos los datos, en JSON", doBackup),
     h("div", { class: "dbtns" }, h("button", { class: "dbtn ghost", onclick: closeModal }, "Cancelar")));
   showModal(d);
 }
@@ -1654,15 +1842,13 @@ function doExport(filtered) {
 /* ====================== PERFILES ====================== */
 function profileRowNode(p, current) {
   const isCur = p.id === current;
-  const row = h("div", { class: "stat",
-    style: "cursor:pointer;margin-top:8px" + (isCur ? ";border-color:var(--indigo);border-width:2px" : "") });
-  const top = h("div", { class: "top" });
-  top.append(h("div", { class: "sdot", style: "background:" + (THEME_ACCENT[p.theme] || THEME_ACCENT.azul) }));
-  top.append(h("div", { class: "snm", style: "font-weight:700" }, p.name));
-  if (isCur) top.append(h("div", { class: "sval", style: "color:var(--indigo);font-weight:800" }, "✓"));
-  top.append(h("div", { style: "color:var(--muted);padding:0 4px 0 8px;cursor:pointer;font-size:15px",
-    onclick: (e) => { e.stopPropagation(); openProfileEdit(p); } }, "✎"));
-  row.append(top);
+  const row = h("div", { class: "prow" + (isCur ? " cur" : "") });
+  row.append(h("div", { class: "avatar", style: "background:" + (THEME_ACCENT[p.theme] || THEME_ACCENT.azul) },
+    p.name.trim().charAt(0).toUpperCase()));
+  row.append(h("div", { class: "pn" }, p.name));
+  if (isCur) row.append(h("div", { class: "pcheck" }, icon("check")));
+  row.append(h("div", { class: "pedit", title: "Editar",
+    onclick: (e) => { e.stopPropagation(); openProfileEdit(p); } }, icon("edit")));
   row.addEventListener("click", () => selectProfile(p.id));
   return row;
 }
@@ -1671,7 +1857,7 @@ function openProfileSheet() {
   const d = h("div", { class: "dialog" }, h("h3", null, "Perfiles"));
   const cur = Store.currentProfileId();
   for (const p of ProfileStore.profiles()) d.append(profileRowNode(p, cur));
-  d.append(h("button", { class: "addcard", style: "margin-top:8px", onclick: openNewProfile }, "+  Nuevo perfil"));
+  d.append(h("button", { class: "addcard", onclick: openNewProfile }, icon("plus"), "Nuevo perfil"));
   d.append(h("div", { class: "dbtns" }, h("button", { class: "dbtn ghost", onclick: closeModal }, "Cerrar")));
   showModal(d);
 }
@@ -1679,7 +1865,7 @@ function openProfileSheet() {
 function showMandatoryPicker() {
   const d = h("div", { class: "dialog" }, h("h3", null, "¿Quién sos?"));
   for (const p of ProfileStore.profiles()) d.append(profileRowNode(p, ""));
-  d.append(h("button", { class: "addcard", style: "margin-top:8px", onclick: openNewProfile }, "+  Nuevo perfil"));
+  d.append(h("button", { class: "addcard", onclick: openNewProfile }, icon("plus"), "Nuevo perfil"));
   showModal(d, true);
 }
 
@@ -1724,12 +1910,8 @@ function openProfileEdit(p) {
   const swWrap = h("div", { class: "swatches" });
   const els = [];
   THEME_ORDER.forEach(t => {
-    const sw = h("div", { class: "sw" + (t === pickedTheme ? " sel" : ""),
-      style: "background:" + THEME_ACCENT[t] + ";border-radius:50%",
-      onclick: () => { pickedTheme = t; els.forEach((e, i) => {
-        e.className = "sw" + (THEME_ORDER[i] === pickedTheme ? " sel" : "");
-        e.style.borderRadius = "50%";
-      }); } });
+    const sw = h("div", { class: "sw" + (t === pickedTheme ? " sel" : ""), style: "background:" + THEME_ACCENT[t],
+      onclick: () => { pickedTheme = t; els.forEach((e, i) => e.className = "sw" + (THEME_ORDER[i] === pickedTheme ? " sel" : "")); } });
     els.push(sw); swWrap.append(sw);
   });
   const d = h("div", { class: "dialog" },
@@ -1737,7 +1919,7 @@ function openProfileEdit(p) {
     h("div", { class: "flabel" }, "Tema"), swWrap);
   const btns = h("div", { class: "dbtns" });
   if (p.id !== "default")
-    btns.append(h("button", { class: "dbtn danger", style: "margin-right:auto", onclick: () => confirmDeleteProfile(p) }, "Borrar"));
+    btns.append(h("button", { class: "dbtn dangertext", style: "margin-right:auto", onclick: () => confirmDeleteProfile(p) }, "Borrar"));
   btns.append(h("button", { class: "dbtn ghost", onclick: openProfileSheet }, "Cancelar"));
   btns.append(h("button", { class: "dbtn", onclick: () => {
     const name = nameIn.value.trim(); if (name) ProfileStore.rename(p.id, name);
@@ -1758,7 +1940,7 @@ function confirmDeleteProfile(p) {
     h("div", { class: "dbtns" },
       h("button", { class: "dbtn ghost", onclick: openProfileSheet }, "Cancelar"),
       h("button", { class: "dbtn danger", onclick: () => {
-        if (input.value.trim().toLowerCase() !== "borrar") { input.style.borderColor = "var(--live)"; input.focus(); return; }
+        if (input.value.trim().toLowerCase() !== "borrar") { input.classList.add("bad"); input.focus(); return; }
         const wasCurrent = Store.currentProfileId() === p.id;
         ProfileStore.del(p.id);
         sync();
@@ -1802,10 +1984,14 @@ function initTheme() {
 // name="theme-color"> actualizado por JS, en vez de variantes con
 // prefers-color-scheme: así respeta también el toggle manual claro/oscuro de acá
 // adentro, no solo la preferencia del sistema.
+// También pinta el botón de tema: luna en claro (pasar a oscuro), sol en oscuro.
 function applyTitlebarColor() {
   const cur = document.documentElement.getAttribute("data-theme");
   const isDark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  document.getElementById("themeColorMeta").setAttribute("content", isDark ? "#0E1420" : "#F4F6FA");
+  document.getElementById("themeColorMeta").setAttribute("content", isDark ? "#2E3440" : "#ECEFF4");
+  const btn = document.getElementById("themeBtn");
+  btn.innerHTML = "";
+  btn.append(icon(isDark ? "sun" : "moon"));
 }
 document.getElementById("themeBtn").onclick = () => {
   const cur = document.documentElement.getAttribute("data-theme");
@@ -1825,6 +2011,7 @@ setInterval(() => {
     if (todayEls[runId]) todayEls[runId].textContent = t;
     const bc = document.getElementById("bannerChrono");
     if (bc) bc.textContent = exact(Math.floor(Store.runningElapsedMs() / 1000));
+    updateTodaySub();
   }
   updateTitle();
 }, 1000);

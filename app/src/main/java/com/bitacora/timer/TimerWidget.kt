@@ -91,7 +91,7 @@ class TimerWidget : AppWidgetProvider() {
 
                 // Tocar una actividad (arriba) siempre para si ya está corriendo; pausar es
                 // solo con este botón dedicado, igual que en la app.
-                views.setTextViewText(R.id.w_pause, if (paused) "Resumir" else "Pausar")
+                views.setTextViewText(R.id.w_pause, if (paused) "Seguir" else "Pausar")
                 views.setViewVisibility(R.id.w_pause, View.VISIBLE)
                 val pauseIntent = Intent(context, TimerWidget::class.java).apply { action = ACTION_PAUSE }
                 val pausePi = PendingIntent.getBroadcast(

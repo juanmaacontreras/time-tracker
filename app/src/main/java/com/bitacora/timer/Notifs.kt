@@ -86,7 +86,7 @@ object Notifs {
         val elapsed = Store.runningElapsedMs(ctx)
         val base = SystemClock.elapsedRealtime() - elapsed
         val pauseIcon = if (paused) R.drawable.ic_play else R.drawable.ic_pause
-        val pauseLabel = if (paused) "Resumir" else "Pausar"
+        val pauseLabel = if (paused) "Seguir" else "Pausar"
         val liveColor = ContextCompat.getColor(ctx, R.color.live)
         val mutedColor = ContextCompat.getColor(ctx, R.color.muted)
 

@@ -19,12 +19,14 @@ object Themes {
 
     val ORDER = listOf("azul", "verde", "violeta", "arcilla", "grafito")
 
+    // Acentos Nord: Frost para azul/grafito, Aurora para verde/violeta/arcilla. En claro
+    // van un poco más oscuros que los originales de Nord para que se lean sobre blanco.
     private val PALETTES = mapOf(
-        "azul"    to Accent(0xFF2F4B8F.toInt(), 0xFF7B96D4.toInt(), 0xFF1C74C9.toInt(), 0xFF62AEEA.toInt()),
-        "verde"   to Accent(0xFF2E7D5B.toInt(), 0xFF6FBF9B.toInt(), 0xFF1F9D57.toInt(), 0xFF57C98A.toInt()),
-        "violeta" to Accent(0xFF6A4C93.toInt(), 0xFFA98FD6.toInt(), 0xFF8A5CD0.toInt(), 0xFFB79BEA.toInt()),
-        "arcilla" to Accent(0xFFA6552E.toInt(), 0xFFD69574.toInt(), 0xFFD06A34.toInt(), 0xFFE8956A.toInt()),
-        "grafito" to Accent(0xFF4A5A78.toInt(), 0xFFAAB6CC.toInt(), 0xFF5B6BB5.toInt(), 0xFF8AA0E0.toInt())
+        "azul"    to Accent(0xFF5E81AC.toInt(), 0xFF81A1C1.toInt(), 0xFF3F86B0.toInt(), 0xFF88C0D0.toInt()),
+        "verde"   to Accent(0xFF5F8A4E.toInt(), 0xFFA3BE8C.toInt(), 0xFF6E9F5A.toInt(), 0xFFB4CF9C.toInt()),
+        "violeta" to Accent(0xFF8A6585.toInt(), 0xFFB48EAD.toInt(), 0xFF9C74A0.toInt(), 0xFFC6A4C0.toInt()),
+        "arcilla" to Accent(0xFFB4694F.toInt(), 0xFFD08770.toInt(), 0xFFC9784F.toInt(), 0xFFE09A82.toInt()),
+        "grafito" to Accent(0xFF4C566A.toInt(), 0xFFD8DEE9.toInt(), 0xFF5E81AC.toInt(), 0xFF88C0D0.toInt())
     )
 
     fun isValid(id: String): Boolean = PALETTES.containsKey(id)

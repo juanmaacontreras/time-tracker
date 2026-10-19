@@ -8,13 +8,18 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="32dp">
 
+        <!-- Encabezado: título + fecha de hoy (y lo acumulado), perfil como avatar. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -25,46 +30,64 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Bitácora"
+                    android:text="@string/app_name"
                     android:textColor="@color/ink"
-                    android:textSize="26sp"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="-0.02" />
+
+                <TextView
+                    android:id="@+id/todaySub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/profileChip"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="4dp"
+                android:paddingEnd="12dp">
+
+                <TextView
+                    android:id="@+id/profAvatar"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
                     android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/profName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="REGISTRO DE TIEMPO"
-                    android:textColor="@color/muted"
-                    android:textSize="10sp"
-                    android:letterSpacing="0.14" />
+                    android:layout_marginStart="8dp"
+                    android:maxWidth="120dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:textColor="@color/ink"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/profileChip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textColor="@color/ink"
-                android:textStyle="bold"
-                android:textSize="13sp"
-                android:background="@drawable/chip"
-                android:paddingLeft="14dp"
-                android:paddingRight="14dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
-                android:maxWidth="160dp"
-                android:maxLines="1"
-                android:ellipsize="end" />
         </LinearLayout>
 
+        <!-- Pestañas: control segmentado (pista tenue, opción activa "levantada"). -->
         <LinearLayout
+            android:id="@+id/tabs"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:background="@drawable/widget_bg"
-            android:padding="3dp"
-            android:layout_marginTop="14dp"
-            android:weightSum="2">
+            android:baselineAligned="false"
+            android:padding="4dp"
+            android:layout_marginTop="18dp">
 
             <TextView
                 android:id="@+id/tabTimer"
@@ -72,9 +95,10 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:padding="10dp"
+                android:padding="9dp"
                 android:text="Cronómetro"
-                android:textSize="13sp" />
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tabResumen"
@@ -82,9 +106,10 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:padding="10dp"
+                android:padding="9dp"
                 android:text="Resumen"
-                android:textSize="13sp" />
+                android:textSize="14sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -94,81 +119,115 @@
             android:orientation="vertical"
             android:layout_marginTop="16dp">
 
+            <!-- Tarjeta de lo que corre, con el lenguaje de la notificación: swatch de
+                 identidad, cronómetro grande y botón principal lleno. Sin nada corriendo
+                 muestra el total de hoy (ver renderBanner). -->
             <LinearLayout
-                android:id="@+id/banner"
+                android:id="@+id/hero"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:background="@drawable/widget_bg"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:orientation="vertical"
+                android:padding="18dp">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:id="@+id/heroTop"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:orientation="horizontal"
+                    android:baselineAligned="false"
+                    android:gravity="center_vertical">
 
-                    <TextView
-                        android:id="@+id/bannerLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="EN REPOSO"
-                        android:textColor="@color/muted"
-                        android:textSize="10sp"
-                        android:letterSpacing="0.12" />
+                    <FrameLayout
+                        android:id="@+id/heroSwatch"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="12dp" />
 
-                    <TextView
-                        android:id="@+id/bannerName"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="Nada corriendo"
-                        android:textColor="@color/ink"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-                    <Chronometer
-                        android:id="@+id/bannerChrono"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="00:00"
-                        android:textColor="@color/ink"
-                        android:textSize="30sp"
-                        android:fontFamily="monospace"
-                        android:layout_marginTop="2dp" />
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <View
+                                android:id="@+id/heroDot"
+                                android:layout_width="8dp"
+                                android:layout_height="8dp"
+                                android:layout_marginEnd="6dp" />
+
+                            <TextView
+                                android:id="@+id/bannerLabel"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:letterSpacing="0.12" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/bannerName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textColor="@color/ink"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            android:maxLines="1"
+                            android:ellipsize="end" />
+
+                        <TextView
+                            android:id="@+id/heroCat"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/inkSoft"
+                            android:textSize="13sp"
+                            android:maxLines="1"
+                            android:ellipsize="end" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <TextView
-                    android:id="@+id/bannerPause"
+                    android:id="@+id/heroIdle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Pausar"
-                    android:textColor="@color/ink"
-                    android:textSize="13sp"
+                    android:text="HOY"
+                    android:textColor="@color/muted"
+                    android:textSize="11sp"
                     android:textStyle="bold"
-                    android:background="@drawable/chip"
-                    android:paddingLeft="14dp"
-                    android:paddingRight="14dp"
-                    android:paddingTop="10dp"
-                    android:paddingBottom="10dp"
-                    android:layout_marginEnd="8dp"
-                    android:visibility="gone" />
+                    android:letterSpacing="0.12" />
+
+                <Chronometer
+                    android:id="@+id/bannerChrono"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:textColor="@color/ink"
+                    android:textSize="52sp"
+                    android:fontFeatureSettings="tnum"
+                    android:letterSpacing="-0.03"
+                    android:includeFontPadding="false" />
 
                 <TextView
-                    android:id="@+id/bannerStop"
+                    android:id="@+id/heroHint"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Parar"
-                    android:textColor="@color/live"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:background="@drawable/chip"
-                    android:paddingLeft="14dp"
-                    android:paddingRight="14dp"
-                    android:paddingTop="10dp"
-                    android:paddingBottom="10dp"
-                    android:visibility="gone" />
+                    android:layout_marginTop="6dp"
+                    android:text="Tocá una actividad para empezar a cronometrar."
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:id="@+id/heroActions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="horizontal" />
             </LinearLayout>
 
             <LinearLayout

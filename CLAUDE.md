@@ -3,7 +3,7 @@
 Cronómetro de estudio/lectura. Android nativo (Kotlin, Views programáticas, sin
 Compose) + una versión web espejo (`web/index.html`, un solo archivo). Sincronizan
 contra el mismo backend Supabase. Multi-perfil (varias personas, mismo dispositivo o
-distintos), 5 temas de color, categorías con ícono propio, widgets de home screen,
+distintos), paleta Nord con 5 acentos por perfil, categorías con ícono propio, widgets de home screen,
 notificación persistente, push silencioso entre dispositivos (FCM) y
 auto-actualización desde GitHub Releases.
 
@@ -23,11 +23,22 @@ estadísticas e ids de categoría que corren LOS DOS lados contra su propio cód
 antes de publicar la APK y la web: si un lado deja de coincidir con el otro, no se
 publica. Todo cambio a la lógica de sync/merge/stats lleva un caso nuevo acá.
 
+**Capturas de la app sin dispositivo:** Robolectric con `@GraphicsMode(NATIVE)` dibuja
+las Views reales (pantallas, diálogos, widgets vía `ShadowAppWidgetManager`, la
+notificación vía `ShadowNotificationManager`) y se guardan como PNG con
+`view.draw(Canvas)`. Se arma en una copia aparte, nunca en el repo: agregar
+`robolectric`, `androidx.test:core` y `work-testing` como `testImplementation` +
+`unitTests.isIncludeAndroidResources = true`, y **vaciar `Config.SUPABASE_URL` en la
+copia** — si no, la app sincroniza los datos de prueba contra el Supabase real. `Store`
+es un singleton: entre pruebas hay que invalidar su cache (`Store.setCurrentProfile`).
+
 ## Estructura
 
 ```
 app/src/main/java/com/bitacora/timer/
-  MainActivity.kt   — ciclo de vida, sync, pestañas y helpers de UI compartidos (dp, col, card, sectionLabel).
+  MainActivity.kt   — ciclo de vida, sync, encabezado y pestañas.
+  Ui.kt             — kit de componentes (superficies, swatch de identidad, botones, encabezados de
+                      sección, campos, selector de color, estilo de diálogos). Usarlo en vez de armar a mano.
   TimerTab.kt / ResumenTab.kt / ProfilesUi.kt / ActivitySheets.kt — cada pantalla, como funciones
                       de extensión de MainActivity (comparten su estado vía campos `internal`).
                       Views armadas por código, sin XML de layout salvo activity_main.xml.
@@ -106,14 +117,30 @@ distintos, casi todas las funciones públicas de `Store`/`ProfileStore` están
 anotadas `@Synchronized` (reentrante, así que llamadas anidadas entre funciones
 sincronizadas no generan deadlock).
 
+**Sistema de diseño (app y web, mismos tokens).** Paleta **Nord**, elegida por el
+usuario: claro = "Snow Storm" (`#ECEFF4` fondo, `#2E3440` texto), oscuro = "Polar
+Night" (`#2E3440` fondo, `#3B4252` tarjetas); acento = Frost, pausado / borrar =
+Aurora. Superficies **sin bordes** (la jerarquía la dan los tonos `paper < card` y
+`surface2` para pistas y campos), esquinas amplias (16–24), números con **dígitos
+tabulares** (`fontFeatureSettings = "tnum"` / `font-variant-numeric`), nunca
+monoespaciada. Elementos firma: la tarjeta de lo que corre con el lenguaje de la
+notificación (swatch lleno con el ícono de la categoría, cronómetro grande, botón
+principal lleno + "Parar" tonal, fondo teñido con el color de la actividad) y el
+*swatch de identidad* (ícono de la categoría sobre el color de la actividad) en cada
+fila. "Borrar" siempre en rojo (`danger`), nunca en el acento. Los colores que se
+ofrecen para actividades/categorías (`Store.COLORS` / `COLORS` en la web) son tonos
+Nord profundos para que un ícono blanco se lea encima.
+
 **Temas = solo 2 colores por paleta.** `Themes.kt` intercepta únicamente
-`@color/indigo` (acento) y `@color/live` (corriendo); los neutros (papel, tinta,
-líneas) son iguales en las 5 paletas. Esto mantiene el resto del sistema de diseño
-(radios, drawables `chip.xml`, etc.) sin tocar. Los **widgets y la notificación NO
+`@color/indigo` (acento) y `@color/live` (corriendo); los neutros son iguales en las 5
+paletas (azul y grafito = Frost; verde, violeta y arcilla = Aurora). Los colores que se
+mezclan en tiempo de ejecución (fondos tenues) salen de `blend()` en `Ui.kt`; en la web,
+de `color-mix()`. Los **widgets y la notificación NO
 seleccionan el tema del perfil** — quedan con el acento base (indigo #2F4B8F).
 Decisión explícita: tematizar RemoteViews por perfil era mucho más trabajo para un
 beneficio menor; si se pide más adelante, hay que revisar `TimerWidget.kt` /
-`ResumenWidget.kt` / `Notifs.kt`.
+`ResumenWidget.kt` / `Notifs.kt`. Como RemoteViews no puede mezclar colores, los
+fondos tenues de los widgets son colores fijos (`liveSoft`, `pausedSoft`).
 
 **La web es un espejo funcional, no un puerto automático.** Cualquier cambio al
 formato de datos (`Store.payload()`/`Store.merge()` en Kotlin) tiene que reflejarse
@@ -280,6 +307,9 @@ Confirmado funcionando en dispositivo real:
 - ✅ Perfiles multi-usuario sincronizados (app + web), con borrado que exige escribir
   "borrar".
 - ✅ 5 temas de color por perfil (app + web).
+- ⏳ Rediseño visual con paleta Nord (app, widgets, notificación y web): verificado
+  con capturas (Robolectric + Chromium) en claro y oscuro, **sin confirmar todavía en
+  dispositivo real**.
 - ✅ Resumen con navegación de períodos pasados (◀ ▶) y gráfico semanal apilado por
   categoría, con bordes redondeados en las barras apiladas.
 - ✅ Categorías como entidad, con ícono y color propios, desplegable de selección y

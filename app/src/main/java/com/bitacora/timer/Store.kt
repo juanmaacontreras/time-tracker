@@ -12,10 +12,13 @@ object Store {
     private const val APP_PREFS = "bitacora_app"
     private const val CURRENT_KEY = "currentProfile"
 
-    // Paleta apagada tipo "papel/tinta", 14 tonos distinguibles entre sí.
+    // Colores para actividades y categorías: Nord (Frost / Aurora) en tonos lo bastante
+    // profundos para que un ícono blanco se lea encima. 14 tonos distinguibles entre sí.
+    // Mismo set y orden que COLORS en web/index.html. Las actividades existentes
+    // conservan el color que ya tenían guardado.
     val COLORS = arrayOf(
-        "#2F4B8F", "#B5432E", "#2E7D5B", "#8A5A2B", "#6A4C93", "#1F6F8B", "#9C4368",
-        "#3E6B2F", "#B08A1E", "#4A5A78", "#7A3E9C", "#2B7A78", "#A6552E", "#5B6BB5"
+        "#5E81AC", "#BF616A", "#6E9F5A", "#D08770", "#8A6585", "#4C8A8A", "#B48EAD",
+        "#C29B4A", "#4C566A", "#3E7A99", "#A35D6A", "#5F7F4A", "#B4694F", "#6F8FB4"
     )
 
     fun now(): Long = System.currentTimeMillis()
@@ -777,6 +780,17 @@ object Store {
             obj.optLong("runChangedAt", 0L) > (remote?.optJSONObject("run")?.optLong("changedAt", 0L) ?: 0L)
 
     // ---------- formatting helpers ----------
+    // Compacto para etiquetas chicas (encabezado, gráficos): "2h 05m", "45m", "30s".
+    fun human(sec: Long): String {
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
+        return when {
+            h > 0 -> "${h}h ${m.toString().padStart(2, '0')}m"
+            m > 0 -> "${m}m"
+            else -> "${sec}s"
+        }
+    }
+
     // Valor exacto siempre: H:MM:SS si hay horas, si no M:SS.
     fun exact(sec: Long): String {
         val h = sec / 3600

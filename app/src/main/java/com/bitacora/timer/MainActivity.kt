@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.Chronometer
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -28,14 +29,24 @@ class MainActivity : AppCompatActivity() {
     internal lateinit var list: LinearLayout
     private lateinit var timerView: LinearLayout
     internal lateinit var resumenView: LinearLayout
+    internal lateinit var hero: LinearLayout
+    internal lateinit var heroTop: View
+    internal lateinit var heroSwatch: FrameLayout
+    internal lateinit var heroDot: View
+    internal lateinit var heroCat: TextView
+    internal lateinit var heroHint: TextView
+    internal lateinit var heroIdle: TextView
+    internal lateinit var heroActions: LinearLayout
     internal lateinit var bannerLabel: TextView
     internal lateinit var bannerName: TextView
     internal lateinit var bannerChrono: Chronometer
-    internal lateinit var bannerPause: TextView
-    internal lateinit var bannerStop: TextView
+    private lateinit var tabs: LinearLayout
     private lateinit var tabTimer: TextView
     private lateinit var tabResumen: TextView
-    private lateinit var profileChip: TextView
+    private lateinit var profileChip: View
+    private lateinit var profAvatar: TextView
+    private lateinit var profName: TextView
+    private lateinit var todaySub: TextView
     internal var pickerDialog: AlertDialog? = null
     private var updateChecked = false
 
@@ -91,25 +102,25 @@ class MainActivity : AppCompatActivity() {
         list = findViewById(R.id.list)
         timerView = findViewById(R.id.timerView)
         resumenView = findViewById(R.id.resumenView)
+        hero = findViewById(R.id.hero)
+        heroTop = findViewById(R.id.heroTop)
+        heroSwatch = findViewById(R.id.heroSwatch)
+        heroDot = findViewById(R.id.heroDot)
+        heroCat = findViewById(R.id.heroCat)
+        heroHint = findViewById(R.id.heroHint)
+        heroIdle = findViewById(R.id.heroIdle)
+        heroActions = findViewById(R.id.heroActions)
         bannerLabel = findViewById(R.id.bannerLabel)
         bannerName = findViewById(R.id.bannerName)
         bannerChrono = findViewById(R.id.bannerChrono)
-        bannerPause = findViewById(R.id.bannerPause)
-        bannerStop = findViewById(R.id.bannerStop)
+        tabs = findViewById(R.id.tabs)
         tabTimer = findViewById(R.id.tabTimer)
         tabResumen = findViewById(R.id.tabResumen)
         profileChip = findViewById(R.id.profileChip)
+        profAvatar = findViewById(R.id.profAvatar)
+        profName = findViewById(R.id.profName)
+        todaySub = findViewById(R.id.todaySub)
 
-        bannerPause.setOnClickListener {
-            if (Store.runningPaused(this)) Store.resume(this) else Store.pause(this)
-            render()
-            doSync()
-        }
-        bannerStop.setOnClickListener {
-            Store.stop(this)
-            render()
-            doSync()
-        }
         tabTimer.setOnClickListener { switchTab("timer") }
         tabResumen.setOnClickListener { switchTab("resumen") }
         profileChip.setOnClickListener { openProfileSheet() }
@@ -183,17 +194,33 @@ class MainActivity : AppCompatActivity() {
     // Al abrir la app: si hay una versión nueva en GitHub, ofrece actualizar.
     private fun checkForUpdates() {
         Updater.check(this, { r -> runOnUiThread(r) }) { version, apkUrl ->
-            AlertDialog.Builder(this, R.style.AppDialog)
-                .setTitle("Actualización disponible")
-                .setMessage("Hay una versión nueva de Bitácora. ¿Actualizar ahora?")
-                .setPositiveButton("Actualizar") { _, _ -> Updater.downloadAndInstall(this, apkUrl) }
-                .setNegativeButton("Ahora no", null)
-                .show()
+            showStyled(
+                AlertDialog.Builder(this, R.style.AppDialog)
+                    .setTitle("Actualización disponible")
+                    .setMessage("Hay una versión nueva de Bitácora. ¿Actualizar ahora?")
+                    .setPositiveButton("Actualizar") { _, _ -> Updater.downloadAndInstall(this, apkUrl) }
+                    .setNegativeButton("Ahora no", null)
+            )
         }
     }
 
-    internal fun updateProfileChip() {
-        profileChip.text = ProfileStore.nameOf(this, Store.currentProfileId(this)) + " ▾"
+    // Encabezado: avatar (inicial sobre el color del tema del perfil) + nombre, y la
+    // fecha de hoy con lo acumulado en el día.
+    internal fun updateHeader() {
+        val pid = Store.currentProfileId(this)
+        val name = ProfileStore.nameOf(this, pid)
+        profName.text = name
+        profAvatar.text = name.trim().take(1).uppercase()
+        profAvatar.background = oval(Themes.accentOf(ProfileStore.themeOf(this, pid), night = false))
+        profileChip.background = withRipple(rounded(col(R.color.card), 20), dp(20).toFloat())
+        updateTodaySub()
+    }
+
+    internal fun updateTodaySub() {
+        val fecha = java.text.SimpleDateFormat("EEEE d 'de' MMMM", java.util.Locale("es"))
+            .format(java.util.Date()).replaceFirstChar { it.uppercase() }
+        val total = Store.totalBetween(this, Store.startOfToday(), Long.MAX_VALUE)
+        todaySub.text = if (total > 0) "$fecha · ${Store.human(total)}" else fecha
     }
 
     override fun onPause() {
@@ -215,37 +242,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun styleTabs() {
-        fun paint(tv: TextView, active: Boolean) {
-            if (active) {
-                val d = GradientDrawable()
-                d.cornerRadius = dp(8).toFloat()
-                d.setColor(col(R.color.ink))
-                tv.background = d
-                tv.setTextColor(col(R.color.paper))
-            } else {
-                tv.background = null
-                tv.setTextColor(col(R.color.inkSoft))
-            }
-        }
-        paint(tabTimer, tab == "timer")
-        paint(tabResumen, tab == "resumen")
+        tabs.background = rounded(col(R.color.surface2), 14)
+        paintSegment(tabTimer, tab == "timer")
+        paintSegment(tabResumen, tab == "resumen")
+    }
+
+    // Opción de un control segmentado (pestañas, período): la activa queda "levantada".
+    internal fun paintSegment(tv: TextView, active: Boolean) {
+        tv.background = if (active) rounded(col(R.color.raised), 10) else null
+        tv.elevation = if (active && !Themes.isNight(this)) dp(1).toFloat() else 0f
+        tv.setTextColor(if (active) col(R.color.ink) else col(R.color.inkSoft))
     }
 
     internal fun render() {
-        updateProfileChip()
+        updateHeader()
         if (tab == "timer") renderTimer() else renderResumen()
         Surfaces.refresh(this)
         // Queda registrado qué estado corresponde a lo que hay dibujado ahora, para que
         // el ticker solo vuelva a redibujar si algo lo cambia por fuera (ver stateSig).
         lastStateSig = stateSig()
-    }
-
-    internal fun card(): GradientDrawable {
-        val d = GradientDrawable()
-        d.setColor(col(R.color.card))
-        d.cornerRadius = dp(12).toFloat()
-        d.setStroke(dp(1), col(R.color.line))
-        return d
     }
 
     // Envuelve un fondo con un ripple recortado a la misma forma, para dar feedback
@@ -256,21 +271,6 @@ class MainActivity : AppCompatActivity() {
         mask.setColor(Color.WHITE)
         val rippleColor = ColorStateList.valueOf(col(R.color.indigo))
         return RippleDrawable(rippleColor, content, mask)
-    }
-
-    internal fun sectionLabel(text: String): View {
-        val t = TextView(this)
-        t.text = text
-        t.setTextColor(col(R.color.muted))
-        t.textSize = 10f
-        t.letterSpacing = 0.14f
-        val lp = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.topMargin = dp(22)
-        lp.bottomMargin = dp(8)
-        t.layoutParams = lp
-        return t
     }
 
     // Solo redibuja si el sync trajo cambios reales: render() reconstruye la lista, la

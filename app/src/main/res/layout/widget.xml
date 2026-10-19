@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Widget del cronómetro, con el lenguaje de la app: arriba la tarjeta de lo que corre
-     (fondo teñido con el color de la actividad, swatch, cronómetro, Pausar lleno + Parar
-     tonal) o, en reposo, el total de hoy y la última actividad; abajo la grilla de
+     (fondo neutro, swatch con el color de la actividad, cronómetro, Pausar lleno +
+     Parar "levantado") o, en reposo, el total de hoy y la última actividad; abajo la grilla de
      actividades (se arma en TimerWidget según el tamaño). Tocar el fondo abre la app.
      El tema del perfil no se aplica a los widgets (ver CLAUDE.md). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -16,14 +16,8 @@
     <FrameLayout
         android:id="@+id/w_run"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
-        <ImageView
-            android:id="@+id/w_run_tint"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="fitXY"
-            android:src="@drawable/hero_tint" />
+        android:layout_height="wrap_content"
+        android:background="@drawable/hero_bg">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -103,7 +97,7 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/circle_tonal"
+                android:background="@drawable/circle_raised"
                 android:contentDescription="Parar">
 
                 <ImageView

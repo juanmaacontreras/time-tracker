@@ -109,17 +109,13 @@ class TimerWidget : AppWidgetProvider() {
                 views.setViewVisibility(R.id.w_idle, View.GONE)
                 RemoteUi.bindSwatch(context, views, a, cat, 44)
                 views.setTextViewText(R.id.w_name, a?.optString("name") ?: "")
-                // Fondo teñido con el color de la actividad, como la tarjeta de la app
-                // (blend al ~16% en claro, algo más en oscuro para que se note).
-                views.setInt(R.id.w_run_tint, "setColorFilter", RemoteUi.colorOf(a))
-                views.setInt(R.id.w_run_tint, "setImageAlpha", if (RemoteUi.isNight(context)) 72 else 40)
 
                 // Al pausar, el cronómetro se congela (started = false) con el tiempo real corrido.
                 val elapsed = Store.runningElapsedMs(context)
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, !paused)
                 views.setTextColor(R.id.w_chrono, ContextCompat.getColor(context, if (paused) R.color.inkSoft else R.color.ink))
                 // Angosto, "1:23:45" no entra junto al swatch y los dos botones: el swatch
-                // se va (el fondo teñido ya dice qué corre) y el cronómetro se achica.
+                // se va (el nombre y el chip marcado ya dicen qué corre) y el cronómetro se achica.
                 val narrow = wDp < 290
                 views.setViewVisibility(R.id.w_run_sw, if (narrow) View.GONE else View.VISIBLE)
                 views.setTextViewTextSize(R.id.w_chrono, TypedValue.COMPLEX_UNIT_SP, if (narrow) 23f else 26f)

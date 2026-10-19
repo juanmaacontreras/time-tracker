@@ -355,7 +355,8 @@ Confirmado funcionando en dispositivo real:
 - ⏳ **Notificación y widgets pulidos (octubre de 2026)**, verificado con capturas en claro y
   oscuro, sin confirmar en dispositivo: swatch de identidad (ícono de la categoría sobre el
   color de la actividad) en la notificación, los chips del widget y las filas del Resumen;
-  widget del cronómetro con la tarjeta de lo que corre teñida con el color de la actividad y,
+  widget del cronómetro con la tarjeta de lo que corre neutra (elegida entre teñida / neutra /
+  color lleno) y,
   en reposo, "Hoy" + la última actividad; widget Resumen con el título del período, total en
   "5 h 20 m", la misma comparación que la app (`comparison()` en ResumenTab.kt) y control
   segmentado; tocar el fondo de cualquiera de los dos abre la app; vistas previas en el
@@ -385,8 +386,8 @@ Confirmado funcionando en dispositivo real:
 - **Sobre el acento lleno va `onAccent`, nunca blanco fijo**: en oscuro el acento es celeste
   claro (#81A1C1) y el blanco encima no se leía.
 - **En RemoteViews no hay `android:tint` (lint lo rechaza) ni mezcla de colores**: los íconos
-  se tiñen con `setColorFilter` desde el código, y el fondo teñido de la tarjeta del widget es
-  una forma blanca con `setColorFilter` + `setImageAlpha`.
+  se tiñen con `setColorFilter` desde el código. Un fondo teñido se arma con una forma blanca
+  en un ImageView + `setColorFilter` + `setImageAlpha` (se probó así para la tarjeta del widget).
 - **Las esquinas del swatch son un vector, no un `<shape>`**: un `<shape>` tiene radio fijo en
   dp y no escala con el tamaño del `<include>`; el vector mantiene el 31% del lado.
 - **Los widgets no se redibujan solos con el paso del tiempo.** Muestran "hoy" y, pasada la

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Fondo de la tarjeta de lo que corre en el widget: blanco, se tiñe con el color de la
-     actividad y se baja de opacidad en runtime (RemoteViews no puede mezclar colores:
-     esto es el blend() de la app hecho con setColorFilter + setImageAlpha). -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#FFFFFF" />
-    <corners android:radius="18dp" />
-</shape>

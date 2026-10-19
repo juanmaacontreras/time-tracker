@@ -32,6 +32,12 @@ notificación vía `ShadowNotificationManager`) y se guardan como PNG con
 copia** — si no, la app sincroniza los datos de prueba contra el Supabase real. `Store`
 es un singleton: entre pruebas hay que invalidar su cache (`Store.setCurrentProfile`).
 
+**Cambios de diseño: primero propuestas, después código.** Antes de implementar un cambio
+visual (pantallas, widgets, notificación, web), mostrarle al usuario 2-3 variantes en
+imágenes y esperar a que elija. Las capturas salen de la app real con el armado de
+Robolectric de abajo (o de la web en Chromium), aplicando cada variante en la copia, no en
+el repo. Pedido explícito del usuario.
+
 ## Estructura
 
 ```

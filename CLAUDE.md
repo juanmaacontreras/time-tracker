@@ -53,6 +53,8 @@ app/src/main/java/com/bitacora/timer/
   Notifs.kt         — notificación persistente (vista custom, swatch de categoría + cronómetro grande).
   Devices.kt        — registro de tokens FCM por dispositivo, con el perfil que cada uno tiene activo.
   PushService.kt    — recibe el push silencioso y refresca notificación + widgets.
+  Live.kt           — Supabase Realtime (OkHttp WebSocket) entre onResume y onPause: con la app
+                      en pantalla los cambios llegan en <1 s sin esperar el push. Espejo de `Live` en la web.
   CategoryIcons.kt  — set curado de 10 íconos de categoría (claves compartidas con la web).
   Updater.kt        — chequea GitHub Releases al abrir la app, ofrece descargar+instalar.
   Config.kt         — credenciales Supabase + helpers de bucket key por perfil.
@@ -258,6 +260,23 @@ edita a mano.
   confunde el diagnóstico: la web sincroniza al instante cuando la ventana gana foco
   (`focus` / `visibilitychange`), así que al hacerle clic parece instantánea aunque el
   ciclo esté mal configurado.
+- **Realtime nunca estuvo prendido hasta octubre de 2026.** `supabase/realtime.sql` estaba
+  en el repo pero no se había corrido, y nadie lo notó: la web caía en silencio al sondeo
+  de 10 s y "funcionaba", solo que con hasta 10 s de demora. Diagnóstico directo: al
+  suscribirse, el servidor contesta un `system` con `"status": "error"` y "Unable to
+  subscribe to changes". Ya está corrido (el 2026-10-19).
+- **Un rechazo de la suscripción tiene que reintentar.** `Live` solo ponía `ok = false` y
+  la pestaña quedaba en el sondeo lento hasta recargarla — una ventana abierta antes de
+  prender Realtime nunca llegó a usarlo. Ahora (web y app) el rechazo cierra el socket y
+  reconecta con espera creciente; el contador de reintentos se resetea **con la
+  suscripción confirmada, no al abrir el socket** (si no, un servidor que acepta la
+  conexión y rechaza la suscripción haría reintentar cada 1 s para siempre). Al
+  confirmarse se sincroniza una vez, por lo que cambió sin conexión.
+- **Latencias medidas (2026-10-19):** escritura de un dispositivo → aviso Realtime en
+  0,2-1 s. Celu → web abierta: ~1 s. Web → celu con la app cerrada: 3-4 s, el camino
+  trigger → `pg_net` → Edge Function → FCM → pull. Ese tramo no baja mucho más con la app
+  en segundo plano: Android no deja sostener un socket ahí, por eso `Live.kt` existe solo
+  con la app en pantalla y el push sigue siendo la vía para widget y notificación.
 - **Redibujar solo si el sync trajo cambios.** Mismo motivo, versión local: `render()`
   reconstruye la lista, la notificación y los dos widgets, y refrescar el widget
   reaplica `setChronometer` sobre un cronómetro en vivo (el "flash del número

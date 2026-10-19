@@ -173,6 +173,10 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(ticker); handler.post(ticker)
         doSync()
         handler.removeCallbacks(syncLoop); handler.postDelayed(syncLoop, SYNC_LOOP_MS)
+        // Con la app en pantalla los cambios de otros dispositivos llegan por Realtime en
+        // menos de 1 s, sin esperar el push. Cambiar de perfil vuelve a pasar por acá y
+        // Live se resuscribe a los buckets del perfil nuevo.
+        Live.start(listOf(Config.INDEX_KEY, Config.bucketKey(Store.currentProfileId(this)))) { doSync() }
         registerPushToken()
         if (!updateChecked) { updateChecked = true; checkForUpdates() }
     }
@@ -233,6 +237,7 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         handler.removeCallbacks(ticker)
         handler.removeCallbacks(syncLoop)
+        Live.stop()  // en segundo plano el aviso vuelve a llegar solo por push
     }
 
     internal fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

@@ -58,6 +58,11 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-messaging")
 
+    // WebSocket para Supabase Realtime con la app abierta (Live.kt). El resto de la red
+    // sigue en HttpURLConnection; OkHttp entra solo por el WebSocket, que la plataforma
+    // no trae. 4.12.x: la última línea estable en Kotlin, sin requisitos de compileSdk.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // Tests de JVM (tests/fixtures compartidos con la web). org.json real: el que trae
     // android.jar en los unit tests es un stub que tira "not mocked".
     testImplementation("junit:junit:4.13.2")

@@ -53,7 +53,6 @@ class MainActivity : AppCompatActivity() {
     internal var tab = "timer"
     internal var statsPeriod = "day"
     internal var statsCategory = "all"
-    internal var catExpanded: Boolean? = null  // null = usar default según cantidad
     internal var statsOffset = 0  // 0 = período actual, -1 = el anterior, etc.
     internal var showArchived = false
 
@@ -65,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     // detectar cambios hechos por fuera de la UI (botones de la notificación o del
     // widget, sync en background) y redibujar enseguida.
     private var lastStateSig = ""
+    private var resumenMinute = 0L
     // Incluye Store.revision para captar TODO cambio del dataset, no solo los del
     // cronómetro: una actividad renombrada en otro dispositivo llega por push y se
     // fusiona en un hilo de fondo, y sin eso la pantalla abierta no se enteraba hasta
@@ -79,7 +79,13 @@ class MainActivity : AppCompatActivity() {
             // tocar disco ni red). Antes la app solo se enteraba de estos cambios en el
             // syncLoop, que corre cada 10s: por eso pausar desde la notificación tardaba
             // varios segundos en reflejarse con la app abierta.
-            if (stateSig() != lastStateSig) render() else updateRunningRow()
+            if (stateSig() != lastStateSig) render() else {
+                updateRunningRow()
+                // El Resumen muestra minutos: con algo corriendo, se rehace una vez por minuto.
+                val minute = Store.now() / 60000
+                if (tab == "resumen" && minute != resumenMinute && Store.runningActId(this@MainActivity).isNotEmpty() &&
+                    !Store.runningPaused(this@MainActivity)) { resumenMinute = minute; renderResumen() }
+            }
             handler.postDelayed(this, 1000)
         }
     }

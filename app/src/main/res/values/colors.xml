@@ -15,6 +15,8 @@
     <color name="line">#FFD8DEE9</color>
     <color name="grid">#FFE5E9F0</color>
     <color name="indigo">#FF5E81AC</color>
+    <!-- Subió respecto del período anterior (Aurora verde). Bajar no tiene color propio: es muted. -->
+    <color name="up">#FF5F8A4E</color>
     <!-- Frost más intenso que el acento, para que "corriendo" se distinga de un vistazo. -->
     <color name="live">#FF3F86B0</color>
     <color name="pausedColor">#FFC2784F</color>

@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Paleta "papel/tinta" invertida para modo oscuro. Mismos nombres que el tema claro. -->
-    <color name="paper">#FF0E1420</color>
-    <color name="card">#FF161E2C</color>
-    <color name="panel">#FF1B2433</color>
-    <color name="ink">#FFEAF0FA</color>
-    <color name="inkSoft">#FFAAB6CC</color>
-    <color name="muted">#FF7E8CA6</color>
-    <color name="line">#FF2A3648</color>
-    <color name="grid">#FF232F40</color>
-    <color name="indigo">#FF7B96D4</color>
-    <color name="live">#FF62AEEA</color>
-    <color name="pausedColor">#FFE0A03A</color>
+    <!-- Paleta Nord "Polar Night" para modo oscuro. Mismos nombres que el tema claro. -->
+    <color name="paper">#FF2E3440</color>
+    <color name="card">#FF3B4252</color>
+    <color name="surface2">#FF434C5E</color>
+    <color name="raised">#FF4C566A</color>
+    <color name="ink">#FFECEFF4</color>
+    <color name="inkSoft">#FFD8DEE9</color>
+    <color name="muted">#FF9AA4B6</color>
+    <color name="line">#FF434C5E</color>
+    <color name="grid">#FF434C5E</color>
+    <color name="indigo">#FF81A1C1</color>
+    <color name="live">#FF88C0D0</color>
+    <color name="pausedColor">#FFEBCB8B</color>
+    <!-- Fondos tenues de "corriendo" / "pausado" para los widgets (RemoteViews no puede
+         mezclar colores en tiempo de ejecución como la app). -->
+    <color name="liveSoft">#FF45525F</color>
+    <color name="pausedSoft">#FF51504F</color>
+    <color name="danger">#FFBF616A</color>
+    <color name="onAccent">#FF2E3440</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

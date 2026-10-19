@@ -70,7 +70,7 @@ class ResumenWidget : AppWidgetProvider() {
             views.setTextColor(
                 id,
                 if (active) ContextCompat.getColor(ctx, R.color.paper)
-                else ContextCompat.getColor(ctx, R.color.muted)
+                else ContextCompat.getColor(ctx, R.color.inkSoft)
             )
         }
 

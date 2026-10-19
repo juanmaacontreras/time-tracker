@@ -59,7 +59,8 @@ object Notifs {
         val inkSoft = ContextCompat.getColor(ctx, R.color.inkSoft)
         val actColor = RemoteUi.colorOf(a)
 
-        fun bindCommon(views: RemoteViews, swatchDp: Int) {
+        // pauseBg/pauseBgPaused: círculos en la colapsada, píldoras en la expandida.
+        fun bindCommon(views: RemoteViews, swatchDp: Int, pauseBg: Int, pauseBgPaused: Int) {
             RemoteUi.bindSwatch(ctx, views, a, cat, swatchDp)
             views.setTextViewText(R.id.n_name, name)
             views.setTextColor(R.id.n_eyebrow, stateColor)
@@ -68,20 +69,21 @@ object Notifs {
             views.setInt(R.id.n_pause_icon, "setColorFilter", onAccent)
             views.setInt(R.id.n_stop_icon, "setColorFilter", inkSoft)
             // Pausado, el botón invita a seguir con el anillo "live" (sustituto estático del pulso).
-            views.setInt(R.id.n_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
+            views.setInt(R.id.n_pause, "setBackgroundResource", if (paused) pauseBgPaused else pauseBg)
             views.setContentDescription(R.id.n_pause, if (paused) "Seguir" else "Pausar")
             views.setOnClickPendingIntent(R.id.n_pause, pausePi)
             views.setOnClickPendingIntent(R.id.n_stop, stopPi)
         }
 
         val big = RemoteViews(ctx.packageName, R.layout.notif)
-        bindCommon(big, 40)
+        bindCommon(big, 40, R.drawable.pill_primary, R.drawable.pill_primary_invite)
+        big.setTextViewText(R.id.n_pause_label, if (paused) "Seguir" else "Pausar")
         big.setTextViewText(R.id.n_eyebrow, (if (paused) "Pausado" else "Cronometrando") + " · " + catName)
         big.setInt(R.id.n_swatch_ring, "setColorFilter", stateColor)
         big.setViewVisibility(R.id.n_swatch_ring, View.VISIBLE)
 
         val small = RemoteViews(ctx.packageName, R.layout.notif_small)
-        bindCommon(small, 34)
+        bindCommon(small, 34, R.drawable.circle_primary, R.drawable.circle_primary_invite)
         small.setTextViewText(R.id.n_eyebrow, if (paused) "Pausado" else catName)
         // Desde Android 12 el sistema dibuja su propio círculo con el ícono a la
         // izquierda de la vista colapsada (y lo tiñe con setColor, abajo): el swatch

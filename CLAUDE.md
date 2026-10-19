@@ -376,7 +376,8 @@ Confirmado funcionando en dispositivo real:
 - **Desde Android 12 (targetSdk ≥ 31) el sistema envuelve SIEMPRE las vistas custom de la
   notificación**, aunque no se use `DecoratedCustomViewStyle`: en la colapsada pone su círculo
   con el ícono y la flecha de expandir; en AOSP la expandida lleva además el encabezado
-  completo y la sangría, y quedan ~270dp de ancho. Por eso `notif.xml` va apilado (en una sola
+  completo y la sangría, y quedan ~270dp de ancho. Por eso `notif.xml` va apilado: nombre,
+  cronómetro y las píldoras Pausar / Parar con texto, elegidas por el usuario (en una sola
   fila el nombre se partía letra a letra) y la colapsada oculta su swatch en API ≥ 31: lo
   reemplaza el círculo del sistema, teñido con el color de la actividad vía `setColor`.
   Para ver lo que dibuja SystemUI en Robolectric: `Notification.Builder.recoverBuilder(ctx,

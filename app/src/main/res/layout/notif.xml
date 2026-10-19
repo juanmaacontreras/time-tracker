@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Vista expandida de la notificación, estilo reproductor: swatch de identidad con el
-     anillo de estado, qué corre y de qué categoría, y abajo el cronómetro grande con los
-     dos botones redondos. Apilado (y no todo en una fila) porque desde Android 12 el
-     sistema le pone su encabezado y sangría: quedan ~270dp de ancho, y en una sola fila
-     el nombre se partía letra a letra. -->
+     anillo de estado, qué corre y de qué categoría, el cronómetro grande y abajo dos
+     píldoras con texto (Pausar lleno + Parar tonal; elegidas por el usuario frente a
+     botones redondos solo con ícono). Apilado (y no todo en una fila) porque desde
+     Android 12 el sistema le pone su encabezado y sangría: quedan ~270dp de ancho, y en
+     una sola fila el nombre se partía letra a letra. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -70,60 +71,81 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Dígitos tabulares, nunca monoespaciada (regla del sistema de diseño). -->
+    <Chronometer
+        android:id="@+id/n_chrono"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+        android:textSize="34sp"
+        android:fontFeatureSettings="tnum"
+        android:letterSpacing="-0.02"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="0:00" />
+
     <LinearLayout
+        android:baselineAligned="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="10dp">
+        android:layout_marginTop="12dp">
 
-        <!-- Dígitos tabulares, nunca monoespaciada (regla del sistema de diseño). -->
-        <Chronometer
-            android:id="@+id/n_chrono"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
-            android:textSize="34sp"
-            android:fontFeatureSettings="tnum"
-            android:letterSpacing="-0.02"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:text="0:00" />
-
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/n_pause"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@drawable/circle_primary"
-            android:contentDescription="Pausar"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="10dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/pill_primary"
             android:clickable="true"
             android:focusable="true">
 
             <ImageView
                 android:id="@+id/n_pause_icon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:layout_gravity="center"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:src="@drawable/ic_pause" />
-        </FrameLayout>
 
-        <FrameLayout
+            <TextView
+                android:id="@+id/n_pause_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/onAccent"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:text="Pausar" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/n_stop"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="10dp"
-            android:background="@drawable/circle_tonal"
-            android:contentDescription="Parar"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/pill_tonal"
             android:clickable="true"
             android:focusable="true">
 
             <ImageView
                 android:id="@+id/n_stop_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center"
+                android:layout_width="15dp"
+                android:layout_height="15dp"
                 android:src="@drawable/ic_stop" />
-        </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/inkSoft"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:text="Parar" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

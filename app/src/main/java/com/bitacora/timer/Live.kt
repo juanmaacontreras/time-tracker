@@ -95,7 +95,7 @@ object Live {
 
     // Cada socket tiene su propio listener y todo callback chequea que siga siendo el
     // actual: los avisos tardíos de un socket ya descartado se ignoran.
-    private inner class Listener : WebSocketListener() {
+    private class Listener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             main.post {
                 if (ws !== webSocket) return@post

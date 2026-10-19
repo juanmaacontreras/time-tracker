@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fondo de la tarjeta de lo que corre en el widget: neutro (surface2), elegido por el
-     usuario entre teñido / neutro / color lleno. La identidad la da el swatch. -->
+<!-- Fondo de la tarjeta de lo que corre en el widget: blanco, se tiñe en runtime con el
+     color de la actividad (setColorFilter). Color lleno: elegido por el usuario entre
+     teñida / neutra / lleno. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="@color/surface2" />
+    <solid android:color="#FFFFFF" />
     <corners android:radius="18dp" />
 </shape>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- "Parar" redondo sobre la tarjeta neutra del widget: tonal sobre surface2 se perdía,
-     así que va "levantado" (raised), como la opción activa del control segmentado. -->
+<!-- "Parar" del widget cuando la tarjeta no lleva botones blancos (actividad de color
+     claro): "levantado" (raised), para que no se pierda contra el fondo. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
     <solid android:color="@color/raised" />

@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
+import android.graphics.Color
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -78,6 +79,8 @@ class TimerWidget : AppWidgetProvider() {
         private const val ROW_DP = 40      // alto mínimo de una fila de chips (widget_row.xml)
         private const val MAX_ROWS = 4
 
+        private fun soft(c: Int, alpha: Int): Int = (c and 0x00FFFFFF) or (alpha shl 24)
+
         private fun renderOne(context: Context, mgr: AppWidgetManager, id: Int) {
             val pkg = context.packageName
             val views = RemoteViews(pkg, R.layout.widget)
@@ -109,11 +112,20 @@ class TimerWidget : AppWidgetProvider() {
                 views.setViewVisibility(R.id.w_idle, View.GONE)
                 RemoteUi.bindSwatch(context, views, a, cat, 44)
                 views.setTextViewText(R.id.w_name, a?.optString("name") ?: "")
+                // Tarjeta con el color de la actividad lleno (elegido por el usuario entre
+                // teñida / neutra / lleno). Encima, blanco o tinta según qué tan claro sea
+                // el color; el swatch queda del mismo color, así que se ve solo el ícono.
+                val ac = RemoteUi.colorOf(a)
+                val fg = RemoteUi.contrastOn(ac)
+                val onWhite = fg == Color.WHITE
+                views.setInt(R.id.w_run_bg, "setColorFilter", ac)
+                views.setTextColor(R.id.w_name, fg)
+                views.setTextColor(R.id.w_paused, soft(fg, 0xCC))
 
                 // Al pausar, el cronómetro se congela (started = false) con el tiempo real corrido.
                 val elapsed = Store.runningElapsedMs(context)
                 views.setChronometer(R.id.w_chrono, SystemClock.elapsedRealtime() - elapsed, null, !paused)
-                views.setTextColor(R.id.w_chrono, ContextCompat.getColor(context, if (paused) R.color.inkSoft else R.color.ink))
+                views.setTextColor(R.id.w_chrono, if (paused) soft(fg, 0xB3) else fg)
                 // Angosto, "1:23:45" no entra junto al swatch y los dos botones: el swatch
                 // se va (el nombre y el chip marcado ya dicen qué corre) y el cronómetro se achica.
                 val narrow = wDp < 290
@@ -124,9 +136,20 @@ class TimerWidget : AppWidgetProvider() {
                 // Tocar una actividad siempre la para si ya está corriendo; pausar es solo
                 // con este botón dedicado, igual que en la app.
                 views.setImageViewResource(R.id.w_pause_icon, if (paused) R.drawable.ic_play else R.drawable.ic_pause)
-                views.setInt(R.id.w_pause_icon, "setColorFilter", ContextCompat.getColor(context, R.color.onAccent))
-                views.setInt(R.id.w_stop_icon, "setColorFilter", ContextCompat.getColor(context, R.color.inkSoft))
-                views.setInt(R.id.w_pause, "setBackgroundResource", if (paused) R.drawable.circle_primary_invite else R.drawable.circle_primary)
+                // Pausar: círculo blanco con el ícono en el color de la actividad; Parar:
+                // blanco translúcido. Sobre un color claro (raro: los de Store.COLORS son
+                // profundos) vuelven los botones de siempre.
+                if (onWhite) {
+                    views.setInt(R.id.w_pause, "setBackgroundResource", R.drawable.circle_white)
+                    views.setInt(R.id.w_pause_icon, "setColorFilter", ac)
+                    views.setInt(R.id.w_stop, "setBackgroundResource", R.drawable.circle_white_soft)
+                    views.setInt(R.id.w_stop_icon, "setColorFilter", Color.WHITE)
+                } else {
+                    views.setInt(R.id.w_pause, "setBackgroundResource", R.drawable.circle_primary)
+                    views.setInt(R.id.w_pause_icon, "setColorFilter", ContextCompat.getColor(context, R.color.onAccent))
+                    views.setInt(R.id.w_stop, "setBackgroundResource", R.drawable.circle_raised)
+                    views.setInt(R.id.w_stop_icon, "setColorFilter", ContextCompat.getColor(context, R.color.inkSoft))
+                }
                 views.setContentDescription(R.id.w_pause, if (paused) "Seguir" else "Pausar")
                 views.setOnClickPendingIntent(R.id.w_pause, broadcast(ACTION_PAUSE, 202))
                 views.setOnClickPendingIntent(R.id.w_stop, broadcast(ACTION_STOP, 201))

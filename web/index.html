@@ -1150,7 +1150,9 @@ const Live = {
     const ws = new WebSocket(url);
     this._ws = ws;
     ws.onopen = () => {
-      this._retry = 0;
+      // _retry NO se resetea acá sino recién con la suscripción confirmada: si el
+      // servidor acepta el socket pero rechaza la suscripción, resetear al abrir haría
+      // reintentar cada 1 s para siempre.
       this._join();
       clearInterval(this._hb);
       this._hb = setInterval(() => this._send(null, "phoenix", "heartbeat", {}), 25000);
@@ -1159,8 +1161,19 @@ const Live = {
       let m; try { m = JSON.parse(e.data); } catch (_) { return; }
       const [, , topic, event, payload] = m;
       if (topic !== this._topic) return;
-      if (event === "phx_reply" && payload && payload.status !== "ok") this.ok = false;
-      else if (event === "system" && payload) this.ok = payload.status === "ok";
+      // Un rechazo de la suscripción cierra el socket para que onclose reintente con
+      // espera creciente. Antes solo ponía ok = false y la pestaña quedaba en el sondeo
+      // de 10 s hasta recargarla: pasó de verdad, con la página abierta desde antes de
+      // prender Realtime en la tabla, y Realtime nunca llegó a usarse.
+      const failed = (event === "phx_reply" || event === "system") && payload && payload.status !== "ok";
+      if (failed) { this.ok = false; ws.close(); }
+      else if (event === "system" && payload) {
+        // Suscripción confirmada. Se sincroniza una vez: lo que cambió mientras no
+        // había conexión no va a llegar como aviso.
+        const wasOk = this.ok;
+        this.ok = true; this._retry = 0;
+        if (!wasOk) sync();
+      }
       else if (event === "postgres_changes") {
         this.ok = true;
         clearTimeout(this._debounce);

@@ -18,7 +18,7 @@ ejecutando su lógica en Node o en Chromium (Playwright).
 **Tests:** `tests/fixtures/shared.json` tiene casos de fusión, dedupe de categorías,
 estadísticas e ids de categoría que corren LOS DOS lados contra su propio código:
 `gradle testDebugUnitTest` (app, `SharedFixturesTest.kt`, sobre las funciones puras
-`Store.mergeData`/`remoteBehind`/`msByActivity`/`stableCategoryId`) y
+`Store.mergeData`/`remoteBehind`/`msByActivity`/`stableCategoryId`/`sessionsBetween`/`lastEndByActivity`) y
 `node tests/web.test.js` (web, extrae el código real de `index.html`). CI los corre
 antes de publicar la APK y la web: si un lado deja de coincidir con el otro, no se
 publica. Todo cambio a la lógica de sync/merge/stats lleva un caso nuevo acá.
@@ -312,6 +312,17 @@ Confirmado funcionando en dispositivo real:
   dispositivo real**.
 - ✅ Resumen con navegación de períodos pasados (◀ ▶) y gráfico semanal apilado por
   categoría, con bordes redondeados en las barras apiladas.
+- ⏳ **Resumen "stats a mano"** (app + web + widget, verificado con capturas, sin
+  confirmar en dispositivo): total en formato "56 h 05 m" con comparación contra el
+  MISMO tramo del período anterior (verde si sube, apagado si baja, nunca rojo), KPIs
+  (Día: sesiones / la más larga / de·hasta; Semana y Mes: promedio por día / días con
+  actividad / mejor día), Día = línea de tiempo de sesiones, Semana = barras con techo
+  en horas enteras + línea del promedio + días futuros contorneados (con filtro de
+  categoría apila por actividad), Mes = calendario de intensidad (tocar un día abre su
+  Día), "Por categoría" siempre abierta como leyenda, "Sin tiempo este período" con la
+  última vez, swatch de identidad en las filas, se refresca por minuto con algo
+  corriendo, cambiar Día/Semana/Mes conserva la fecha (`offsetFor`), tocar la fecha
+  vuelve a hoy, ←/→ en la web. Metas diarias: descartadas por el usuario, no proponer.
 - ✅ Categorías como entidad, con ícono y color propios, desplegable de selección y
   alta/edición/borrado (app + web). Migración desde los `type` de texto libre.
 - ✅ Notificación rediseñada estilo reproductor: swatch de identidad, cronómetro

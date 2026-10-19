@@ -83,4 +83,28 @@ class SharedFixturesTest {
             assertEquals(c.getString("name"), exp.keys().asSequence().associateWith { exp.getLong(it) }, got)
         }
     }
+
+    @Test
+    fun sessions() {
+        val cases = fixtures.getJSONArray("sessions")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val got = Store.sessionsBetween(dataset(c.getJSONObject("data")), c.getLong("from"), c.getLong("to"), c.getLong("now"))
+                .map { listOf(it.first, it.second, it.third) }
+            val exp = c.getJSONArray("expect")
+            val want = (0 until exp.length()).map { j -> exp.getJSONArray(j).let { listOf(it.getString(0), it.getLong(1), it.getLong(2)) } }
+            assertEquals(c.getString("name"), want, got)
+        }
+    }
+
+    @Test
+    fun lastEnd() {
+        val cases = fixtures.getJSONArray("lastEnd")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val exp = c.getJSONObject("expect")
+            assertEquals(c.getString("name"), exp.keys().asSequence().associateWith { exp.getLong(it) },
+                Store.lastEndByActivity(dataset(c.getJSONObject("data")), c.getLong("now")))
+        }
+    }
 }

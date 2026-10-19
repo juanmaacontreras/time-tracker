@@ -79,5 +79,25 @@ for (const c of fixtures.stats) {
   });
 }
 
+for (const c of fixtures.sessions) {
+  check("sesiones: " + c.name, () => {
+    load(c.data);
+    Date.now = () => c.now;
+    try {
+      const got = Store.sessionsBetween(c.from, c.to).map(x => [x.actId, x.start, x.end]);
+      assert.deepStrictEqual(got, c.expect);
+    } finally { Date.now = realNow; }
+  });
+}
+
+for (const c of fixtures.lastEnd) {
+  check("última vez: " + c.name, () => {
+    load(c.data);
+    Date.now = () => c.now;
+    try { assert.deepStrictEqual(Store.lastEndByActivity(), c.expect); }
+    finally { Date.now = realNow; }
+  });
+}
+
 if (failures) { console.log("\n" + failures + " caso(s) fallaron"); process.exit(1); }
 console.log("\nTodos los casos compartidos pasan en la web.");

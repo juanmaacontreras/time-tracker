@@ -87,7 +87,7 @@ internal fun MainActivity.selectProfile(id: String) {
     Store.setCurrentProfile(this, id)
     // Reset del estado transitorio de la UI al cambiar de dataset.
     showArchived = false; expandedIds.clear()
-    statsOffset = 0; statsCategory = "all"; catExpanded = null
+    statsOffset = 0; statsCategory = "all"
     tab = "timer"; switchTab("timer")
     beginSession()
 }

@@ -11,6 +11,7 @@
     <color name="line">#FF434C5E</color>
     <color name="grid">#FF434C5E</color>
     <color name="indigo">#FF81A1C1</color>
+    <color name="up">#FFA3BE8C</color>
     <color name="live">#FF88C0D0</color>
     <color name="pausedColor">#FFEBCB8B</color>
     <!-- Fondos tenues de "corriendo" / "pausado" para los widgets (RemoteViews no puede

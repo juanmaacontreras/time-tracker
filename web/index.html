@@ -39,7 +39,7 @@
   --indigo:#5E81AC; --live:#3F86B0; --paused:#C2784F; --danger:#BF616A;
   --shadow:0 1px 2px rgba(46,52,64,.05), 0 2px 8px rgba(46,52,64,.06);
   --shadowUp:0 8px 30px rgba(46,52,64,.2);
-  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF;
+  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF; --up:#5F8A4E;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -48,7 +48,7 @@
     --line:#434C5E; --grid:#434C5E;
     --indigo:#81A1C1; --live:#88C0D0; --paused:#EBCB8B; --danger:#BF616A;
     --shadow:none; --shadowUp:0 8px 30px rgba(0,0,0,.35); --scrim:rgba(20,24,31,.6);
-    --raised:#4C566A; --onAccent:#2E3440;
+    --raised:#4C566A; --onAccent:#2E3440; --up:#A3BE8C;
   }
 }
 :root[data-theme="light"] {
@@ -58,7 +58,7 @@
   --indigo:#5E81AC; --live:#3F86B0; --paused:#C2784F; --danger:#BF616A;
   --shadow:0 1px 2px rgba(46,52,64,.05), 0 2px 8px rgba(46,52,64,.06);
   --shadowUp:0 8px 30px rgba(46,52,64,.2);
-  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF;
+  --scrim:rgba(46,52,64,.4); --raised:#FAFBFC; --onAccent:#FFFFFF; --up:#5F8A4E;
 }
 :root[data-theme="dark"] {
   --paper:#2E3440; --card:#3B4252; --surface2:#434C5E;
@@ -66,7 +66,7 @@
   --line:#434C5E; --grid:#434C5E;
   --indigo:#81A1C1; --live:#88C0D0; --paused:#EBCB8B; --danger:#BF616A;
   --shadow:none; --shadowUp:0 8px 30px rgba(0,0,0,.35); --scrim:rgba(20,24,31,.6);
-  --raised:#4C566A; --onAccent:#2E3440;
+  --raised:#4C566A; --onAccent:#2E3440; --up:#A3BE8C;
 }
 :root {
   --accentSoft:color-mix(in srgb, var(--indigo) 13%, var(--card));
@@ -245,10 +245,12 @@ body[data-tab="resumen"] #timerView { display:none; }
 
 /* Resumen: navegación de período */
 .nav { display:flex; align-items:center; margin-top:12px; gap:8px; }
-.nav .ar { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+.nav .ar { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;
   cursor:pointer; color:var(--ink); background:var(--card); box-shadow:var(--shadow); user-select:none; }
-.nav .ar.off { color:var(--line); cursor:default; box-shadow:none; background:transparent; }
+.nav .ar.off { opacity:.35; cursor:default; box-shadow:none; }
 .nav .navlbl { flex:1; text-align:center; font-weight:700; font-size:15px; }
+.nav .navlbl.away { cursor:pointer; }
+.nav .navlbl small { display:block; font-size:12px; font-weight:700; color:var(--indigo); margin-top:1px; }
 
 /* Filtro por categoría */
 .chip { display:inline-flex; align-items:center; gap:7px; border-radius:18px; flex:none;
@@ -256,46 +258,86 @@ body[data-tab="resumen"] #timerView { display:none; }
   padding:8px 13px; font-size:13px; font-weight:600; cursor:pointer; user-select:none; white-space:nowrap; }
 .chip.active { background:var(--ink); color:var(--paper); box-shadow:none; }
 .chip .cdot { width:8px; height:8px; border-radius:50%; }
+.chip .ico { width:15px; height:15px; }
 .catrow { display:flex; gap:8px; overflow-x:auto; padding:12px 2px 4px; margin:0 -2px; scrollbar-width:none; }
 .catrow::-webkit-scrollbar { display:none; }
 
-/* Total del período + gráfico, en una tarjeta */
-.statcard { margin-top:14px; padding:18px 18px 12px; }
+/* Tarjeta del total: el número, cómo viene contra el período anterior y las stats del
+   período, todo a la vista antes del gráfico. */
+.statcard { margin-top:14px; padding:18px 18px 14px; }
 .statcard .lbl { font-size:13px; font-weight:700; color:var(--muted); }
-.total { font-size:44px; font-weight:600; letter-spacing:-1.2px; line-height:1.05; margin-top:4px; }
-.statcard .sub { font-size:13px; color:var(--inkSoft); margin-top:4px; }
-.empty { color:var(--muted); padding:22px 0 10px; text-align:center; }
+.total { font-size:44px; font-weight:700; letter-spacing:-1.2px; line-height:1.05; margin-top:4px; }
+.total .u { font-size:22px; font-weight:600; color:var(--muted); margin-left:2px; letter-spacing:0; }
+.cmp { font-size:13.5px; font-weight:700; color:var(--muted); margin-top:6px; }
+.cmp.up { color:var(--up); }
+.kpis { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.kpi { flex:1 1 0; min-width:92px; background:var(--surface2); border-radius:14px; padding:10px 11px; }
+.kpi b { display:block; font-size:16px; font-weight:700; white-space:nowrap; }
+.kpi span { font-size:12px; color:var(--muted); }
+.empty { color:var(--muted); padding:18px 0 4px; text-align:center; }
 
-/* Gráfico de barras: barras con punta redondeada sobre una "pista" tenue, así se ve la
-   forma del período aunque haya días vacíos. */
-.chart { display:flex; align-items:flex-end; margin-top:18px; height:150px; gap:6px; }
-.chart.dense { gap:2px; }
-.chart .cbar { flex:1; display:flex; flex-direction:column; align-items:center;
-  justify-content:flex-end; height:100%; min-width:0; }
-.chart .cval { font-size:10px; color:var(--inkSoft); text-align:center; white-space:nowrap; margin-bottom:4px; font-weight:600; }
-.chart .ctrack { width:100%; flex:1; display:flex; flex-direction:column; justify-content:flex-end;
-  background:var(--grid); border-radius:8px; overflow:hidden; }
-.chart.dense .ctrack { border-radius:4px; }
-.chart .cfill { width:100%; border-radius:8px; min-height:4px; }
-.chart.dense .cfill { border-radius:4px; }
+/* Barras (Semana): pista de altura completa, techo en horas enteras y línea del promedio. */
+.chart { margin-top:18px; }
+.chart .crow { display:flex; gap:6px; }
+.chart .crow > * { flex:1; min-width:0; text-align:center; }
+.chart .cval { font-size:10px; color:var(--inkSoft); white-space:nowrap; font-weight:600; height:14px; margin-bottom:4px; }
+.chart .cplot { position:relative; height:140px; }
+.chart .cplot .crow { height:100%; align-items:stretch; }
+.chart .ctrack { display:flex; flex-direction:column; justify-content:flex-end; background:var(--grid);
+  border-radius:8px; overflow:hidden; }
+.chart .ctrack.future { background:transparent; box-shadow:inset 0 0 0 1.5px var(--grid); }
 .chart .cstack { width:100%; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
 .chart .cseg { width:100%; }
 .chart .cseg + .cseg { border-top:2px solid var(--card); }
-.chart .clab { font-size:11px; color:var(--muted); margin-top:6px; overflow:hidden;
-  text-overflow:ellipsis; white-space:nowrap; max-width:100%; height:14px; }
+.chart .clab { font-size:11px; color:var(--muted); margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chart .clab.today { color:var(--ink); font-weight:800; }
+.cguide { position:absolute; left:0; right:0; border-top:1.5px dashed var(--muted); opacity:.8; pointer-events:none; }
+.cguide span { position:absolute; right:0; top:-17px; font-size:10.5px; font-weight:700; color:var(--inkSoft);
+  background:var(--card); padding:0 4px; border-radius:4px; }
 
-/* Desglose (por actividad / por categoría): una tarjeta con filas, no una tarjeta por fila */
-.list { padding:6px 16px; margin-top:8px; }
-.stat { padding:11px 0; border-top:1px solid var(--line); }
+/* Línea de tiempo (Día): un bloque por sesión sobre la franja horaria con actividad. */
+.tl { margin-top:18px; }
+.tl .track { position:relative; height:30px; background:var(--grid); border-radius:9px; overflow:hidden; margin:0; }
+.tl .blk { position:absolute; top:0; bottom:0; min-width:3px; border-radius:5px; }
+.tl .ticks { position:relative; height:16px; margin-top:6px; }
+.tl .ticks span { position:absolute; transform:translateX(-50%); font-size:11px; color:var(--muted); white-space:nowrap; }
+.tl .ticks span:first-child { transform:none; }
+.tl .ticks span:last-child { transform:translateX(-100%); }
+
+/* Calendario (Mes): intensidad del acento según las horas del día. */
+.cal { margin-top:16px; }
+.cal .wk, .cal .grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; }
+.cal .wk span { text-align:center; font-size:11px; font-weight:700; color:var(--muted); }
+.cal .grid { margin-top:6px; }
+.cal .d { aspect-ratio:1; border-radius:10px; display:flex; align-items:center; justify-content:center;
+  font-size:12.5px; font-weight:700; color:var(--inkSoft); background:var(--grid); cursor:pointer; }
+.cal .d.l1 { background:color-mix(in srgb, var(--indigo) 28%, var(--card)); color:var(--ink); }
+.cal .d.l2 { background:color-mix(in srgb, var(--indigo) 50%, var(--card)); color:var(--ink); }
+.cal .d.l3 { background:color-mix(in srgb, var(--indigo) 75%, var(--card)); color:var(--onAccent); }
+.cal .d.l4 { background:var(--indigo); color:var(--onAccent); }
+.cal .d.future { background:transparent; box-shadow:inset 0 0 0 1.5px var(--grid); color:var(--muted); cursor:default; }
+.cal .d.today { box-shadow:0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
+.cal .legend { display:flex; align-items:center; justify-content:flex-end; gap:5px; margin-top:12px; font-size:11px; color:var(--muted); }
+.cal .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; background:var(--grid); }
+.cal .legend i.l1 { background:color-mix(in srgb, var(--indigo) 28%, var(--card)); }
+.cal .legend i.l2 { background:color-mix(in srgb, var(--indigo) 50%, var(--card)); }
+.cal .legend i.l3 { background:color-mix(in srgb, var(--indigo) 75%, var(--card)); }
+.cal .legend i.l4 { background:var(--indigo); }
+
+/* Desgloses (por actividad / por categoría / sin tiempo): una tarjeta con filas */
+.list { padding:4px 16px; margin-top:8px; }
+.stat { padding:10px 0; border-top:1px solid var(--line); }
 .stat:first-child { border-top:none; }
 .stat.click { cursor:pointer; }
-.stat .top { display:flex; align-items:center; gap:10px; }
-.stat .sdot { width:10px; height:10px; border-radius:50%; flex:none; }
-.stat .snm { flex:1; font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.stat .sval { font-size:14px; font-weight:600; }
+.stat .top { display:flex; align-items:center; gap:12px; }
+.stat .swatch { width:34px; height:34px; border-radius:11px; font-size:14px; }
+.stat .swatch .ico { width:18px; height:18px; }
+.stat .snm { flex:1; min-width:0; font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stat .sval { font-size:14px; font-weight:700; }
 .stat .spct { font-size:12.5px; color:var(--muted); width:38px; text-align:right; }
-.track { height:6px; background:var(--grid); border-radius:3px; margin-top:8px; overflow:hidden; }
+.stat .sago { font-size:12.5px; color:var(--muted); }
+.stat.idle .swatch, .stat.idle .snm { opacity:.6; }
+.track { height:6px; background:var(--grid); border-radius:3px; margin:8px 0 0 46px; overflow:hidden; }
 .track .fill { height:100%; border-radius:3px; }
 
 .csvbtn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:18px; padding:14px;
@@ -831,6 +873,28 @@ const Store = {
     for (const id in ms) out[id] = Math.floor(ms[id] / 1000);
     return out;
   },
+  // Sesiones (guardadas + la en curso) recortadas a [from, to), ordenadas por inicio.
+  // Base de la línea de tiempo del Día. Espejo de Store.sessionsBetween en Kotlin.
+  sessionsBetween(from, to) {
+    const out = [];
+    const add = (actId, start, end) => {
+      const a = Math.max(start, from), b = Math.min(end, to);
+      if (b > a) out.push({ actId, start: a, end: b });
+    };
+    const o = this.root();
+    for (const s of o.sessions) if (!s.deleted) add(s.actId, s.start, s.end);
+    if (o.runActId && o.runStart > 0) add(o.runActId, o.runStart, o.runStart + this.runningElapsedMs());
+    return out.sort((x, y) => x.start - y.start || (x.actId < y.actId ? -1 : 1));
+  },
+  // Fin de la última sesión de cada actividad ("última vez hace N días"). La que corre
+  // cuenta como ahora. Espejo de Store.lastEndByActivity en Kotlin.
+  lastEndByActivity() {
+    const out = {};
+    const o = this.root();
+    for (const s of o.sessions) if (!s.deleted && s.end > (out[s.actId] || 0)) out[s.actId] = s.end;
+    if (o.runActId && o.runStart > 0) out[o.runActId] = now();
+    return out;
+  },
   secsFor(actId, from, to = Number.MAX_SAFE_INTEGER) {
     return Math.floor((this._msByActivity(from, to)[actId] || 0) / 1000);
   },
@@ -1245,7 +1309,6 @@ let tab = "timer";
 let statsPeriod = "day";
 let statsCategory = "all";
 let statsOffset = 0;
-let catExpanded = null;
 let showArchived = false;
 const expandedIds = new Set();
 
@@ -1419,8 +1482,20 @@ function buildSessionsPanel(act) {
 }
 
 /* ---------------- RESUMEN ---------------- */
+// Todo lo que importa del período a la vista y arriba: el total, cómo viene contra el
+// período anterior y las stats clave; debajo, la forma del período (línea de tiempo del
+// día, barras de la semana, calendario del mes) y los desgloses.
+const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const PREV_LABEL = {
+  day: ["vs. ayer a esta hora", "vs. el día anterior"],
+  week: ["vs. la semana pasada a esta altura", "vs. la semana anterior"],
+  month: ["vs. el mes pasado a esta altura", "vs. el mes anterior"]
+};
+
 function renderResumen() {
   const view = document.getElementById("resumenView");
+  const oldRow = view.querySelector(".catrow");
+  const catScroll = oldRow ? oldRow.scrollLeft : 0;
   view.innerHTML = "";
   view.append(buildPeriodSelector());
 
@@ -1431,11 +1506,16 @@ function renderResumen() {
   const catMap = new Map();
   for (const a of allActs) { const c = Store.categoryForActivity(a); catMap.set(c.id, c); }
   const allCats = [...catMap.values()].sort((x, y) => x.name.localeCompare(y.name));
-  if (allCats.length > 1) view.append(buildCategorySelector(allCats));
   if (statsCategory !== "all" && !allCats.some(c => c.id === statsCategory)) statsCategory = "all";
+  if (allCats.length > 1) {
+    const row = buildCategorySelector(allCats);
+    view.append(row);
+    row.scrollLeft = catScroll;
+  }
 
   const acts = statsCategory === "all" ? allActs
     : allActs.filter(a => Store.categoryForActivity(a).id === statsCategory);
+  const actIds = new Set(acts.map(a => a.id));
 
   // Una sola pasada por el historial para todo el período; el resto sale de acá.
   const secs = Store.secsByActivity(from, to);
@@ -1443,110 +1523,298 @@ function renderResumen() {
     .filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
   const total = perAct.reduce((s, x) => s + x[1], 0);
 
-  const statsCatName = statsCategory === "all" ? "" : (catMap.get(statsCategory)?.name || statsCategory);
+  // Días del período que ya pasaron (o todos, si es un período pasado): base del promedio
+  // y de qué días se dibujan como "todavía no".
+  const dayCount = Math.round((to - from) / DAY_MS);
+  const elapsedDays = statsOffset === 0 ? Math.round((startOfToday() - from) / DAY_MS) + 1 : dayCount;
+  const days = statsPeriod === "day" ? null : dailyTotals(from, dayCount, actIds);
+
+  const catName = statsCategory === "all" ? "" : (catMap.get(statsCategory)?.name || "");
   const card = h("div", { class: "card statcard" },
-    h("div", { class: "lbl" }, statsCategory === "all" ? "Total" : "Total · " + statsCatName),
-    h("div", { class: "total num" }, exact(total)));
+    h("div", { class: "lbl" }, catName ? "Total · " + catName : "Total"),
+    bigTime(total));
+  const cmp = comparisonLine(total, from, to, actIds);
+  if (cmp) card.append(cmp);
   view.append(card);
 
-  if (perAct.length === 0) {
-    card.append(h("div", { class: "empty" }, "Sin registros en este período."));
-    return;
-  }
-  card.append(h("div", { class: "sub" }, perAct.length === 1 ? "en 1 actividad" : `en ${perAct.length} actividades`));
-
-  const actIds = new Set(acts.map(a => a.id));
-  const catColorsAll = categoryColors(allActs);
-  // Día → por actividad. Mes → por día. Semana → por día TAMBIÉN, pero cada barra
-  // apilada por categoría (así se ve en qué día se le dedicó tiempo a qué). Si ya hay
-  // un filtro de categoría activo, apilar una sola categoría no aporta nada: cae a
-  // "por actividad" como día.
-  if (statsPeriod === "week" && statsCategory === "all") {
-    // Orden fijo de categorías (por total de la semana) para que el mismo color quede
-    // siempre en la misma posición dentro de cada barra apilada.
-    const catOrder = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]).map(x => x[0]);
-    card.append(buildStackedBarChart(weekCategoryStacks(allActs, from, catOrder), catColorsAll, todayIndex(from, 7)));
-  } else if (statsPeriod === "day" || statsPeriod === "week") {
-    const bars = perAct.slice(0, 8).map(x => ({ label: x[0].name, secs: x[1], color: x[0].color || "#2F4B8F" }));
-    card.append(buildBarChart(bars, true, 1, -1));
+  if (statsPeriod === "day") {
+    const sessions = Store.sessionsBetween(from, to).filter(s => actIds.has(s.actId));
+    if (sessions.length) {
+      card.append(buildKpis(dayKpis(sessions)));
+      card.append(buildTimeline(sessions, allActs));
+    } else card.append(h("div", { class: "empty" }, "Sin registros en este día."));
   } else {
-    const bars = monthBars(actIds, from, statsOffset === 0 ? new Date().getDate() : daysInMonth(from));
-    card.append(buildBarChart(bars, false, 5, todayIndex(from, bars.length)));
+    card.append(buildKpis(rangeKpis(days, elapsedDays, from)));
+    if (statsPeriod === "week") card.append(buildWeekChart(from, acts, elapsedDays, days, total / elapsedDays));
+    else card.append(buildMonthCalendar(from, days, elapsedDays));
   }
 
-  view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Por actividad")));
-  const list = h("div", { class: "card list" });
-  for (const [a, sec] of perAct) list.append(statRow(a.name, a.color || "#2F4B8F", sec, total, null));
-  view.append(list);
+  if (perAct.length) {
+    view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Por actividad")));
+    const list = h("div", { class: "card list" });
+    for (const [a, sec] of perAct) {
+      const cat = Store.categoryForActivity(a);
+      list.append(statRow(swatchEl(a.color || "#2F4B8F", cat.icon, a.name), a.name, a.color || "#2F4B8F", sec, total, null));
+    }
+    view.append(list);
+  }
 
+  // Por categoría siempre abierta: es también la leyenda de los colores del gráfico.
   if (statsCategory === "all") {
     const entries = Object.entries(categorySums(allActs, secs)).sort((x, y) => y[1] - x[1]);
-    if (entries.length) {
-      const expanded = catExpanded == null ? entries.length <= 3 : catExpanded;
-      const chev = icon("chevDown");
-      if (!expanded) chev.style.transform = "rotate(-90deg)";
-      view.append(h("div", { class: "sechd" },
-        h("div", { class: "t click", onclick: () => { catExpanded = !expanded; renderResumen(); } }, "Por categoría", chev)));
-      // Mismo color que en el gráfico apilado: sirve de leyenda.
-      if (expanded) {
-        const cl = h("div", { class: "card list" });
-        for (const [c, sec] of entries) {
-          const label = (Store.categoryById(c) || {}).name || "General";
-          cl.append(statRow(label, catColorsAll[c] || "var(--indigo)", sec, total, () => { statsCategory = c; renderResumen(); }));
-        }
-        view.append(cl);
+    if (entries.length > 1 || (entries.length === 1 && statsPeriod === "week")) {
+      view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Por categoría")));
+      const cl = h("div", { class: "card list" });
+      for (const [c, sec] of entries) {
+        const cat = catMap.get(c) || Store.categoryForActivity(null);
+        const color = cat.color || "#2F4B8F";
+        cl.append(statRow(swatchEl(color, cat.icon, cat.name), cat.name, color, sec, total,
+          () => { statsCategory = c; renderResumen(); }));
       }
+      view.append(cl);
     }
+  }
+
+  // Lo que no se tocó en el período, con cuándo fue la última vez.
+  const idle = acts.filter(a => !a.archived && !(secs[a.id] > 0));
+  if (idle.length) {
+    const last = Store.lastEndByActivity();
+    idle.sort((x, y) => (last[y.id] || 0) - (last[x.id] || 0) || x.name.localeCompare(y.name));
+    view.append(h("div", { class: "sechd" }, h("div", { class: "t" }, "Sin tiempo este período")));
+    const il = h("div", { class: "card list" });
+    for (const a of idle) {
+      const cat = Store.categoryForActivity(a);
+      il.append(h("div", { class: "stat idle" }, h("div", { class: "top" },
+        swatchEl(a.color || "#2F4B8F", cat.icon, a.name),
+        h("div", { class: "snm" }, a.name),
+        h("div", { class: "sago" }, lastSeen(last[a.id])))));
+    }
+    view.append(il);
   }
 
   view.append(h("button", { class: "csvbtn", onclick: onExportClick }, icon("download"), "Exportar"));
 }
 
-// Posición de "hoy" dentro de un período que arranca en from (para resaltar su barra),
-// o -1 si hoy no cae ahí.
-function todayIndex(from, count) {
-  const i = Math.round((startOfToday() - from) / DAY_MS);
-  return i >= 0 && i < count ? i : -1;
+// "56 h 05 m" grande, con las unidades en chico.
+function bigTime(sec) {
+  const el = h("div", { class: "total num" });
+  const unit = u => h("span", { class: "u" }, u);
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+  if (hh > 0) el.append(String(hh), unit("h"), " " + String(mm).padStart(2, "0"), unit("m"));
+  else if (mm > 0 || sec === 0) el.append(String(mm), unit("m"));
+  else el.append(String(sec), unit("s"));
+  return el;
+}
+// Duración legible para las líneas de texto: "1 h 10 m", "25 m", "40 s".
+function spaced(sec) {
+  const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+  if (hh > 0) return mm ? `${hh} h ${String(mm).padStart(2, "0")} m` : `${hh} h`;
+  return mm > 0 ? `${mm} m` : `${sec} s`;
+}
+
+// Contra el período anterior. Si el actual está en curso, contra el MISMO tramo del
+// anterior (lunes a hoy a esta hora vs. lunes a ese día a esta hora), si no la
+// comparación siempre da "menos" hasta que termine. Subir es verde; bajar es apagado,
+// nunca rojo: no es un error.
+function comparisonLine(total, from, to, actIds) {
+  const [pf, pt] = periodRange(statsPeriod, statsOffset - 1);
+  const live = statsOffset === 0;
+  const prevTo = live ? Math.min(pt, pf + (now() - from)) : pt;
+  const prev = Store.totalBetween(pf, prevTo, actIds);
+  if (total === 0 && prev === 0) return null;
+  const label = PREV_LABEL[statsPeriod][live ? 0 : 1];
+  const diff = total - prev;
+  if (Math.abs(diff) < 60) return h("div", { class: "cmp" }, "= Igual que " + label.slice(4));
+  return h("div", { class: "cmp" + (diff > 0 ? " up" : "") },
+    (diff > 0 ? "▲ " : "▼ ") + spaced(Math.abs(diff)) + " " + label);
+}
+
+function buildKpis(items) {
+  return h("div", { class: "kpis" }, items.map(([v, l]) => h("div", { class: "kpi" }, h("b", { class: "num" }, v), h("span", null, l))));
+}
+function dayKpis(sessions) {
+  const longest = Math.max(...sessions.map(s => s.end - s.start));
+  const first = sessions[0].start, last = Math.max(...sessions.map(s => s.end));
+  return [
+    [String(sessions.length), sessions.length === 1 ? "sesión" : "sesiones"],
+    [human(Math.floor(longest / 1000)), "la más larga"],
+    [`${hhmm(first)}–${hhmm(last)}`, "de · hasta"]
+  ];
+}
+function rangeKpis(days, elapsedDays, from) {
+  const passed = days.slice(0, elapsedDays);
+  const total = passed.reduce((s, x) => s + x, 0);
+  const active = passed.filter(x => x > 0).length;
+  const best = passed.reduce((b, x, i) => (x > passed[b] ? i : b), 0);
+  const bestLabel = statsPeriod === "week" ? WEEKDAYS[best].toLowerCase()
+    : new Date(from + best * DAY_MS + DAY_MS / 2).getDate() + "/" + (new Date(from).getMonth() + 1);
+  return [
+    [total > 0 ? human(Math.floor(total / elapsedDays)) : "0m", "promedio por día"],
+    [`${active} de ${elapsedDays}`, "días con actividad"],
+    passed[best] > 0 ? [human(passed[best]), "mejor día · " + bestLabel] : ["—", "mejor día"]
+  ];
+}
+
+// Total de cada día del período (filtrado por actividades).
+function dailyTotals(from, count, actIds) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const ds = dayStart(from, i);
+    out.push(Store.totalBetween(ds, dayStart(from, i + 1), actIds));
+  }
+  return out;
+}
+// Medianoche del día i contando desde from (respeta los cambios de horario).
+function dayStart(from, i) { const d = new Date(from); d.setDate(d.getDate() + i); return midnight(d); }
+
+// Día: un bloque por sesión sobre la franja horaria con actividad.
+function buildTimeline(sessions, acts) {
+  const byId = new Map(acts.map(a => [a.id, a]));
+  const first = new Date(sessions[0].start); first.setMinutes(0, 0, 0);
+  const a = first.getTime();
+  const lastEnd = Math.max(...sessions.map(s => s.end));
+  // Franja en horas enteras (mínimo 4) y múltiplo del paso de las marcas, así la última
+  // marca cae justo en el borde.
+  let hours = Math.max(4, Math.ceil((lastEnd - a) / 3600000));
+  const step = hours <= 6 ? 1 : hours <= 12 ? 2 : hours <= 18 ? 3 : 4;
+  hours = Math.ceil(hours / step) * step;
+  const span = hours * 3600000;
+  const track = h("div", { class: "track" });
+  for (const s of sessions) {
+    const act = byId.get(s.actId);
+    track.append(h("div", { class: "blk", title: `${act ? act.name : ""} · ${hhmm(s.start)} – ${hhmm(s.end)}`,
+      style: `left:${(s.start - a) / span * 100}%;width:${(s.end - s.start) / span * 100}%;background:${act && act.color || "#2F4B8F"}` }));
+  }
+  const ticks = h("div", { class: "ticks" });
+  for (let i = 0; i <= hours; i += step) {
+    const t = a + i * 3600000;
+    ticks.append(h("span", { class: "num", style: `left:${i / hours * 100}%` }, String(new Date(t).getHours()).padStart(2, "0") + ":00"));
+  }
+  return h("div", { class: "tl" }, track, ticks);
+}
+
+// Semana: una barra por día, apilada por categoría (o, con un filtro de categoría, por
+// actividad de esa categoría), techo en horas enteras y la línea del promedio.
+function buildWeekChart(from, acts, elapsedDays, days, avg) {
+  const byCat = statsCategory === "all";
+  const keyOf = a => byCat ? Store.categoryForActivity(a).id : a.id;
+  const colorOf = {};
+  for (const a of acts) {
+    const k = keyOf(a);
+    if (!(k in colorOf)) colorOf[k] = (byCat ? Store.categoryForActivity(a).color : a.color) || "#2F4B8F";
+  }
+  const perDay = [], weekSum = {};
+  for (let i = 0; i < 7; i++) {
+    const s = Store.secsByActivity(dayStart(from, i), dayStart(from, i + 1)), m = {};
+    for (const a of acts) if (s[a.id] > 0) { const k = keyOf(a); m[k] = (m[k] || 0) + s[a.id]; weekSum[k] = (weekSum[k] || 0) + s[a.id]; }
+    perDay.push(m);
+  }
+  // Orden fijo (por total de la semana): el mismo color queda en la misma posición.
+  const order = Object.keys(weekSum).sort((x, y) => weekSum[y] - weekSum[x]);
+  const ceil = Math.max(3600, Math.ceil(Math.max(...days) / 3600) * 3600);
+  const todayIdx = statsOffset === 0 ? elapsedDays - 1 : -1;
+
+  const vals = h("div", { class: "crow" }), bars = h("div", { class: "crow" }), labs = h("div", { class: "crow" });
+  days.forEach((t, i) => {
+    vals.append(h("div", { class: "cval num" }, t > 0 ? human(t) : ""));
+    const track = h("div", { class: "ctrack" + (i >= elapsedDays ? " future" : "") });
+    if (t > 0) {
+      const stack = h("div", { class: "cstack", style: `height:${Math.max(3, t / ceil * 100)}%` });
+      for (const k of order) if (perDay[i][k] > 0)
+        stack.append(h("div", { class: "cseg", style: `flex-grow:${perDay[i][k]};background:${colorOf[k]}` }));
+      track.append(stack);
+    }
+    bars.append(track);
+    labs.append(h("div", { class: "clab" + (i === todayIdx ? " today" : "") }, WEEKDAYS[i]));
+  });
+  const plot = h("div", { class: "cplot" }, bars);
+  if (avg >= 60) plot.append(h("div", { class: "cguide", style: `bottom:${avg / ceil * 100}%` },
+    h("span", { class: "num" }, "prom. " + human(Math.floor(avg)))));
+  return h("div", { class: "chart" }, vals, plot, labs);
+}
+
+// Mes: calendario L–D; la intensidad del acento dice cuánto se hizo ese día. Tocar un
+// día lleva a su vista de Día.
+function buildMonthCalendar(from, days, elapsedDays) {
+  const level = t => t <= 0 ? "" : t < 3600 ? " l1" : t < 7200 ? " l2" : t < 14400 ? " l3" : " l4";
+  const grid = h("div", { class: "grid" });
+  const lead = (new Date(from).getDay() + 6) % 7;
+  for (let i = 0; i < lead; i++) grid.append(h("div"));
+  const todayIdx = statsOffset === 0 ? elapsedDays - 1 : -1;
+  days.forEach((t, i) => {
+    const future = i >= elapsedDays;
+    const ds = dayStart(from, i);
+    grid.append(h("div", { class: "d num" + (future ? " future" : level(t)) + (i === todayIdx ? " today" : ""),
+      title: future ? null : (t > 0 ? human(t) : "Sin registros"),
+      onclick: future ? null : () => { statsPeriod = "day"; statsOffset = offsetFor("day", ds); renderResumen(); } },
+      String(i + 1)));
+  });
+  return h("div", { class: "cal" },
+    h("div", { class: "wk" }, WEEKDAYS.map(d => h("span", null, d.charAt(0)))),
+    grid,
+    h("div", { class: "legend" }, "0", h("i"), h("i", { class: "l1" }), h("i", { class: "l2" }),
+      h("i", { class: "l3" }), h("i", { class: "l4" }), "4 h+"));
+}
+
+function lastSeen(ms) {
+  if (!ms) return "Nunca";
+  const d = Math.round((startOfToday() - midnight(new Date(ms))) / DAY_MS);
+  return d <= 0 ? "Hoy" : d === 1 ? "Ayer" : `hace ${d} días`;
+}
+
+// Offset (≤ 0) del período que contiene el instante ms.
+function offsetFor(period, ms) {
+  const t = new Date(), d = new Date(ms);
+  if (period === "month") return Math.min(0, (d.getFullYear() - t.getFullYear()) * 12 + d.getMonth() - t.getMonth());
+  const cur = periodRange(period, 0)[0], target = midnight(d);
+  if (period === "day") return Math.min(0, Math.round((target - cur) / DAY_MS));
+  return Math.min(0, Math.floor((target - cur) / (7 * DAY_MS) + 0.02));
 }
 
 function buildPeriodSelector() {
   const seg = h("div", { class: "seg" });
   for (const [p, lbl] of [["day", "Día"], ["week", "Semana"], ["month", "Mes"]])
     seg.append(h("div", { class: "s" + (p === statsPeriod ? " active" : ""),
-      onclick: () => { statsPeriod = p; statsOffset = 0; renderResumen(); } }, lbl));
+      onclick: () => {
+        // Se mantiene la fecha que se estaba mirando: de "Semana del 6" a "Mes" va a ese mes.
+        const [from] = periodRange(statsPeriod, statsOffset);
+        const anchor = statsOffset === 0 ? now() : from;
+        statsPeriod = p; statsOffset = offsetFor(p, anchor); renderResumen();
+      } }, lbl));
   return seg;
+}
+function shiftPeriod(delta) {
+  const next = statsOffset + delta;
+  if (next > 0 || next === statsOffset) return;
+  statsOffset = next; renderResumen();
 }
 function buildOffsetNav(label) {
   const nav = h("div", { class: "nav" });
-  nav.append(h("div", { class: "ar", title: "Anterior", onclick: () => { statsOffset -= 1; renderResumen(); } }, icon("chevLeft")));
-  nav.append(h("div", { class: "navlbl" }, label));
-  const canFwd = statsOffset < 0;
-  nav.append(h("div", { class: "ar" + (canFwd ? "" : " off"), title: "Siguiente",
-    onclick: canFwd ? () => { statsOffset += 1; renderResumen(); } : null }, icon("chevRight")));
+  nav.append(h("div", { class: "ar", title: "Anterior", onclick: () => shiftPeriod(-1) }, icon("chevLeft")));
+  const away = statsOffset !== 0;
+  nav.append(h("div", { class: "navlbl" + (away ? " away" : ""), title: away ? "Volver a hoy" : null,
+    onclick: away ? () => { statsOffset = 0; renderResumen(); } : null },
+    label, away ? h("small", null, "Volver a hoy") : null));
+  nav.append(h("div", { class: "ar" + (away ? "" : " off"), title: "Siguiente",
+    onclick: away ? () => shiftPeriod(1) : null }, icon("chevRight")));
   return nav;
-}
-// Color de cada categoría: propiedad propia de la categoría (ya no "la de su primera
-// actividad"). Es la "leyenda" consistente entre el selector, el gráfico apilado y la
-// lista colapsable.
-function categoryColors(acts) {
-  const map = {};
-  for (const a of acts) {
-    const cat = Store.categoryForActivity(a);
-    if (!(cat.id in map)) map[cat.id] = cat.color || "#2F4B8F";
-  }
-  return map;
 }
 function buildCategorySelector(cats) {
   const rowEl = h("div", { class: "catrow" });
-  const chip = (label, value, color) => {
+  const chip = (label, value, cat) => {
     const c = h("div", { class: "chip" + (value === statsCategory ? " active" : ""),
       onclick: () => { statsCategory = value; renderResumen(); } });
-    if (color) c.append(h("div", { class: "cdot", style: "background:" + color }));
+    if (cat) {
+      const color = cat.color || "#2F4B8F";
+      const ic = cat.icon ? categoryIconEl(cat.icon, color) : null;
+      if (ic) { ic.setAttribute("class", "ico"); c.append(ic); }
+      else c.append(h("div", { class: "cdot", style: "background:" + color }));
+    }
     c.append(document.createTextNode(label));
     return c;
   };
   rowEl.append(chip("Todo", "all", null));
-  for (const c of cats) rowEl.append(chip(c.name, c.id, c.color || "#2F4B8F"));
+  for (const c of cats) rowEl.append(chip(c.name, c.id, c));
   return rowEl;
 }
 // Segundos por categoría, a partir de los segundos por actividad ya calculados.
@@ -1558,69 +1826,14 @@ function categorySums(acts, secs) {
   }
   return sums;
 }
-function monthBars(actIds, monthStart, dayCount) {
-  const out = [];
-  for (let i = 0; i < dayCount; i++) {
-    const ds = monthStart + i * DAY_MS;
-    out.push({ label: String(i + 1), secs: Store.totalBetween(ds, ds + DAY_MS, actIds), color: "var(--indigo)" });
-  }
-  return out;
-}
-// Para cada día de la semana, el desglose por categoría (en el orden fijo catOrder, así
-// el mismo color queda siempre en la misma posición dentro de cada barra apilada).
-function weekCategoryStacks(acts, weekStart, catOrder) {
-  const labels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-  return labels.map((lb, i) => {
-    const ds = weekStart + i * DAY_MS;
-    const perCat = categorySums(acts, Store.secsByActivity(ds, ds + DAY_MS));
-    const segs = catOrder.filter(c => perCat[c] > 0).map(c => ({ cat: c, secs: perCat[c] }));
-    return { label: lb, total: segs.reduce((s, x) => s + x.secs, 0), segs };
-  });
-}
-// Barras apiladas: una columna por día, cada una dividida en segmentos de color según
-// la categoría (mismo color que el selector y la lista colapsable de categorías).
-function buildStackedBarChart(days, catColors, todayIdx) {
-  const max = Math.max(1, ...days.map(d => d.total));
-  const chart = h("div", { class: "chart" });
-  days.forEach((d, i) => {
-    const col = h("div", { class: "cbar" });
-    col.append(h("div", { class: "cval num" }, d.total > 0 ? human(d.total) : ""));
-    const track = h("div", { class: "ctrack" });
-    if (d.total > 0) {
-      const stack = h("div", { class: "cstack", style: `height:${Math.max(3, (d.total / max) * 100)}%` });
-      for (const seg of d.segs)
-        stack.append(h("div", { class: "cseg", style: `flex-grow:${seg.secs};background:${catColors[seg.cat] || "var(--indigo)"}` }));
-      track.append(stack);
-    }
-    col.append(track);
-    col.append(h("div", { class: "clab" + (i === todayIdx ? " today" : "") }, d.label));
-    chart.append(col);
-  });
-  return chart;
-}
-function buildBarChart(bars, showValues, labelStep, todayIdx) {
-  const max = Math.max(1, ...bars.map(b => b.secs));
-  const chart = h("div", { class: "chart" + (bars.length > 12 ? " dense" : "") });
-  bars.forEach((b, idx) => {
-    const col = h("div", { class: "cbar" });
-    if (showValues) col.append(h("div", { class: "cval num" }, b.secs > 0 ? human(b.secs) : ""));
-    const track = h("div", { class: "ctrack" });
-    if (b.secs > 0) track.append(h("div", { class: "cfill", style: `height:${Math.max(3, (b.secs / max) * 100)}%;background:${b.color}` }));
-    col.append(track);
-    const showLabel = idx % labelStep === 0 || idx === todayIdx;
-    col.append(h("div", { class: "clab" + (idx === todayIdx ? " today" : "") }, showLabel ? b.label : ""));
-    chart.append(col);
-  });
-  return chart;
-}
-function statRow(name, color, sec, total, onClick) {
+function statRow(swatch, name, color, sec, total, onClick) {
   const pct = total > 0 ? Math.round(sec * 100 / total) : 0;
   const box = h("div", { class: "stat" + (onClick ? " click" : "") });
   if (onClick) box.addEventListener("click", onClick);
   box.append(h("div", { class: "top" },
-    h("div", { class: "sdot", style: "background:" + color }),
+    swatch,
     h("div", { class: "snm" }, name),
-    h("div", { class: "sval num" }, exact(sec)),
+    h("div", { class: "sval num" }, human(sec)),
     h("div", { class: "spct num" }, pct + "%")));
   const track = h("div", { class: "track" });
   track.append(h("div", { class: "fill", style: `width:${total > 0 ? (sec / total * 100) : 0}%;background:${color}` }));
@@ -1882,7 +2095,7 @@ function onRemoteChange() {
 function selectProfile(id) {
   if (id === Store.currentProfileId() && Store.hasChosenProfile()) { closeModal(); return; }
   Store.setCurrentProfile(id);
-  statsOffset = 0; statsCategory = "all"; catExpanded = null; expandedIds.clear(); showArchived = false;
+  statsOffset = 0; statsCategory = "all"; expandedIds.clear(); showArchived = false;
   closeModal();
   applyProfileChrome();
   render();
@@ -2004,6 +2217,7 @@ document.getElementById("themeBtn").onclick = () => {
 
 /* Ticker: refresca el tiempo en vivo sin re-renderizar toda la lista.
    No depende de la pestaña: en desktop el panel del cronómetro siempre está visible. */
+let resumenMinute = 0;
 setInterval(() => {
   const runId = Store.runningActId();
   if (runId && !Store.runningPaused()) {
@@ -2012,9 +2226,21 @@ setInterval(() => {
     const bc = document.getElementById("bannerChrono");
     if (bc) bc.textContent = exact(Math.floor(Store.runningElapsedMs() / 1000));
     updateTodaySub();
+    // El Resumen muestra minutos: con algo corriendo, se rehace una vez por minuto.
+    const minute = Math.floor(Date.now() / 60000);
+    if (minute !== resumenMinute) { resumenMinute = minute; renderResumen(); }
   }
   updateTitle();
 }, 1000);
+// ← / → recorren los períodos del Resumen (sin un diálogo abierto ni un campo con foco).
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (e.altKey || e.ctrlKey || e.metaKey || document.querySelector(".overlay")) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+  if (tab !== "resumen" && window.innerWidth < 900) return;
+  shiftPeriod(e.key === "ArrowLeft" ? -1 : 1);
+});
 
 /* Sync loop + eventos.
    Con Live conectado los cambios llegan al instante y el sondeo queda como respaldo

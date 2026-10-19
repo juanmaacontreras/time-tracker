@@ -20,6 +20,11 @@ class ResumenWidget : AppWidgetProvider() {
         syncInBackground(context)
     }
 
+    // Al cambiar de tamaño cambia cuántas filas entran.
+    override fun onAppWidgetOptionsChanged(context: Context, mgr: AppWidgetManager, id: Int, newOptions: android.os.Bundle) {
+        renderOne(context, mgr, id)
+    }
+
     // Solo redibuja si el sync trajo cambios reales (ver Surfaces).
     private fun syncInBackground(context: Context) {
         val pending = goAsync()
@@ -65,6 +70,18 @@ class ResumenWidget : AppWidgetProvider() {
             )
         }
 
+        // Cuántas filas entran enteras (con su barra) en el alto actual del widget.
+        // Medidas del layout: padding 14+14, encabezado ~44, chips ~36, cada fila ~36
+        // (texto + margen + barra) y la línea de "+N más" ~18 si hace falta.
+        private fun rowsThatFit(mgr: AppWidgetManager, id: Int, count: Int): Int {
+            // En vertical el alto real es el máximo informado; sin datos, el mínimo del widget.
+            val h = mgr.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+                .let { if (it > 0) it else 200 }
+            val free = h - 28 - 44 - 36
+            if (count <= free / 36) return count
+            return ((free - 18) / 36).coerceAtLeast(1)
+        }
+
         private fun styleChip(ctx: Context, views: RemoteViews, id: Int, active: Boolean) {
             views.setInt(id, "setBackgroundResource", if (active) R.drawable.chip_on else R.drawable.chip)
             views.setTextColor(
@@ -80,13 +97,14 @@ class ResumenWidget : AppWidgetProvider() {
             val (from, to) = Store.periodRange(period, 0)
             val secs = Store.secsByActivity(context, from, to)
 
-            val per = Store.activities(context)
+            // Incluye archivadas, como el Resumen de la app: su tiempo del período cuenta.
+            val per = Store.activities(context, includeArchived = true)
                 .map { it to (secs[it.getString("id")] ?: 0L) }
                 .filter { it.second > 0 }
                 .sortedByDescending { it.second }
             val total = per.sumOf { it.second }
 
-            views.setTextViewText(R.id.w2_total, Store.exact(total))
+            views.setTextViewText(R.id.w2_total, Store.human(total))
 
             styleChip(context, views, R.id.w2_day, period == "day")
             styleChip(context, views, R.id.w2_week, period == "week")
@@ -107,16 +125,18 @@ class ResumenWidget : AppWidgetProvider() {
             val rowN = intArrayOf(R.id.w2_n0, R.id.w2_n1, R.id.w2_n2, R.id.w2_n3, R.id.w2_n4, R.id.w2_n5)
             val rowT = intArrayOf(R.id.w2_t0, R.id.w2_t1, R.id.w2_t2, R.id.w2_t3, R.id.w2_t4, R.id.w2_t5)
             val rowP = intArrayOf(R.id.w2_p0, R.id.w2_p1, R.id.w2_p2, R.id.w2_p3, R.id.w2_p4, R.id.w2_p5)
-            val max = (per.firstOrNull()?.second ?: 1L).coerceAtLeast(1L)
+            // La barra es la parte del total (igual que el Resumen), no relativa a la mayor.
+            val safeTotal = total.coerceAtLeast(1L)
+            val shown = minOf(rowBox.size, rowsThatFit(mgr, id, per.size))
 
             for (i in rowBox.indices) {
-                if (i < per.size) {
+                if (i < minOf(per.size, shown)) {
                     val a = per[i].first
                     val sec = per[i].second
                     views.setViewVisibility(rowBox[i], View.VISIBLE)
                     views.setTextViewText(rowN[i], a.getString("name"))
-                    views.setTextViewText(rowT[i], Store.exact(sec))
-                    views.setProgressBar(rowP[i], 100, ((sec * 100) / max).toInt(), false)
+                    views.setTextViewText(rowT[i], Store.human(sec))
+                    views.setProgressBar(rowP[i], 100, ((sec * 100) / safeTotal).toInt(), false)
                     // Tint dinámico por color de actividad (setColorStateList existe desde API 31).
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         val c = Color.parseColor(a.optString("color", "#2F4B8F"))
@@ -126,8 +146,8 @@ class ResumenWidget : AppWidgetProvider() {
                     views.setViewVisibility(rowBox[i], View.GONE)
                 }
             }
-            // Indicador "+N más" si hay más actividades con tiempo que las 6 visibles.
-            val extra = per.size - rowBox.size
+            // Indicador "+N más" si hay más actividades con tiempo que las filas visibles.
+            val extra = per.size - minOf(per.size, shown)
             if (extra > 0) {
                 views.setTextViewText(R.id.w2_more, "+$extra más")
                 views.setViewVisibility(R.id.w2_more, View.VISIBLE)

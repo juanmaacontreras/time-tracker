@@ -560,6 +560,46 @@ object Store {
 
     private fun msByActivity(ctx: Context, from: Long, to: Long) = msByActivity(root(ctx), from, to, now())
 
+    // Sesiones (guardadas + la en curso) recortadas a [from, to), ordenadas por inicio:
+    // (actId, inicio, fin). Base de la línea de tiempo del Día. Pura (tests compartidos).
+    internal fun sessionsBetween(obj: JSONObject, from: Long, to: Long, now: Long): List<Triple<String, Long, Long>> {
+        val out = ArrayList<Triple<String, Long, Long>>()
+        fun add(actId: String, start: Long, end: Long) {
+            val a = maxOf(start, from)
+            val b = minOf(end, to)
+            if (b > a) out.add(Triple(actId, a, b))
+        }
+        val ss = obj.getJSONArray("sessions")
+        for (i in 0 until ss.length()) {
+            val s = ss.getJSONObject(i)
+            if (s.optBoolean("deleted", false)) continue
+            add(s.getString("actId"), s.getLong("start"), s.getLong("end"))
+        }
+        runningSpan(obj, now)?.let { add(obj.getString("runActId"), it[0], it[1]) }
+        return out.sortedWith(compareBy({ it.second }, { it.first }))
+    }
+
+    // Fin de la última sesión de cada actividad ("última vez hace N días"). La que corre
+    // cuenta como ahora. Pura (tests compartidos).
+    internal fun lastEndByActivity(obj: JSONObject, now: Long): Map<String, Long> {
+        val out = HashMap<String, Long>()
+        val ss = obj.getJSONArray("sessions")
+        for (i in 0 until ss.length()) {
+            val s = ss.getJSONObject(i)
+            if (s.optBoolean("deleted", false)) continue
+            val id = s.getString("actId")
+            if (s.getLong("end") > (out[id] ?: 0L)) out[id] = s.getLong("end")
+        }
+        if (runningSpan(obj, now) != null) out[obj.getString("runActId")] = now
+        return out
+    }
+
+    @Synchronized
+    fun sessionsBetween(ctx: Context, from: Long, to: Long) = sessionsBetween(root(ctx), from, to, now())
+
+    @Synchronized
+    fun lastEndByActivity(ctx: Context) = lastEndByActivity(root(ctx), now())
+
     /** Segundos por actividad dentro de [from, to). Sin "to": hasta ahora. */
     @Synchronized
     fun secsByActivity(ctx: Context, from: Long, to: Long = Long.MAX_VALUE): Map<String, Long> =

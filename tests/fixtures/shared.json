@@ -1,5 +1,5 @@
 {
-  "_about": "Casos compartidos entre la app (app/src/test/.../SharedFixturesTest.kt) y la web (tests/web.test.js). Los dos lados (incluidas las estadísticas del Resumen: sesiones de un período y última vez por actividad) corren estos mismos casos contra su propio código: si alguno da distinto, la sincronización entre ellos se rompería. Para agregar un caso, agregarlo acá y correr los dos tests. En 'expect', cada entidad lista solo los campos a verificar; 'counts' verifica cuántas entradas hay en total (vivas y borradas).",
+  "_about": "Casos compartidos entre la app (app/src/test/.../SharedFixturesTest.kt) y la web (tests/web.test.js). Los dos lados (incluidas las estadísticas del Resumen: sesiones de un período y última vez por actividad) corren estos mismos casos contra su propio código: si alguno da distinto, la sincronización entre ellos se rompería. Para agregar un caso, agregarlo acá y correr los dos tests. En 'expect', cada entidad lista solo los campos a verificar; 'counts' verifica cuántas entradas hay en total (vivas y borradas). 'atril': la bandeja de Atril (AtrilImport) se aplica después de fusionar 'remote' (si falta, el remoto es igual a 'local').",
   "categoryIds": [
     {
       "name": "General",
@@ -632,6 +632,606 @@
       "expect": {
         "a1": 250000,
         "a3": 1000000
+      }
+    }
+  ],
+  "atril": [
+    {
+      "name": "un libro del resumidor suma a su materia",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "counts": {
+          "activities": 1,
+          "sessions": 1
+        },
+        "sessions": {
+          "atril-s1": {
+            "actId": "comu",
+            "start": 1000000,
+            "end": 1600000,
+            "updatedAt": 2000000,
+            "deleted": false
+          }
+        }
+      }
+    },
+    {
+      "name": "un libro sin materia encuentra su actividad aunque cambien tildes, mayúsculas y autor",
+      "local": {
+        "activities": [
+          {
+            "id": "bov",
+            "name": "Bovédas de Acero (Isaac Asimov)",
+            "type": "cat-43a5df0f",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-43a5df0f",
+            "name": "Libro",
+            "updatedAt": 0
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b2",
+            "title": "Bóvedas de acero",
+            "author": "Isaac Asimov",
+            "subject": null
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b2",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "counts": {
+          "activities": 1,
+          "sessions": 1
+        },
+        "sessions": {
+          "atril-s1": {
+            "actId": "bov"
+          }
+        }
+      }
+    },
+    {
+      "name": "un libro sin actividad crea la suya en la categoría Libro",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          },
+          {
+            "id": "cat-43a5df0f",
+            "name": "Libro",
+            "updatedAt": 0
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b9",
+            "title": "Fundación",
+            "author": "Isaac Asimov",
+            "subject": null
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b9",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "counts": {
+          "activities": 2,
+          "sessions": 1
+        },
+        "activities": {
+          "atril-book-b9": {
+            "name": "Fundación (Isaac Asimov)",
+            "type": "cat-43a5df0f",
+            "color": "#B4694F",
+            "updatedAt": 1,
+            "deleted": false
+          }
+        },
+        "sessions": {
+          "atril-s1": {
+            "actId": "atril-book-b9"
+          }
+        }
+      }
+    },
+    {
+      "name": "una sesión de Atril que se cruza con una a mano de la misma actividad queda borrada",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "m1",
+            "actId": "comu",
+            "start": 900000,
+            "end": 1300000,
+            "updatedAt": 3000000
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "counts": {
+          "sessions": 2
+        },
+        "sessions": {
+          "atril-s1": {
+            "deleted": true,
+            "updatedAt": 3000001
+          }
+        }
+      }
+    },
+    {
+      "name": "si la sesión a mano se borra, la de Atril vuelve",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "m1",
+            "actId": "comu",
+            "start": 900000,
+            "end": 1300000,
+            "updatedAt": 4000000,
+            "deleted": true
+          },
+          {
+            "id": "atril-s1",
+            "actId": "comu",
+            "start": 1000000,
+            "end": 1600000,
+            "updatedAt": 3000001,
+            "deleted": true
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "sessions": {
+          "atril-s1": {
+            "deleted": false,
+            "updatedAt": 4000000
+          }
+        }
+      }
+    },
+    {
+      "name": "ya importada y sin cambios: ni cambia ni sube",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "atril-s1",
+            "actId": "comu",
+            "start": 1000000,
+            "end": 1600000,
+            "updatedAt": 2000000,
+            "deleted": false
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": false,
+        "behind": false,
+        "counts": {
+          "sessions": 1
+        }
+      }
+    },
+    {
+      "name": "Atril alargó la sesión: se actualiza",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "atril-s1",
+            "actId": "comu",
+            "start": 1000000,
+            "end": 1600000,
+            "updatedAt": 2000000,
+            "deleted": false
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 900,
+            "updatedAt": 2500000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "sessions": {
+          "atril-s1": {
+            "end": 1900000,
+            "updatedAt": 2500000
+          }
+        }
+      }
+    },
+    {
+      "name": "una importada que borraste a mano no vuelve",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "atril-s1",
+            "actId": "comu",
+            "start": 1000000,
+            "end": 1600000,
+            "updatedAt": 9000000,
+            "deleted": true
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": false,
+        "behind": false,
+        "sessions": {
+          "atril-s1": {
+            "deleted": true
+          }
+        }
+      }
+    },
+    {
+      "name": "la bandeja de otro perfil se ignora",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "otro",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": false,
+        "behind": false,
+        "counts": {
+          "activities": 1,
+          "sessions": 0
+        }
+      }
+    },
+    {
+      "name": "menos de un minuto no cuenta",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "listen",
+            "start": 1000000,
+            "seconds": 30,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": false,
+        "behind": false,
+        "counts": {
+          "sessions": 0
+        }
       }
     }
   ]

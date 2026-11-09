@@ -66,6 +66,25 @@ for (const c of fixtures.merge) {
   });
 }
 
+for (const c of fixtures.atril) {
+  check("atril: " + c.name, () => {
+    load(c.local);
+    const remote = c.remote || JSON.parse(JSON.stringify(Object.assign({ categories: [] }, c.local)));
+    const res = Store.merge("default", remote, c.inbox);
+    const o = Store.root();
+    assert.strictEqual(res.changed, c.expect.changed, "changed");
+    assert.strictEqual(res.upload !== null, c.expect.behind, "behind");
+    for (const [k, n] of Object.entries(c.expect.counts || {})) assert.strictEqual(o[k].length, n, "count " + k);
+    for (const kind of ["activities", "sessions"]) {
+      for (const [id, fields] of Object.entries(c.expect[kind] || {})) {
+        const e = o[kind].find(x => x.id === id);
+        assert.ok(e, "falta " + kind + "/" + id);
+        for (const [f, v] of Object.entries(fields)) assert.deepStrictEqual(f === "deleted" ? !!e[f] : e[f], v, kind + "/" + id + "." + f);
+      }
+    }
+  });
+}
+
 const realNow = Date.now;
 for (const c of fixtures.stats) {
   check("stats: " + c.name, () => {

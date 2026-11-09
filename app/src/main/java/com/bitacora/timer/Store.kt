@@ -764,6 +764,8 @@ object Store {
     /**
      * Fusiona el bucket remoto (null = todavía no existe) con el dataset de profileId.
      *
+     * atril: la bandeja de Atril (null si no hay o no se pudo bajar), ver AtrilImport.
+     *
      * Devuelve null si el perfil activo ya no es profileId: el remoto se bajó para OTRO
      * perfil, y fusionarlo acá mezclaría los datasets de dos personas — y la subida
      * posterior llevaría la mezcla al bucket equivocado, contaminando los dos para
@@ -772,10 +774,13 @@ object Store {
      * la escritura.
      */
     @Synchronized
-    fun merge(ctx: Context, profileId: String, remote: JSONObject?): MergeResult? {
+    fun merge(ctx: Context, profileId: String, remote: JSONObject?, atril: JSONObject? = null): MergeResult? {
         if (currentProfileId(ctx) != profileId) return null
         val obj = root(ctx)
-        val changed = mergeData(obj, remote)
+        var changed = mergeData(obj, remote)
+        // Lo que llegó de Atril entra después de lo remoto: así ve las sesiones a mano que
+        // trajeron los otros dispositivos (ver AtrilImport).
+        changed = AtrilImport.fold(obj, atril, profileId) || changed
         // Solo se escribe (y sube Store.revision, que hace redibujar la UI) si algo
         // cambió de verdad: antes cada sync escribía igual, y la pantalla abierta, la
         // notificación y los widgets se reconstruían en cada ciclo sin motivo.

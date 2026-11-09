@@ -20,6 +20,8 @@ object Config {
     // perfiles del mismo USER_KEY: cada entrada dice qué perfil tiene activo cada
     // dispositivo, para despertar solo a los que corresponde.
     val DEVICES_KEY = "$USER_KEY::devices"
+    // Bandeja de Atril: la escribe solo Atril, Bitácora solo la lee (ver AtrilImport).
+    val ATRIL_KEY = "$USER_KEY::atril"
     fun bucketKey(profileId: String): String =
         if (profileId == DEFAULT_PROFILE || profileId.isEmpty()) USER_KEY else "$USER_KEY::$profileId"
 

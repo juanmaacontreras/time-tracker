@@ -37,7 +37,9 @@ object Sync {
      */
     fun syncProfile(ctx: Context, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Boolean {
         val pid = Store.currentProfileId(ctx)
-        return syncBucket(Config.bucketKey(pid), timeoutMs) { remote -> Store.merge(ctx, pid, remote) }
+        // La bandeja de Atril es opcional: si no existe o falla la bajada, se sigue sin ella.
+        val atril = if (Config.syncEnabled()) try { pull(Config.ATRIL_KEY, timeoutMs) } catch (e: Exception) { null } else null
+        return syncBucket(Config.bucketKey(pid), timeoutMs) { remote -> Store.merge(ctx, pid, remote, atril) }
     }
 
     /** Solo el índice de perfiles (pantalla de selección, renombres y temas). */

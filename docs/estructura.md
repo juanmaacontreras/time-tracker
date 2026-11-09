@@ -17,6 +17,7 @@ app/src/main/java/com/bitacora/timer/
   Themes.kt         — 5 paletas de color, resuelve @color/indigo y @color/live según el tema del perfil activo.
   Sync.kt           — pull → merge → push-si-hace-falta contra Supabase, por "bucket key". Todo devuelve "¿cambió algo?".
   Merge.kt          — fusión por updatedAt (Merge.list) y detección de "el remoto quedó atrás" (Merge.behind), común a los 3 buckets.
+  AtrilImport.kt    — convierte la bandeja de Atril (USER_KEY::atril) en actividades y sesiones; ver docs/atril.md.
   Surfaces.kt       — refresca notificación + los dos widgets juntos (solo tras un cambio real).
   SyncWorker.kt     — WorkManager, corre cada ~1 h en background aunque la app esté cerrada (red de seguridad del push).
   TimerWidget.kt / ResumenWidget.kt — widgets de home screen.

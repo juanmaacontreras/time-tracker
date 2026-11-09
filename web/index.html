@@ -509,6 +509,8 @@ const CFG = {
    userKey base tal cual; los demás usan userKey::<id>. El índice va en userKey::index. */
 const BASE = CFG.userKey;
 const INDEX_KEY = BASE + "::index";
+// Bandeja de Atril: la escribe solo Atril, Bitácora solo la lee (ver AtrilImport).
+const ATRIL_KEY = BASE + "::atril";
 const bucketKey = pid => (!pid || pid === "default") ? BASE : BASE + "::" + pid;
 
 /* 5 temas: cada uno cambia el acento (indigo) y el "corriendo" (live). Los neutros
@@ -968,7 +970,8 @@ const Store = {
   // Devuelve null si el perfil activo ya no es pid (el remoto se bajó para OTRO perfil:
   // fusionarlo mezclaría los datos de dos personas). Si no, { changed, upload }:
   // upload !== null significa que el remoto quedó atrás y hay que subir eso.
-  merge(pid, remote) {
+  // atril: la bandeja de Atril (null si no hay o no se pudo bajar), ver AtrilImport.
+  merge(pid, remote, atril) {
     if (this.currentProfileId() !== pid) return null;
     const o = this.root();
     const r = remote || {};
@@ -985,6 +988,8 @@ const Store = {
       o.runPausedAccum = rr.pausedAccum || 0; o.runChangedAt = remoteRunAt;
       changed = true;
     }
+    // Lo de Atril entra después de lo remoto: así ve las sesiones a mano de los otros dispositivos.
+    changed = AtrilImport.fold(o, atril, pid) || changed;
     if (changed) this.write(o);
     const behind = isBehind(r.activities, o.activities) || isBehind(r.sessions, o.sessions) ||
       isBehind(r.categories, o.categories) || (o.runChangedAt || 0) > remoteRunAt;
@@ -1016,6 +1021,71 @@ function isBehind(remoteArr, local) {
   if (Array.isArray(remoteArr)) for (const r of remoteArr) if (r && r.id) remote[r.id] = r;
   return local.some(l => !remote[l.id] || (l.updatedAt || 0) > (remote[l.id].updatedAt || 0));
 }
+
+/* ====================== ATRIL (espejo de AtrilImport.kt) ======================
+   Sesiones de lectura y escucha que publica Atril en el bucket BASE::atril (docs/atril.md).
+   Se convierten en actividades y sesiones normales y pasan por mergeList. Pura y
+   determinística: dos dispositivos arman las mismas entradas (ids y updatedAt). Las reglas
+   (a qué actividad va cada libro, qué pasa si se cruza con una sesión a mano) están en el
+   comentario de AtrilImport.kt; los casos "atril" de tests/fixtures/shared.json corren
+   contra los dos lados. */
+const AtrilImport = {
+  VERSION: 1, SESSION_PREFIX: "atril-", BOOK_PREFIX: "atril-book-", MIN_SECONDS: 60,
+  key(s) {
+    const plain = (s || "").toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "")
+      .replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ");
+    return plain.split(" ").filter(w => w.length > 2).join(" ");
+  },
+  _activityNamed(acts, name) {
+    const k = this.key(name);
+    if (!k) return null;
+    const hits = acts.filter(a => this.key(a.name) === k).sort((x, y) =>
+      (!!x.archived - !!y.archived) ||
+      ((x.id || "").startsWith(this.SESSION_PREFIX) - (y.id || "").startsWith(this.SESSION_PREFIX)) ||
+      (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+    return hits.length ? hits[0].id : null;
+  },
+  // Incorpora la bandeja a o (el root del perfil). Devuelve true si o cambió.
+  fold(o, inbox, pid) {
+    if (!inbox || inbox.v !== this.VERSION || inbox.profile !== pid) return false;
+    const acts = o.activities.filter(a => a && !a.deleted);
+    const libros = o.categories.filter(c => c && !c.deleted && this.key(c.name) === "libro")
+      .map(c => c.id).sort();
+    const libro = libros.length ? libros[0] : "";
+    const newActs = [], actOf = {};
+    for (const b of inbox.books || []) {
+      if (!b || !b.id) continue;
+      const title = b.title || "", author = b.author || "", subject = b.subject || "";
+      const found = (subject ? this._activityNamed(acts, subject) : null) || this._activityNamed(acts, title);
+      if (found) { actOf[b.id] = found; continue; }
+      const id = this.BOOK_PREFIX + b.id;
+      actOf[b.id] = id;
+      const hash = parseInt(Store._stableCategoryId(b.id).slice(4), 16);
+      newActs.push({ id, name: author ? `${title} (${author})` : title, type: libro,
+        color: COLORS[hash % COLORS.length], archived: false, updatedAt: 1, deleted: false });
+    }
+    let changed = mergeList(o.activities, newActs);
+    const manual = o.sessions.filter(m => m && !(m.id || "").startsWith(this.SESSION_PREFIX));
+    const newSessions = [];
+    for (const s of inbox.sessions || []) {
+      const actId = s && actOf[s.bookId];
+      if (!actId || !s.id || !((s.seconds || 0) >= this.MIN_SECONDS)) continue;
+      const start = s.start || 0, end = start + s.seconds * 1000;
+      // Las sesiones a mano de la misma actividad que se cruzan (vivas o borradas) llevan
+      // el updatedAt: borrar o agregar una a mano siempre le gana a lo que había.
+      let stamp = s.updatedAt || 0, covered = false;
+      for (const m of manual) {
+        if (m.actId !== actId || (m.start || 0) >= end || (m.end || 0) <= start) continue;
+        stamp = Math.max(stamp, m.updatedAt || 0);
+        if (!m.deleted) covered = true;
+      }
+      newSessions.push({ id: this.SESSION_PREFIX + s.id, actId, start, end,
+        updatedAt: stamp + (covered ? 1 : 0), deleted: covered });
+    }
+    changed = mergeList(o.sessions, newSessions) || changed;
+    return changed;
+  }
+};
 
 /* ====================== PROFILE STORE (índice de perfiles) ====================== */
 const ProfileStore = {
@@ -1107,7 +1177,9 @@ async function sync(afterLocalChange = false) {
     // El perfil se fija UNA vez, antes de bajar: si el usuario cambia de perfil mientras
     // tanto, Store.merge lo detecta y descarta el ciclo (no mezcla datos de dos perfiles).
     const pid = Store.currentProfileId();
-    const dataChanged = await syncBucket(bucketKey(pid), r => Store.merge(pid, r));
+    // La bandeja de Atril es opcional: si no existe o falla la bajada, se sigue sin ella.
+    const atril = await pull(ATRIL_KEY).catch(() => null);
+    const dataChanged = await syncBucket(bucketKey(pid), r => Store.merge(pid, r, atril));
     setSync("ok");
     // Solo se redibuja si llegó algo: este ciclo corre cada 10 s.
     if (indexChanged || dataChanged) onRemoteChange();

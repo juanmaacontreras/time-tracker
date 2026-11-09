@@ -53,6 +53,7 @@ claude-budget                     # contexto al arrancar, meta < 3000 tokens
 | tocar perfiles, categorías, push, Store, diseño, temas, la web o la firma | `docs/arquitectura.md` |
 | tocar sync, widgets, notificación, service worker, Realtime o dedupe | `docs/gotchas.md` |
 | saber qué está confirmado en dispositivo | `docs/estado.md` |
+| tocar lo que llega de Atril (bandeja `::atril`, AtrilImport) | `docs/atril.md` |
 | proponer trabajo nuevo (seguridad del repo público, tokens FCM, datos por fila) | `docs/pendiente.md` |
 
 Lo nuevo va al `docs/` que corresponda. Sumá una línea acá solo si vale para

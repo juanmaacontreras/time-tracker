@@ -68,6 +68,37 @@ class SharedFixturesTest {
         }
     }
 
+    @Test
+    fun atril() {
+        val cases = fixtures.getJSONArray("atril")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val name = c.getString("name")
+            val obj = dataset(c.getJSONObject("local"))
+            val remote = c.optJSONObject("remote") ?: dataset(c.getJSONObject("local"))
+            val exp = c.getJSONObject("expect")
+            // Mismo orden que Store.merge: primero lo remoto, después la bandeja de Atril.
+            var changed = Store.mergeData(obj, remote)
+            changed = AtrilImport.fold(obj, c.getJSONObject("inbox"), "default") || changed
+            assertEquals("$name: changed", exp.getBoolean("changed"), changed)
+            assertEquals("$name: behind", exp.getBoolean("behind"), Store.remoteBehind(obj, remote))
+            exp.optJSONObject("counts")?.let { counts ->
+                for (k in counts.keys()) assertEquals("$name: count $k", counts.getInt(k), obj.getJSONArray(k).length())
+            }
+            for (kind in listOf("activities", "sessions")) {
+                val want = exp.optJSONObject(kind) ?: continue
+                val have = byId(obj.getJSONArray(kind))
+                for (id in want.keys()) {
+                    val fields = want.getJSONObject(id)
+                    val entry = have[id] ?: throw AssertionError("$name: falta $kind/$id")
+                    for (f in fields.keys()) {
+                        assertEquals("$name: $kind/$id.$f", fields.get(f).toString(), entry.opt(f)?.toString() ?: defaultOf(f))
+                    }
+                }
+            }
+        }
+    }
+
     // "deleted" ausente equivale a false, igual que en Store.
     private fun defaultOf(field: String): String = if (field == "deleted") "false" else "null"
 

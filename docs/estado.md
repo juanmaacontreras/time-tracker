@@ -26,6 +26,10 @@ Confirmado funcionando en dispositivo real:
   última vez, swatch de identidad en las filas, se refresca por minuto con algo
   corriendo, cambiar Día/Semana/Mes conserva la fecha (`offsetFor`), tocar la fecha
   vuelve a hoy, ←/→ en la web. Metas diarias: descartadas por el usuario, no proponer.
+- ⏳ **Día: tramos seguidos cuentan como una sesión** (2026-11-15, app + web, casos `blocks`):
+  "sesiones" y "la más larga" unen los tramos de la misma actividad con hasta 2 minutos
+  entre uno y otro (`Store.sessionBlocks`); el Kobo avisa de a pedacitos de un minuto. La
+  línea de tiempo dibuja los tramos tal cual. Sin confirmar en dispositivo.
 - ⏳ **Resumen: la leyenda primero y "sin tiempo" plegada** (2026-11-15, app + web, elegido por
   el usuario mirando la captura): "Por categoría" va arriba de "Por actividad", pegada al
   gráfico, porque es la leyenda de los colores de las barras; "Sin tiempo este período" es un

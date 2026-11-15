@@ -129,6 +129,18 @@ class SharedFixturesTest {
     }
 
     @Test
+    fun blocks() {
+        val cases = fixtures.getJSONArray("blocks")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            fun triples(key: String) = c.getJSONArray(key).let { a ->
+                (0 until a.length()).map { j -> a.getJSONArray(j).let { Triple(it.getString(0), it.getLong(1), it.getLong(2)) } }
+            }
+            assertEquals(c.getString("name"), triples("expect"), Store.sessionBlocks(triples("sessions")))
+        }
+    }
+
+    @Test
     fun lastEnd() {
         val cases = fixtures.getJSONArray("lastEnd")
         for (i in 0 until cases.length()) {

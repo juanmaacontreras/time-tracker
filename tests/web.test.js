@@ -109,6 +109,13 @@ for (const c of fixtures.sessions) {
   });
 }
 
+for (const c of fixtures.blocks) {
+  check("tramos: " + c.name, () => {
+    const got = Store.sessionBlocks(c.sessions.map(([actId, start, end]) => ({ actId, start, end }))).map(x => [x.actId, x.start, x.end]);
+    assert.deepStrictEqual(got, c.expect);
+  });
+}
+
 for (const c of fixtures.lastEnd) {
   check("última vez: " + c.name, () => {
     load(c.data);

@@ -25,8 +25,8 @@ import java.util.Locale
  *     "Bovédas de Acero (Isaac Asimov)": se comparan sin tildes, sin lo que va entre
  *     paréntesis y sin palabras de una o dos letras).
  *  3. Si no hay ninguna, a una actividad nueva "Título (Autor)" en la categoría Libro.
- * Una sesión de Atril que se superpone con una sesión cargada a mano en la misma actividad
- * queda borrada: ese rato ya lo contó el cronómetro.
+ * Una sesión de Atril que se superpone con una sesión cargada a mano, de la actividad que
+ * sea, queda borrada: ese rato ya lo contó el cronómetro y no puede contar dos veces.
  */
 object AtrilImport {
     const val VERSION = 1
@@ -105,13 +105,12 @@ object AtrilImport {
             if (seconds < MIN_SECONDS || s.optString("id", "").isEmpty()) continue
             val start = s.optLong("start", 0L)
             val end = start + seconds * 1000
-            // Sesiones a mano de la misma actividad que se cruzan, vivas o borradas: el
+            // Sesiones a mano que se cruzan, de cualquier actividad, vivas o borradas: el
             // updatedAt de la importada sigue al más nuevo de ellas, así borrar o agregar
             // una a mano siempre le gana a lo que había.
             var stamp = s.optLong("updatedAt", 0L)
             var covered = false
             for (m in manual) {
-                if (m.optString("actId") != actId) continue
                 if (m.optLong("start", 0L) >= end || m.optLong("end", 0L) <= start) continue
                 stamp = maxOf(stamp, m.optLong("updatedAt", 0L))
                 if (!m.optBoolean("deleted", false)) covered = true

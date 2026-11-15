@@ -876,6 +876,18 @@ const Store = {
     return out;
   },
   // Sesiones (guardadas + la en curso) recortadas a [from, to), ordenadas por inicio.
+  // Tramos seguidos de la misma actividad (hasta BLOCK_GAP_MS entre uno y el siguiente)
+  // contados como una sola sesión, para los números del Día. Espejo de Store.sessionBlocks.
+  BLOCK_GAP_MS: 2 * 60000,
+  sessionBlocks(sessions) {
+    const out = [], open = {};
+    for (const s of sessions) {
+      const b = open[s.actId];
+      if (b && s.start - b.end <= this.BLOCK_GAP_MS) { if (s.end > b.end) b.end = s.end; }
+      else out.push(open[s.actId] = { actId: s.actId, start: s.start, end: s.end });
+    }
+    return out;
+  },
   // Base de la línea de tiempo del Día. Espejo de Store.sessionsBetween en Kotlin.
   sessionsBetween(from, to) {
     const out = [];
@@ -1071,11 +1083,11 @@ const AtrilImport = {
       const actId = s && actOf[s.bookId];
       if (!actId || !s.id || !((s.seconds || 0) >= this.MIN_SECONDS)) continue;
       const start = s.start || 0, end = start + s.seconds * 1000;
-      // Las sesiones a mano de la misma actividad que se cruzan (vivas o borradas) llevan
+      // Las sesiones a mano que se cruzan, de cualquier actividad (vivas o borradas), llevan
       // el updatedAt: borrar o agregar una a mano siempre le gana a lo que había.
       let stamp = s.updatedAt || 0, covered = false;
       for (const m of manual) {
-        if (m.actId !== actId || (m.start || 0) >= end || (m.end || 0) <= start) continue;
+        if ((m.start || 0) >= end || (m.end || 0) <= start) continue;
         stamp = Math.max(stamp, m.updatedAt || 0);
         if (!m.deleted) covered = true;
       }
@@ -1717,7 +1729,8 @@ function comparisonLine(total, from, to, actIds) {
 function buildKpis(items) {
   return h("div", { class: "kpis" }, items.map(([v, l]) => h("div", { class: "kpi" }, h("b", { class: "num" }, v), h("span", null, l))));
 }
-function dayKpis(sessions) {
+function dayKpis(all) {
+  const sessions = Store.sessionBlocks(all);
   const longest = Math.max(...sessions.map(s => s.end - s.start));
   const first = sessions[0].start, last = Math.max(...sessions.map(s => s.end));
   return [

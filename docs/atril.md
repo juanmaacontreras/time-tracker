@@ -38,9 +38,14 @@ fusionar el remoto, se convierte en entradas normales que pasan por `Merge.list`
   categoría Libro (`updatedAt: 1`, así cualquier cambio tuyo le gana). Los nombres se
   comparan sin tildes, sin mayúsculas, sin lo que va entre paréntesis y sin palabras de
   una o dos letras: "Bóvedas de acero" encuentra "Bovédas de Acero (Isaac Asimov)".
-- **Superposición**: si una sesión cargada a mano en la misma actividad se cruza con una de
-  Atril, la de Atril queda borrada (ese rato ya lo contó el cronómetro). Su `updatedAt`
-  sigue al de esas sesiones a mano, así que borrar la de mano la hace volver.
+- **Superposición**: si una sesión cargada a mano, **de cualquier actividad**, se cruza con una
+  de Atril, la de Atril queda borrada (ese rato ya lo contó el cronómetro y no puede contar
+  dos veces). Su `updatedAt` sigue al de esas sesiones a mano, así que borrar la de mano la
+  hace volver. Hasta el 2026-11-15 la regla miraba solo la misma actividad: con los datos
+  reales había 11 h 22 min contadas dos veces (cronómetro en "Bovédas de Acero" mientras
+  Atril mandaba "El sol desnudo" o "Los robots del amanecer"). Con la regla nueva octubre
+  pasa de 27,9 h a 20,0 h y noviembre de 26,5 h a 22,8 h; se pierden 26 min de lectura real
+  en los bordes. Vale para lo que sigue en la bandeja (60 días).
 - Mientras el cronómetro corre, la sesión de Atril se ve; al pararlo, la regla anterior la
   borra.
 

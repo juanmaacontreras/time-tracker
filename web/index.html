@@ -1169,7 +1169,7 @@ function setSync(state) { const d = document.getElementById("syncDot"); d.classN
 // la regla más importante: cada escritura dispara el push que despierta a los teléfonos.
 // Devuelve true si algo local cambió.
 async function syncBucket(userKey, mergeFn) {
-  const result = mergeFn(await pull(userKey));
+  const result = await mergeFn(await pull(userKey));
   if (!result) return false;
   if (result.upload) await push(userKey, result.upload);
   return result.changed;
@@ -1185,13 +1185,23 @@ async function sync(afterLocalChange = false) {
   syncing = true; syncAgain = false; lastSyncAt = Date.now(); setSync("sync");
   Live.watch([INDEX_KEY, bucketKey(Store.currentProfileId())]);
   try {
-    const indexChanged = await syncIndex();
     // El perfil se fija UNA vez, antes de bajar: si el usuario cambia de perfil mientras
     // tanto, Store.merge lo detecta y descarta el ciclo (no mezcla datos de dos perfiles).
     const pid = Store.currentProfileId();
+    // Las tres bajadas salen a la vez (índice, bandeja de Atril, bucket del perfil): en
+    // fila, el cambio del cronómetro — lo que los demás dispositivos esperan — salía o se
+    // veía recién después de las otras dos. La fusión del perfil espera a su bucket y a
+    // la bandeja, así que tarda lo que la más lenta y no la suma.
     // La bandeja de Atril es opcional: si no existe o falla la bajada, se sigue sin ella.
-    const atril = await pull(ATRIL_KEY).catch(() => null);
-    const dataChanged = await syncBucket(bucketKey(pid), r => Store.merge(pid, r, atril));
+    const atril = pull(ATRIL_KEY).catch(() => null);
+    // allSettled: el ciclo termina cuando terminaron los dos, aunque uno falle.
+    const done = await Promise.allSettled([
+      syncIndex(),
+      syncBucket(bucketKey(pid), async r => Store.merge(pid, r, await atril)),
+    ]);
+    const failed = done.find(d => d.status === "rejected");
+    if (failed) throw failed.reason;
+    const [indexChanged, dataChanged] = done.map(d => d.value);
     setSync("ok");
     // Solo se redibuja si llegó algo: este ciclo corre cada 10 s.
     if (indexChanged || dataChanged) onRemoteChange();
@@ -2270,7 +2280,7 @@ function afterMutation() {
   render();
   // sube el cambio local enseguida; el pull+merge periódico trae lo de otros dispositivos.
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => sync(true), 250);
+  pushTimer = setTimeout(() => sync(true), 50);
 }
 
 /* Tab switching */

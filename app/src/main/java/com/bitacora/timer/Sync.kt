@@ -21,10 +21,16 @@ object Sync {
 
     const val DEFAULT_TIMEOUT_MS = 12000
 
-    /** Índice de perfiles + perfil activo. */
+    /**
+     * Índice de perfiles + perfil activo, los dos a la vez: son buckets distintos, y en
+     * fila el cambio del cronómetro (lo que los demás dispositivos están esperando) salía
+     * recién después de bajar el índice.
+     */
     fun syncNow(ctx: Context): Boolean {
-        val index = syncIndex(ctx)
+        var index = false
+        val side = Thread { index = syncIndex(ctx) }.apply { start() }
         val data = syncProfile(ctx)
+        side.join()
         return index || data
     }
 
@@ -37,9 +43,18 @@ object Sync {
      */
     fun syncProfile(ctx: Context, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Boolean {
         val pid = Store.currentProfileId(ctx)
+        if (!Config.syncEnabled()) return false
         // La bandeja de Atril es opcional: si no existe o falla la bajada, se sigue sin ella.
-        val atril = if (Config.syncEnabled()) try { pull(Config.ATRIL_KEY, timeoutMs) } catch (e: Exception) { null } else null
-        return syncBucket(Config.bucketKey(pid), timeoutMs) { remote -> Store.merge(ctx, pid, remote, atril) }
+        // Se baja a la vez que el bucket del perfil, no antes: la fusión espera a las dos
+        // bajadas, así que tarda lo que la más lenta y no la suma.
+        var atril: JSONObject? = null
+        val side = Thread {
+            atril = try { pull(Config.ATRIL_KEY, timeoutMs) } catch (e: Exception) { null }
+        }.apply { start() }
+        return syncBucket(Config.bucketKey(pid), timeoutMs) { remote ->
+            side.join()
+            Store.merge(ctx, pid, remote, atril)
+        }
     }
 
     /** Solo el índice de perfiles (pantalla de selección, renombres y temas). */

@@ -110,19 +110,7 @@ internal fun MainActivity.renderResumen() {
         else card.addView(buildMonthCalendar(from, days, elapsedDays))
     }
 
-    if (perAct.isNotEmpty()) {
-        resumenView.addView(sectionHeader("Por actividad"))
-        val list = listCard()
-        for ((i, pair) in perAct.withIndex()) {
-            val a = pair.first
-            val color = parseColor(a.optString("color"))
-            val sw = swatch(color, Store.categoryForActivity(this, a).optString("icon", ""), a.getString("name"), 34, false)
-            list.addView(statRow(sw, a.getString("name"), color, pair.second, total, first = i == 0))
-        }
-        resumenView.addView(list)
-    }
-
-    // Por categoría siempre abierta: es también la leyenda de los colores del gráfico.
+    // Por categoría va primero y siempre abierta: es la leyenda de los colores del gráfico.
     if (statsCategory == "all") {
         val entries = categorySums(allActs, secs).entries.sortedByDescending { it.value }
         if (entries.size > 1 || (entries.size == 1 && statsPeriod == "week")) {
@@ -141,13 +129,40 @@ internal fun MainActivity.renderResumen() {
         }
     }
 
+    if (perAct.isNotEmpty()) {
+        resumenView.addView(sectionHeader("Por actividad"))
+        val list = listCard()
+        for ((i, pair) in perAct.withIndex()) {
+            val a = pair.first
+            val color = parseColor(a.optString("color"))
+            val sw = swatch(color, Store.categoryForActivity(this, a).optString("icon", ""), a.getString("name"), 34, false)
+            list.addView(statRow(sw, a.getString("name"), color, pair.second, total, first = i == 0))
+        }
+        resumenView.addView(list)
+    }
+
     // Lo que no se tocó en el período, con cuándo fue la última vez.
     val idle = acts.filter { !it.optBoolean("archived", false) && (secs[it.getString("id")] ?: 0L) <= 0L }
     if (idle.isNotEmpty()) {
         val last = Store.lastEndByActivity(this)
         val sorted = idle.sortedWith(compareByDescending<JSONObject> { last[it.getString("id")] ?: 0L }
             .thenBy { it.optString("name", "") })
-        resumenView.addView(sectionHeader("Sin tiempo este período"))
+        // Plegada: con varias actividades sin uso ocupaba media pantalla.
+        val fold = LinearLayout(this)
+        fold.orientation = LinearLayout.HORIZONTAL
+        fold.gravity = Gravity.CENTER
+        fold.setPadding(dp(14), dp(14), dp(14), dp(14))
+        fold.background = withRipple(rounded(col(R.color.card), 16), dp(16).toFloat())
+        fold.layoutParams = lp(top = 18)
+        val ft = label(if (idle.size == 1) "1 actividad sin tiempo este período" else "${idle.size} actividades sin tiempo este período",
+            14f, col(R.color.muted), bold = true)
+        ft.setPadding(0, 0, dp(6), 0)
+        fold.addView(ft)
+        val chev = iconView(R.drawable.ic_chevron_down, col(R.color.muted), 18)
+        if (idleOpen) chev.rotation = 180f
+        fold.addView(chev)
+        fold.setOnClickListener { idleOpen = !idleOpen; renderResumen() }
+        resumenView.addView(fold)
         val il = listCard()
         for ((i, a) in sorted.withIndex()) {
             val box = rowBox(first = i == 0)
@@ -166,7 +181,7 @@ internal fun MainActivity.renderResumen() {
             box.addView(top)
             il.addView(box)
         }
-        resumenView.addView(il)
+        if (idleOpen) resumenView.addView(il)
     }
 
     resumenView.addView(buildExportButton())

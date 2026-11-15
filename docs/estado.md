@@ -30,6 +30,14 @@ Confirmado funcionando en dispositivo real:
   "sesiones" y "la más larga" unen los tramos de la misma actividad con hasta 2 minutos
   entre uno y otro (`Store.sessionBlocks`); el Kobo avisa de a pedacitos de un minuto. La
   línea de tiempo dibuja los tramos tal cual. Sin confirmar en dispositivo.
+- ⏳ **Resumen: la leyenda primero y "sin tiempo" plegada** (2026-11-15, app + web, elegido por
+  el usuario mirando la captura): "Por categoría" va arriba de "Por actividad", pegada al
+  gráfico, porque es la leyenda de los colores de las barras; "Sin tiempo este período" es un
+  renglón ("6 actividades sin tiempo este período") que se abre y se cierra al tocarlo
+  (`idleOpen`, no se guarda entre aperturas). Web verificada con capturas en claro y oscuro;
+  la app solo compilada por CI, sin captura ni dispositivo. La lista del Cronómetro no se
+  toca: cada libro de Atril conserva su actividad con play (sirve para leer en papel) y el
+  usuario la archiva al terminarlo; no proponer ocultarlos ni agruparlos.
 - ✅ Categorías como entidad, con ícono y color propios, desplegable de selección y
   alta/edición/borrado (app + web). Migración desde los `type` de texto libre.
 - ⏳ **Notificación y widgets pulidos (octubre de 2026)**, verificado con capturas en claro y

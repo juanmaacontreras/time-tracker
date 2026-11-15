@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     internal var statsCategory = "all"
     internal var statsOffset = 0  // 0 = período actual, -1 = el anterior, etc.
     internal var showArchived = false
+    internal var idleOpen = false  // Resumen: "sin tiempo este período", plegada hasta que se toca
 
     internal val todayViews = HashMap<String, TextView>()
     internal val expandedIds = HashSet<String>()

@@ -597,6 +597,29 @@ object Store {
     @Synchronized
     fun sessionsBetween(ctx: Context, from: Long, to: Long) = sessionsBetween(root(ctx), from, to, now())
 
+    // Tramos seguidos de la misma actividad (hasta BLOCK_GAP_MS entre uno y el siguiente)
+    // contados como una sola sesión: el Kobo avisa su lectura de a pedacitos de un minuto y,
+    // sin esto, un rato de lectura figuraba como diez sesiones. Solo para los números del
+    // Día ("sesiones", "la más larga"); la línea de tiempo dibuja los tramos tal cual.
+    // Pura (tests compartidos). Espera la salida de sessionsBetween (ordenada por inicio).
+    const val BLOCK_GAP_MS = 2 * 60_000L
+    internal fun sessionBlocks(sessions: List<Triple<String, Long, Long>>): List<Triple<String, Long, Long>> {
+        val out = ArrayList<LongArray>()
+        val ids = ArrayList<String>()
+        val open = HashMap<String, Int>()
+        for (s in sessions) {
+            val i = open[s.first]
+            if (i != null && s.second - out[i][1] <= BLOCK_GAP_MS) {
+                if (s.third > out[i][1]) out[i][1] = s.third
+            } else {
+                open[s.first] = out.size
+                ids.add(s.first)
+                out.add(longArrayOf(s.second, s.third))
+            }
+        }
+        return out.indices.map { Triple(ids[it], out[it][0], out[it][1]) }
+    }
+
     @Synchronized
     fun lastEndByActivity(ctx: Context) = lastEndByActivity(root(ctx), now())
 

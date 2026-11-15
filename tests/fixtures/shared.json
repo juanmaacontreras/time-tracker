@@ -1,5 +1,5 @@
 {
-  "_about": "Casos compartidos entre la app (app/src/test/.../SharedFixturesTest.kt) y la web (tests/web.test.js). Los dos lados (incluidas las estadísticas del Resumen: sesiones de un período y última vez por actividad) corren estos mismos casos contra su propio código: si alguno da distinto, la sincronización entre ellos se rompería. Para agregar un caso, agregarlo acá y correr los dos tests. En 'expect', cada entidad lista solo los campos a verificar; 'counts' verifica cuántas entradas hay en total (vivas y borradas). 'atril': la bandeja de Atril (AtrilImport) se aplica después de fusionar 'remote' (si falta, el remoto es igual a 'local').",
+  "_about": "Casos compartidos entre la app (app/src/test/.../SharedFixturesTest.kt) y la web (tests/web.test.js). Los dos lados (incluidas las estadísticas del Resumen: sesiones de un período y última vez por actividad) corren estos mismos casos contra su propio código: si alguno da distinto, la sincronización entre ellos se rompería. Para agregar un caso, agregarlo acá y correr los dos tests. En 'expect', cada entidad lista solo los campos a verificar; 'counts' verifica cuántas entradas hay en total (vivas y borradas). 'atril': la bandeja de Atril (AtrilImport) se aplica después de fusionar 'remote' (si falta, el remoto es igual a 'local'). 'blocks': tramos seguidos de la misma actividad contados como una sola sesión (Store.sessionBlocks), para los números del Día.",
   "categoryIds": [
     {
       "name": "General",
@@ -1233,6 +1233,272 @@
           "sessions": 0
         }
       }
+    },
+    {
+      "name": "una sesión de Atril que se cruza con una a mano de OTRA actividad también queda borrada",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          },
+          {
+            "id": "gim",
+            "name": "Gimnasio",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "m1",
+            "actId": "gim",
+            "start": 900000,
+            "end": 1300000,
+            "updatedAt": 3000000
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "read",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "counts": {
+          "sessions": 2
+        },
+        "sessions": {
+          "atril-s1": {
+            "deleted": true,
+            "updatedAt": 3000001,
+            "actId": "comu"
+          },
+          "m1": {
+            "deleted": false
+          }
+        }
+      }
+    },
+    {
+      "name": "una a mano de otra actividad que termina justo cuando empieza la de Atril no la borra",
+      "local": {
+        "activities": [
+          {
+            "id": "comu",
+            "name": "Sistemas de Comunicaciones",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          },
+          {
+            "id": "gim",
+            "name": "Gimnasio",
+            "type": "cat-5263aa4c",
+            "updatedAt": 5
+          }
+        ],
+        "categories": [
+          {
+            "id": "cat-5263aa4c",
+            "name": "Materia",
+            "updatedAt": 0
+          }
+        ],
+        "sessions": [
+          {
+            "id": "m1",
+            "actId": "gim",
+            "start": 400000,
+            "end": 1000000,
+            "updatedAt": 3000000
+          }
+        ]
+      },
+      "inbox": {
+        "v": 1,
+        "profile": "default",
+        "books": [
+          {
+            "id": "b1",
+            "title": "Sistemas de Comunicaciones — Segundo parcial",
+            "author": null,
+            "subject": "Sistemas de Comunicaciones"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "s1",
+            "bookId": "b1",
+            "kind": "read",
+            "start": 1000000,
+            "seconds": 600,
+            "updatedAt": 2000000
+          }
+        ]
+      },
+      "expect": {
+        "changed": true,
+        "behind": true,
+        "sessions": {
+          "atril-s1": {
+            "deleted": false,
+            "updatedAt": 2000000
+          }
+        }
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "name": "tramos seguidos de la misma actividad son una sola sesión",
+      "sessions": [
+        [
+          "a",
+          0,
+          60000
+        ],
+        [
+          "a",
+          70000,
+          130000
+        ],
+        [
+          "a",
+          250000,
+          300000
+        ]
+      ],
+      "expect": [
+        [
+          "a",
+          0,
+          300000
+        ]
+      ]
+    },
+    {
+      "name": "más de dos minutos de pausa: otra sesión",
+      "sessions": [
+        [
+          "a",
+          0,
+          60000
+        ],
+        [
+          "a",
+          180001,
+          240000
+        ]
+      ],
+      "expect": [
+        [
+          "a",
+          0,
+          60000
+        ],
+        [
+          "a",
+          180001,
+          240000
+        ]
+      ]
+    },
+    {
+      "name": "otra actividad en el medio no corta ni se une",
+      "sessions": [
+        [
+          "a",
+          0,
+          60000
+        ],
+        [
+          "b",
+          30000,
+          90000
+        ],
+        [
+          "a",
+          100000,
+          160000
+        ],
+        [
+          "b",
+          400000,
+          500000
+        ]
+      ],
+      "expect": [
+        [
+          "a",
+          0,
+          160000
+        ],
+        [
+          "b",
+          30000,
+          90000
+        ],
+        [
+          "b",
+          400000,
+          500000
+        ]
+      ]
+    },
+    {
+      "name": "un tramo contenido en otro no acorta el final",
+      "sessions": [
+        [
+          "a",
+          0,
+          300000
+        ],
+        [
+          "a",
+          60000,
+          120000
+        ]
+      ],
+      "expect": [
+        [
+          "a",
+          0,
+          300000
+        ]
+      ]
+    },
+    {
+      "name": "sin sesiones",
+      "sessions": [],
+      "expect": []
     }
   ]
 }

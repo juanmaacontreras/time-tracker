@@ -256,7 +256,8 @@ private fun MainActivity.buildKpis(items: List<Pair<String, String>>, weights: L
 private fun hhmm(ms: Long): String =
     java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date(ms))
 
-private fun dayKpis(sessions: List<Triple<String, Long, Long>>): List<Pair<String, String>> {
+private fun dayKpis(all: List<Triple<String, Long, Long>>): List<Pair<String, String>> {
+    val sessions = Store.sessionBlocks(all)
     val longest = sessions.maxOf { it.third - it.second }
     val first = sessions.first().second
     val last = sessions.maxOf { it.third }
